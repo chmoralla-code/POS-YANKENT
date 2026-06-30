@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self';">
+<title>YANKENT POS</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<!-- Login -->
+<div id="login" class="login-screen">
+  <form class="login-card" id="loginForm">
+    <div class="brand">YANKENT POS</div>
+    <div class="sub">Construction &amp; Supply · Offline</div>
+    <div class="login-error" id="loginError"></div>
+    <div class="field">
+      <label class="fl">Username</label>
+      <input id="loginUser" autocomplete="username" autofocus>
+    </div>
+    <div class="field">
+      <label class="fl">Password</label>
+      <input id="loginPass" type="password" autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary btn-block" type="submit" style="padding:12px">Sign In</button>
+    <div class="hint" style="text-align:center;margin-top:12px">Default: admin / admin123 &nbsp;·&nbsp; maria / cashier123</div>
+  </form>
+</div>
+
+<!-- App shell -->
+<div id="app" class="app hidden">
+  <aside class="sidebar">
+    <div class="sbrand">YANKENT<small>POINT OF SALE</small></div>
+    <button class="nav-item active" data-view="pos"><span class="ic">▣</span><span>Point of Sale</span></button>
+    <button class="nav-item admin-only" data-view="products"><span class="ic">▤</span><span>Products</span></button>
+    <button class="nav-item admin-only" data-view="users"><span class="ic">◍</span><span>Users</span></button>
+    <button class="nav-item admin-only" data-view="reports"><span class="ic">▦</span><span>Reports</span></button>
+    <button class="nav-item admin-only" data-view="settings"><span class="ic">⚙</span><span>Settings</span></button>
+    <div class="spacer"></div>
+    <div class="uname">Signed in as<b id="navUser">—</b><span id="navRole"></span></div>
+    <button class="nav-item" id="logoutBtn"><span class="ic">⏻</span><span>Sign out</span></button>
+  </aside>
+  <main class="main">
+    <header class="topbar">
+      <div class="ttitle" id="viewTitle">Point of Sale</div>
+      <div class="tmeta">
+        <span class="pill" id="netStatus">● Offline-ready</span>
+        <span id="clock">--:--</span>
+      </div>
+    </header>
+    <section id="view" class="view"></section>
+  </main>
+</div>
+
+<div id="toast"></div>
+<div id="modal-root"></div>
+
+<script src="js/ui.js"></script>
+<script src="js/printer.js"></script>
+<script src="js/pos.js"></script>
+<script src="js/products.js"></script>
+<script src="js/users.js"></script>
+<script src="js/reports.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
