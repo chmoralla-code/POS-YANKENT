@@ -39,11 +39,24 @@ button { cursor: pointer; }
 /* ---------- Login ----------------------------------------------------- */
 .login-screen {
   position: fixed; inset: 0; background: var(--ink);
-  display: flex; align-items: center; justify-content: center;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.login-screen::before {
+  content: ''; position: absolute; inset: -5%;
+  background: url('../assets/yankent.png') center/cover no-repeat;
+  filter: blur(8px) brightness(0.5) saturate(0.85);
+  transform: scale(1.08);
+  z-index: 0;
+}
+.login-screen::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(17,17,20,.35), rgba(17,17,20,.65));
+  z-index: 0;
 }
 .login-card {
-  width: 360px; background: var(--panel); border-radius: 12px; padding: 34px 30px;
-  box-shadow: var(--shadow-lg);
+  position: relative; z-index: 1;
+  width: 360px; background: rgba(255,255,255,.97); backdrop-filter: blur(4px);
+  border-radius: 12px; padding: 34px 30px; box-shadow: var(--shadow-lg);
 }
 .login-card .brand { font-size: 22px; font-weight: 800; letter-spacing: .5px; text-align: center; }
 .login-card .sub { text-align: center; color: var(--muted); font-size: 12px; margin: 4px 0 22px; }
