@@ -56,10 +56,6 @@ button { cursor: pointer; }
   width: 360px; background: rgba(255,255,255,.97); backdrop-filter: blur(4px);
   border-radius: 12px; padding: 34px 30px; box-shadow: var(--shadow-lg);
 }
-.login-card .logo {
-  display: block; margin: 0 auto 10px; max-height: 72px; width: auto;
-  filter: drop-shadow(0 4px 10px rgba(0,0,0,.25));
-}
 .login-card .brand {
   font-size: 22px; font-weight: 800; letter-spacing: 1.2px; text-align: center; margin-bottom: 2px;
   background: linear-gradient(110deg, #2a2a2a 35%, #f6f6f6 50%, #2a2a2a 65%);
@@ -71,6 +67,15 @@ button { cursor: pointer; }
   0% { background-position: 220% 0; }
   100% { background-position: -220% 0; }
 }
+.login-status {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  font-size: 11px; color: var(--muted); margin-top: 14px;
+}
+.login-status .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.login-status .dot.on { background: var(--ok); box-shadow: 0 0 6px rgba(31,107,58,.6); }
+.login-status .dot.off { background: var(--muted-2); }
+.login-status .on-txt { color: var(--ok); font-weight: 700; }
+.login-status .off-txt { color: var(--muted); font-weight: 700; }
 .login-card .sub { text-align: center; color: var(--muted); font-size: 12px; margin: 4px 0 22px; }
 .login-error { color: var(--danger); font-size: 12px; min-height: 16px; margin-bottom: 6px; text-align: center; }
 

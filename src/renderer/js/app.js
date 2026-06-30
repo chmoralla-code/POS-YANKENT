@@ -38,6 +38,8 @@ document.addEventListener('DOMContentLoaded', () => {
   setInterval(() => App._clock(), 1000);
   App._net();
   setInterval(() => App._net(), 15000);
+  App._loginNet();
+  setInterval(() => App._loginNet(), 15000);
 });
 
 App._start = async function () {
@@ -82,8 +84,19 @@ App._clock = function () {
 App._net = async function () {
   const el = document.getElementById('netStatus');
   if (!el) return;
-  try {
-    const online = navigator.onLine;
-    el.textContent = online ? '● Online' : '● Offline-ready';
-  } catch { el.textContent = '● Offline-ready'; }
+  let online = false;
+  try { online = await App.pos.telegram.isOnline(); } catch {}
+  el.textContent = online ? '● Online' : '● Offline-ready';
+};
+
+App._loginNet = async function () {
+  const el = document.getElementById('loginStatus');
+  if (!el) return;
+  let online = false;
+  try { online = await App.pos.telegram.isOnline(); } catch {}
+  if (online) {
+    el.innerHTML = '<span class="dot on"></span><span class="on-txt">Online</span>';
+  } else {
+    el.innerHTML = '<span class="dot off"></span><span class="off-txt">Offline — POS still works</span>';
+  }
 };
