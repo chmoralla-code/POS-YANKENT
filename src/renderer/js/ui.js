@@ -1,6 +1,7 @@
 'use strict';
 /* Shared UI helpers for YANKENT POS renderer. */
 window.App = window.App || {};
+App.pos = window.pos;          // bridge from preload (contextBridge)
 App.currencySymbol = '₱';
 
 App.ui = {
