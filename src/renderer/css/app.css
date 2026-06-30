@@ -41,12 +41,10 @@ button { cursor: pointer; }
   position: fixed; inset: 0; background: var(--ink);
   display: flex; align-items: center; justify-content: center; overflow: hidden;
 }
-.login-screen::before {
-  content: ''; position: absolute; inset: -5%;
-  background: url('../assets/yankent.png') center/cover no-repeat;
-  filter: blur(8px) brightness(0.5) saturate(0.85);
-  transform: scale(1.08);
-  z-index: 0;
+.login-bg {
+  position: absolute; inset: -5%; width: 110%; height: 110%;
+  object-fit: cover; filter: blur(8px) brightness(0.5) saturate(0.85);
+  transform: scale(1.08); z-index: 0;
 }
 .login-screen::after {
   content: ''; position: absolute; inset: 0;
