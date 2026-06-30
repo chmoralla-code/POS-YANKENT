@@ -57,8 +57,15 @@ button { cursor: pointer; }
   border-radius: 12px; padding: 34px 30px; box-shadow: var(--shadow-lg);
 }
 .login-card .logo {
-  display: block; margin: 0 auto 12px; max-height: 72px; width: auto;
+  display: block; margin: 0 auto 10px; max-height: 72px; width: auto;
   filter: drop-shadow(0 4px 10px rgba(0,0,0,.25));
+}
+.login-card .brand {
+  font-size: 22px; font-weight: 800; letter-spacing: 1.2px; text-align: center; margin-bottom: 2px;
+  background: linear-gradient(110deg, #2a2a2a 35%, #f6f6f6 50%, #2a2a2a 65%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: shine 3.2s linear infinite;
 }
 @keyframes shine {
   0% { background-position: 220% 0; }
