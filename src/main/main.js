@@ -34,6 +34,7 @@ function createWindow() {
     minHeight: 680,
     backgroundColor: '#0e0e0e',
     title: 'YANKENT POS',
+    icon: path.join(__dirname, '..', 'renderer', 'assets', 'softwarelogo.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

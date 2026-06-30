@@ -42,13 +42,13 @@ button { cursor: pointer; }
   display: flex; align-items: center; justify-content: center; overflow: hidden;
 }
 .login-bg {
-  position: absolute; inset: -2%; width: 104%; height: 104%;
-  object-fit: cover; filter: blur(3px) brightness(0.9) saturate(0.95);
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: contain; filter: brightness(0.98) saturate(1);
   z-index: 0;
 }
 .login-screen::after {
   content: ''; position: absolute; inset: 0;
-  background: linear-gradient(180deg, rgba(17,17,20,.1), rgba(17,17,20,.28));
+  background: linear-gradient(180deg, rgba(17,17,20,.05), rgba(17,17,20,.18));
   z-index: 0;
 }
 .login-card {
@@ -56,12 +56,9 @@ button { cursor: pointer; }
   width: 360px; background: rgba(255,255,255,.97); backdrop-filter: blur(4px);
   border-radius: 12px; padding: 34px 30px; box-shadow: var(--shadow-lg);
 }
-.login-card .brand {
-  font-size: 24px; font-weight: 800; letter-spacing: 1.5px; text-align: center;
-  background: linear-gradient(110deg, #2a2a2a 35%, #f6f6f6 50%, #2a2a2a 65%);
-  background-size: 220% 100%;
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-  animation: shine 3.2s linear infinite;
+.login-card .logo {
+  display: block; margin: 0 auto 12px; max-height: 72px; width: auto;
+  filter: drop-shadow(0 4px 10px rgba(0,0,0,.25));
 }
 @keyframes shine {
   0% { background-position: 220% 0; }
@@ -75,8 +72,8 @@ button { cursor: pointer; }
 .sidebar {
   background: var(--ink); color: #d7d8dc; display: flex; flex-direction: column; padding: 14px 10px;
 }
-.sidebar .sbrand { font-weight: 800; font-size: 16px; padding: 6px 10px 16px; color: #fff; letter-spacing: .5px; }
-.sidebar .sbrand small { display: block; font-weight: 400; font-size: 10px; color: var(--muted-2); letter-spacing: 1px; }
+.sidebar .sbrand { padding: 4px 10px 14px; text-align: center; }
+.sidebar .slogo { display: block; max-height: 40px; width: auto; margin: 0 auto; filter: drop-shadow(0 2px 6px rgba(0,0,0,.3)); }
 .nav-item {
   display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius-sm);
   color: #c7c8cd; font-weight: 600; font-size: 13px; border: none; background: transparent; width: 100%; text-align: left;
