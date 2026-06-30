@@ -133,7 +133,6 @@ App.views.pos = {
         const def = (p.units && p.units[0]) || { unit: p.base_unit, price: p.price };
         const low = p.stock <= (p.low || 10);
         return `<div class="prod-card" data-id="${p.id}">
-          <div class="sku">${App.ui.esc(p.sku)}</div>
           <div class="nm">${App.ui.esc(p.name)}</div>
           <div class="pr">${App.ui.money(def.price)} <small>/${App.ui.esc(def.unit)}</small></div>
           <div class="stk ${low ? 'low' : ''}">Stock: ${App.ui.qty(p.stock)} ${App.ui.esc(p.base_unit)}${(p.units && p.units.length > 1) ? ' · ' + p.units.length + ' units' : ''}</div>
@@ -143,7 +142,6 @@ App.views.pos = {
       el.innerHTML = list.map((p) => {
         const def = (p.units && p.units[0]) || { unit: p.base_unit, price: p.price };
         return `<div class="prod-card svc-card" data-id="${p.id}">
-          <div class="sku">${App.ui.esc(p.sku)}</div>
           <div class="nm">${App.ui.esc(p.name)}</div>
           <div class="pr">${App.ui.money(def.price)} <small>/${App.ui.esc(def.unit)}</small></div>
           <div class="stk">Service</div>
@@ -206,7 +204,7 @@ App.views.pos = {
         return `<div class="cart-row ${i.isService ? 'svc' : ''}" data-idx="${idx}">
           <div>
             <div class="nm">${App.ui.esc(i.name)}${i.isService ? ' <span class="badge svc">svc</span>' : ''}</div>
-            <div class="meta">${App.ui.esc(i.sku)} · ${App.ui.money(i.unitPrice)} / ${App.ui.esc(i.unit)}</div>
+            <div class="meta">${App.ui.money(i.unitPrice)} / ${App.ui.esc(i.unit)}</div>
           </div>
           <div class="qty">
             <button data-act="minus">−</button>

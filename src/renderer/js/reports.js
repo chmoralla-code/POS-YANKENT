@@ -64,7 +64,7 @@ App.views.reports = {
       <div class="stat"><div class="k">This Year</div><div class="v">${App.ui.money(s.year.total)}<small> / ${s.year.tx} transactions</small></div></div>
       <div class="stat"><div class="k">Best Sales Day</div><div class="v">${s.bestDay ? App.ui.money(s.bestDay.total) : '—'}<small>${s.bestDay ? '<br>' + App.ui.esc(s.bestDay.label) : ''}</small></div></div>`;
     v.querySelector('#rBest').innerHTML = d.best.length ? `<table class="tbl"><thead><tr><th>Item</th><th class="right">Qty</th><th class="right">Total</th></tr></thead><tbody>
-      ${d.best.map((b) => `<tr><td>${App.ui.esc(b.name)} <span class="muted mono">${App.ui.esc(b.sku)}</span></td><td class="right">${App.ui.qty(b.qty)}</td><td class="right">${App.ui.money(b.total)}</td></tr>`).join('')}</tbody></table>` : '<div class="empty-state">No data.</div>';
+      ${d.best.map((b) => `<tr><td>${App.ui.esc(b.name)}</td><td class="right">${App.ui.qty(b.qty)}</td><td class="right">${App.ui.money(b.total)}</td></tr>`).join('')}</tbody></table>` : '<div class="empty-state">No data.</div>';
     v.querySelector('#rCsr').innerHTML = d.csr.length ? `<table class="tbl"><thead><tr><th>Cashier</th><th class="right">Tx</th><th class="right">Total</th></tr></thead><tbody>
       ${d.csr.map((c) => `<tr><td>${App.ui.esc(c.cashier_name)}</td><td class="right">${c.tx}</td><td class="right">${App.ui.money(c.total)}</td></tr>`).join('')}</tbody></table>` : '<div class="empty-state">No data.</div>';
     v.querySelector('#rDay').innerHTML = d.day.length ? `<table class="tbl"><thead><tr><th>Date</th><th class="right">Tx</th><th class="right">Total</th></tr></thead><tbody>

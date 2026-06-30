@@ -118,6 +118,8 @@ app.whenReady().then(async () => {
         log('today=' + sum.today.total + '/' + sum.today.tx + ' best=' + (sum.bestDay ? sum.bestDay.label : 'none'));
         const best = await window.pos.reports.bestSelling({});
         log('bestSelling rows=' + best.length);
+        const np = await window.pos.products.create({ name:'Smoke Test Item', base_unit:'pc', stock:5, price:50, units:[{unit:'pc',factor:1,price:50}] });
+        log('created product id=' + np.id);
         const tg = await window.pos.telegram.sendReport();
         log('telegram: ' + (tg.ok ? 'sent' : tg.error));
         log('SMOKE OK');

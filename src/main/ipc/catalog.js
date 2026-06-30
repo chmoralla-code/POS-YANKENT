@@ -63,12 +63,18 @@ function register(ipcMain, ctx) {
   });
 
   guard(ipcMain, 'pos:products:create', { admin: true }, (_c, p) => {
-    if (!p.sku || !p.name) throw new Error('SKU and name are required');
+    if (!p.name) throw new Error('Name is required');
     const info = db.transaction(() => {
+      // Auto-generate an internal code (SKU) if not provided — never shown to users.
+      let sku = p.sku && String(p.sku).trim();
+      if (!sku) {
+        const n = db.prepare('SELECT COALESCE(MAX(id),0)+1 AS n FROM products').get().n;
+        sku = 'P-' + String(n).padStart(5, '0');
+      }
       const r = db.prepare(
         `INSERT INTO products(sku,name,category_id,base_unit,stock,cost,price,low_stock_threshold,is_service,active)
           VALUES(?,?,?,?,?,?,?,?,?,1)`
-      ).run(p.sku, p.name, p.category_id || null, p.base_unit || 'pc', p.stock || 0, p.cost || 0, p.price || 0, p.low_stock_threshold ?? 10, p.is_service ? 1 : 0);
+      ).run(sku, p.name, p.category_id || null, p.base_unit || 'pc', p.stock || 0, p.cost || 0, p.price || 0, p.low_stock_threshold ?? 10, p.is_service ? 1 : 0);
       const pid = r.lastInsertRowid;
       const ins = db.prepare('INSERT INTO product_units(product_id,unit,factor,price) VALUES(?,?,?,?)');
       if (Array.isArray(p.units) && p.units.length) {

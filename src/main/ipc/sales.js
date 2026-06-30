@@ -196,10 +196,10 @@ function register(ipcMain, ctx) {
   guard(ipcMain, 'pos:reports:exportCSV', { auth: true }, async (_c, type, f = {}) => {
     let rows, header;
     if (type === 'bestSelling') {
-      rows = db.prepare(`SELECT si.sku, si.name, SUM(si.qty) AS qty, SUM(si.amount) AS total
+      rows = db.prepare(`SELECT si.name, SUM(si.qty) AS qty, SUM(si.amount) AS total
         FROM sale_items si JOIN sales s ON si.sale_id=s.id WHERE s.status='completed'
         GROUP BY si.product_id ORDER BY total DESC`).all();
-      header = ['SKU','Name','Qty','Total'];
+      header = ['Name','Qty','Total'];
     } else if (type === 'byCashier') {
       rows = db.prepare(`SELECT cashier_name, COUNT(*) AS tx, SUM(total) AS total FROM sales WHERE status='completed' GROUP BY cashier_id ORDER BY total DESC`).all();
       header = ['Cashier','Transactions','Total'];

@@ -22,7 +22,7 @@ App.views.products = {
         <div class="panel-h">Catalog <small id="pCount"></small></div>
         <div style="overflow:auto;max-height:calc(100vh - 200px)">
           <table class="tbl">
-            <thead><tr><th>SKU</th><th>Name</th><th>Category</th><th>Base unit</th><th>Stock</th><th>Price</th><th>Units</th><th>Service</th><th></th></tr></thead>
+            <thead><tr><th>Name</th><th>Category</th><th>Base unit</th><th>Stock</th><th>Price</th><th>Units</th><th>Service</th><th></th></tr></thead>
             <tbody id="pBody"></tbody>
           </table>
         </div>
@@ -58,7 +58,6 @@ App.views.products = {
     this.viewEl.querySelector('#pCount').textContent = this.cache.products.length + ' items';
     body.innerHTML = this.cache.products.map((p) => `
       <tr data-id="${p.id}">
-        <td class="mono">${App.ui.esc(p.sku)}</td>
         <td>${App.ui.esc(p.name)}</td>
         <td>${App.ui.esc(p.category || '—')}</td>
         <td>${App.ui.esc(p.base_unit)}</td>
@@ -80,10 +79,7 @@ App.views.products = {
     const units = (p && p.units) || [{ unit: p ? p.base_unit : 'pc', factor: 1, price: p ? p.price : 0 }];
     const m = App.ui.modal({
       title: id ? 'Edit Product' : 'Add Product', wide: true,
-      bodyHtml: `<div class="row gap wrap">
-          <div class="field" style="flex:1;min-width:160px"><label class="fl">SKU</label><input id="fSku" value="${p ? App.ui.esc(p.sku) : ''}"></div>
-          <div class="field" style="flex:2;min-width:200px"><label class="fl">Name</label><input id="fName" value="${p ? App.ui.esc(p.name) : ''}"></div>
-        </div>
+      bodyHtml: `<div class="field"><label class="fl">Name</label><input id="fName" value="${p ? App.ui.esc(p.name) : ''}"></div>
         <div class="row gap wrap">
           <div class="field" style="flex:1"><label class="fl">Category</label><select id="fCat">
             ${cats.map((c) => `<option value="${c.id}" ${p && p.category_id === c.id ? 'selected' : ''}>${App.ui.esc(c.name)}</option>`).join('')}
@@ -120,7 +116,7 @@ App.views.products = {
     m.el.querySelector('[data-a="cancel"]').onclick = () => m.close();
     m.el.querySelector('[data-a="save"]').onclick = async () => {
       const data = {
-        sku: m.el.querySelector('#fSku').value.trim(),
+        sku: id && p ? p.sku : '',
         name: m.el.querySelector('#fName').value.trim(),
         category_id: +m.el.querySelector('#fCat').value || null,
         base_unit: m.el.querySelector('#fBase').value.trim() || 'pc',
@@ -131,7 +127,7 @@ App.views.products = {
         is_service: m.el.querySelector('#fSvc').checked,
         units: units.filter((u) => u.unit).map((u) => ({ unit: u.unit, factor: +u.factor || 1, price: +u.price || 0 })),
       };
-      if (!data.sku || !data.name) { App.ui.toast('SKU and name required', 'err'); return; }
+      if (!data.name) { App.ui.toast('Name is required', 'err'); return; }
       try {
         if (id) await App.pos.products.update(id, data);
         else await App.pos.products.create(data);
