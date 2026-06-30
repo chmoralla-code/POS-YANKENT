@@ -24,7 +24,7 @@ App.views.pos = {
         <div class="pos-left">
           <div class="panel pos-catalog">
             <div class="search-row">
-              <input id="posSearch" placeholder="Scan barcode or search SKU / item name…" autocomplete="off">
+              <input id="posSearch" placeholder="Search SKU / item name…" autocomplete="off">
               <button class="btn btn-ghost btn-sm" id="posClear">Clear</button>
             </div>
             <div class="tabs">

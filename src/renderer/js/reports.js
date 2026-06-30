@@ -59,6 +59,7 @@ App.views.reports = {
     const s = d.summary;
     v.querySelector('#rStats').innerHTML = `
       <div class="stat"><div class="k">Today</div><div class="v">${App.ui.money(s.today.total)}<small> / ${s.today.tx} transactions</small></div></div>
+      <div class="stat"><div class="k">Yesterday</div><div class="v">${App.ui.money(s.yesterday.total)}<small> / ${s.yesterday.tx} transactions</small></div></div>
       <div class="stat"><div class="k">This Month</div><div class="v">${App.ui.money(s.month.total)}<small> / ${s.month.tx} transactions</small></div></div>
       <div class="stat"><div class="k">This Year</div><div class="v">${App.ui.money(s.year.total)}<small> / ${s.year.tx} transactions</small></div></div>
       <div class="stat"><div class="k">Best Sales Day</div><div class="v">${s.bestDay ? App.ui.money(s.bestDay.total) : '—'}<small>${s.bestDay ? '<br>' + App.ui.esc(s.bestDay.label) : ''}</small></div></div>`;
@@ -83,6 +84,7 @@ App.views.reports = {
       <style>body{font-family:Segoe UI,sans-serif;padding:24px;color:#111}h1{font-size:18px;margin:0 0 4px}table{width:100%;border-collapse:collapse;margin:10px 0 18px;font-size:12px}th,td{border:1px solid #ddd;padding:5px 8px;text-align:left}th{background:#f4f4f5}.r{text-align:right}</style></head>
       <body><h1>YANKENT POS — Sales Report</h1><div style="color:#666;font-size:12px">Generated ${new Date().toLocaleString()}</div>
       <p>Today: <b>${App.ui.money(s.today.total)}</b> / ${s.today.tx} transactions<br>
+      Yesterday: <b>${App.ui.money(s.yesterday.total)}</b> / ${s.yesterday.tx} transactions<br>
       This Month: <b>${App.ui.money(s.month.total)}</b> / ${s.month.tx} tx<br>
       This Year: <b>${App.ui.money(s.year.total)}</b> / ${s.year.tx} tx<br>
       Best Day: <b>${s.bestDay ? App.ui.money(s.bestDay.total) + ' (' + s.bestDay.label + ')' : '—'}</b></p>

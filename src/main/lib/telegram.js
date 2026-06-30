@@ -71,6 +71,12 @@ function buildReportMessage(db) {
        AND date(datetime)=date('now','localtime')`
   ).get();
 
+  const yesterday = db.prepare(
+    `SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total FROM sales
+     WHERE status='completed'
+       AND date(datetime)=date('now','localtime','-1 day')`
+  ).get();
+
   const month = db.prepare(
     `SELECT COALESCE(SUM(total),0) AS total FROM sales WHERE status='completed'
        AND strftime('%Y-%m', datetime)=strftime('%Y-%m','now','localtime')`
@@ -95,6 +101,7 @@ function buildReportMessage(db) {
   return [
     'YANKENT POS Sales Report',
     `Today: ${reportMoney(today.total)} / ${today.tx} transactions`,
+    `Yesterday: ${reportMoney(yesterday.total)} / ${yesterday.tx} transactions`,
     `This Month: ${reportMoney(month.total)}`,
     `This Year: ${reportMoney(year.total)}`,
     `Best Day: ${bestDay}`,

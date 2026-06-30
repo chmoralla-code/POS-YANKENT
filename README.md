@@ -29,7 +29,7 @@ for normal operation.
 - **Telegram owner report** — admin enters BotFather token + chat ID in
   **Settings** (never hardcoded). A sales summary is sent **only when online**;
   the POS keeps working offline.
-- **Reports** — today / this month / this year totals, transaction count,
+- **Reports** — today / yesterday / this month / this year totals, transaction count,
   best sales day, best-selling products, sales by cashier. Printable & CSV export.
 - **Backup & Import** — one-click export of the entire local database to a
   `.yankent` backup file; restore on a new laptop to recover everything.
@@ -109,7 +109,7 @@ the user's app data / project `data/` folder.
 
 ### Cashier (sell & print)
 1. Log in as `maria` / `cashier123`.
-2. Search/scan or click a category, click items to add to the cart.
+2. Search or click a category, click items to add to the cart.
 3. Edit quantity & unit (for bulk items), choose payment method.
 4. **Charge** → enter cash (if Cash) → receipt prints automatically.
 
@@ -117,7 +117,7 @@ the user's app data / project `data/` folder.
 - **Products** — add/edit products, units & conversion factors, prices, stock.
   Only admins can change price and stock.
 - **Users** — add cashiers/admins, reset passwords, deactivate.
-- **Reports** — today/month/year, best-selling products, best sales day,
+- **Reports** — today/yesterday/month/year, best-selling products, best sales day,
   sales by cashier. Print or export CSV.
 - **Settings**
   - **Store** — name (default `YANKENT POS`), address, TIN, VAT rate, footer.
@@ -140,6 +140,7 @@ the user's app data / project `data/` folder.
 ```
 YANKENT POS Sales Report
 Today: ₱12,500 / 24 transactions
+Yesterday: ₱9,800 / 18 transactions
 This Month: ₱185,300
 This Year: ₱1,240,900
 Best Day: June 18, 2026 - ₱32,800
