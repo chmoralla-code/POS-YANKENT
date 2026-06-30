@@ -5,18 +5,26 @@ const http = require('http');
 const { URL } = require('url');
 
 /**
- * Check whether the machine has internet access (does not block the UI —
- * callers should await this). Telegram sending only runs when this is true;
+ * Check whether the machine has real internet access by attempting to reach
+ * multiple well-known endpoints. Returns true if any responds. Does not block
+ * the UI (callers await). Telegram sending only runs when this is true;
  * the POS keeps working offline regardless.
  */
-function checkOnline(timeoutMs = 4000) {
+function checkOnline(timeoutMs = 3000) {
   return new Promise((resolve) => {
-    const req = https.get('https://api.telegram.org', { timeout: timeoutMs }, (res) => {
-      res.resume();
-      resolve(res.statusCode > 0);
-    });
-    req.on('error', () => resolve(false));
-    req.on('timeout', () => { req.destroy(); resolve(false); });
+    let done = false;
+    const finish = (ok) => { if (!done) { done = true; resolve(ok); } };
+    const tryHost = (host) => {
+      const req = https.get(host, { timeout: timeoutMs }, (res) => { res.resume(); finish(res.statusCode > 0); });
+      req.on('error', () => {});
+      req.on('timeout', () => { req.destroy(); });
+    };
+    // Ping several endpoints; resolve true as soon as one answers.
+    tryHost('https://api.telegram.org');
+    tryHost('https://www.google.com');
+    tryHost('https://1.1.1.1');
+    // If nothing responds within the timeout, resolve false.
+    setTimeout(() => finish(false), timeoutMs + 500);
   });
 }
 

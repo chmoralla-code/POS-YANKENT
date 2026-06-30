@@ -41,7 +41,11 @@ function register(ipcMain, ctx) {
   });
 
   // ---- Telegram (offline-safe) ------------------------------------------
-  guard(ipcMain, 'pos:telegram:isOnline', { auth: true }, async () => checkOnline());
+  // isOnline is public (no auth) so the login screen can show real status.
+  ipcMain.handle('pos:telegram:isOnline', async () => {
+    try { return { ok: true, data: await checkOnline() }; }
+    catch { return { ok: true, data: false }; }
+  });
 
   guard(ipcMain, 'pos:telegram:test', { admin: true }, async () => {
     const token = ctx.getSetting(db, 'telegram_token');

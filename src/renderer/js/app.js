@@ -92,11 +92,21 @@ App._net = async function () {
 App._loginNet = async function () {
   const el = document.getElementById('loginStatus');
   if (!el) return;
-  let online = false;
-  try { online = await App.pos.telegram.isOnline(); } catch {}
-  if (online) {
+  // Instant first pass using the browser's network state.
+  if (navigator.onLine) {
     el.innerHTML = '<span class="dot on"></span><span class="on-txt">Online</span>';
   } else {
+    el.innerHTML = '<span class="dot off"></span><span class="off-txt">Offline — POS still works</span>';
+  }
+  // Confirm with a real reachability ping.
+  try {
+    const online = await App.pos.telegram.isOnline();
+    if (online) {
+      el.innerHTML = '<span class="dot on"></span><span class="on-txt">Online</span>';
+    } else {
+      el.innerHTML = '<span class="dot off"></span><span class="off-txt">Offline — POS still works</span>';
+    }
+  } catch {
     el.innerHTML = '<span class="dot off"></span><span class="off-txt">Offline — POS still works</span>';
   }
 };
