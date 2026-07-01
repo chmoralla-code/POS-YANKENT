@@ -94,6 +94,12 @@ App.views.pos = {
     v.querySelector('#posClear').onclick = () => { this.state.q = ''; v.querySelector('#posSearch').value = ''; this._renderGrid(); };
     v.querySelector('#posZoomIn').onclick = () => this._setZoom(0.1);
     v.querySelector('#posZoomOut').onclick = () => this._setZoom(-0.1);
+    // Ctrl + scroll to zoom the catalog
+    v.querySelector('.pos-catalog').addEventListener('wheel', (e) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      this._setZoom(e.deltaY < 0 ? 0.1 : -0.1);
+    }, { passive: false });
     v.querySelectorAll('.tab').forEach((t) => t.onclick = () => {
       v.querySelectorAll('.tab').forEach((x) => x.classList.remove('active'));
       t.classList.add('active'); this.state.tab = t.dataset.tab; this._renderChips(); this._renderGrid();
