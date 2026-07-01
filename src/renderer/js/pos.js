@@ -7,7 +7,7 @@ App.cart = App.cart || [];
 App.views.pos = {
   title: 'Point of Sale',
   cache: { products: [], categories: [], customers: [] },
-  state: { tab: 'products', cat: 'all', q: '', customer: null, pay: 'cash' },
+  state: { tab: 'products', cat: 'all', q: '', customer: null, pay: 'cash', zoom: parseFloat(localStorage.getItem('posZoom') || '1') },
 
   async render(view) {
     this.viewEl = view;
@@ -26,6 +26,11 @@ App.views.pos = {
             <div class="search-row">
               <input id="posSearch" placeholder="Search SKU / item name…" autocomplete="off">
               <button class="btn btn-ghost btn-sm" id="posClear">Clear</button>
+              <div class="zoom-ctrl">
+                <button class="btn btn-ghost btn-sm" id="posZoomOut" title="Smaller text">A−</button>
+                <span class="zoom-val" id="posZoomVal">100%</span>
+                <button class="btn btn-ghost btn-sm" id="posZoomIn" title="Bigger text">A+</button>
+              </div>
             </div>
             <div class="tabs">
               <div class="tab active" data-tab="products">Products</div>
@@ -62,10 +67,24 @@ App.views.pos = {
       </div>`;
 
     this._wire();
+    this._applyZoom();
     this._renderCust();
     this._renderChips();
     this._renderGrid();
     this._renderCart();
+  },
+
+  _applyZoom() {
+    const catalog = this.viewEl.querySelector('.pos-catalog');
+    if (catalog) catalog.style.zoom = this.state.zoom;
+    const val = this.viewEl.querySelector('#posZoomVal');
+    if (val) val.textContent = Math.round(this.state.zoom * 100) + '%';
+  },
+  _setZoom(delta) {
+    const z = Math.min(1.8, Math.max(0.8, +(this.state.zoom + delta).toFixed(2)));
+    this.state.zoom = z;
+    localStorage.setItem('posZoom', String(z));
+    this._applyZoom();
   },
 
   _wire() {
@@ -73,6 +92,8 @@ App.views.pos = {
     const debounced = App.ui.debounce(() => this._renderGrid(), 200);
     v.querySelector('#posSearch').addEventListener('input', (e) => { this.state.q = e.target.value; debounced(); });
     v.querySelector('#posClear').onclick = () => { this.state.q = ''; v.querySelector('#posSearch').value = ''; this._renderGrid(); };
+    v.querySelector('#posZoomIn').onclick = () => this._setZoom(0.1);
+    v.querySelector('#posZoomOut').onclick = () => this._setZoom(-0.1);
     v.querySelectorAll('.tab').forEach((t) => t.onclick = () => {
       v.querySelectorAll('.tab').forEach((x) => x.classList.remove('active'));
       t.classList.add('active'); this.state.tab = t.dataset.tab; this._renderChips(); this._renderGrid();

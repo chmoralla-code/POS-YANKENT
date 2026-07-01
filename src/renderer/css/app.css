@@ -166,7 +166,10 @@ table.tbl tr:hover td { background: #fafbfc; }
 .pos-grid { display: grid; grid-template-columns: 1fr 400px; gap: 14px; height: calc(100vh - 52px - 28px); }
 .pos-left, .pos-right { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
 .pos-catalog { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.search-row { display: flex; gap: 8px; padding: 12px; border-bottom: 1px solid var(--line); }
+.search-row { display: flex; gap: 8px; padding: 12px; border-bottom: 1px solid var(--line); align-items: center; }
+.search-row input { flex: 1; }
+.zoom-ctrl { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.zoom-val { font-size: 11px; color: var(--muted); min-width: 36px; text-align: center; font-weight: 600; }
 .tabs { display: flex; gap: 2px; padding: 8px 12px 0; }
 .tab { padding: 8px 14px; cursor: pointer; border-bottom: 2px solid transparent; font-weight: 600; color: var(--muted); font-size: 13px; }
 .tab.active { color: var(--ink); border-bottom-color: var(--ink); }
