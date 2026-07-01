@@ -173,11 +173,12 @@ App.views.pos = {
       el.innerHTML = list.map((p) => {
         const def = (p.units && p.units[0]) || { unit: p.base_unit, price: p.price };
         const low = p.stock <= (p.low || 10);
+        const out = p.stock <= 0;
         const col = App.catColor(p.category);
-        return `<div class="prod-card" data-id="${p.id}" style="border-left:4px solid ${col}">
+        return `<div class="prod-card ${out ? 'out-of-stock' : ''}" data-id="${p.id}" style="border-left:4px solid ${col}">
           <div class="nm">${App.ui.esc(p.name)}</div>
           <div class="pr">${App.ui.money(def.price)} <small>/${App.ui.esc(def.unit)}</small></div>
-          <div class="stk ${low ? 'low' : ''}">Stock: ${App.ui.qty(p.stock)} ${App.ui.esc(p.base_unit)}${(p.units && p.units.length > 1) ? ' · ' + p.units.length + ' units' : ''}</div>
+          <div class="stk ${out ? 'low' : low ? 'low' : ''}">${out ? 'OUT OF STOCK' : 'Stock: ' + App.ui.qty(p.stock) + ' ' + App.ui.esc(p.base_unit)}${(!out && p.units && p.units.length > 1) ? ' · ' + p.units.length + ' units' : ''}</div>
         </div>`;
       }).join('');
     } else {
@@ -203,10 +204,16 @@ App.views.pos = {
       const u = p.units[0] || { unit: p.base_unit, factor: 1, price: p.price };
       App.cart.push({ productId: p.id, sku: p.sku, name: p.name, unit: u.unit, factor: u.factor, unitPrice: u.price, qty: n, isService: true, lineType: 'service', units: p.units, base_unit: p.base_unit });
     } else {
+      if (p.stock <= 0) { App.ui.toast(p.name + ' is out of stock', 'err'); return; }
       const ex = App.cart.find((i) => i.productId === id && !i.isService);
       const u = (p.units && p.units[0]) || { unit: p.base_unit, factor: 1, price: p.price };
-      if (ex) { ex.qty++; }
-      else App.cart.push({ productId: p.id, sku: p.sku, name: p.name, unit: u.unit, factor: u.factor, unitPrice: u.price, qty: 1, isService: false, lineType: 'product', units: p.units, base_unit: p.base_unit, stock: p.stock });
+      if (ex) {
+        const newConsumed = (ex.qty + 1) * ex.factor;
+        if (newConsumed > p.stock + 1e-9) { App.ui.toast('Not enough stock for ' + p.name, 'err'); return; }
+        ex.qty++;
+      } else {
+        App.cart.push({ productId: p.id, sku: p.sku, name: p.name, unit: u.unit, factor: u.factor, unitPrice: u.price, qty: 1, isService: false, lineType: 'product', units: p.units, base_unit: p.base_unit, stock: p.stock });
+      }
     }
     this._renderCart();
   },
@@ -226,8 +233,24 @@ App.views.pos = {
     if (e.target.dataset.field === 'qty') { this._setQty(i, e.target.value); }
     else if (e.target.dataset.field === 'unit') { this._setUnit(i, e.target.value); }
   },
-  _adjQty(i, d) { const it = App.cart[i]; if (!it) return; it.qty = +it.qty + d; if (it.qty <= 0) App.cart.splice(i, 1); this._renderCart(); },
-  _setQty(i, v) { const it = App.cart[i]; if (!it) return; const n = parseFloat(v); if (!n || n <= 0) { App.cart.splice(i, 1); } else { it.qty = n; } this._renderCart(); },
+  _adjQty(i, d) {
+    const it = App.cart[i]; if (!it) return;
+    if (d > 0 && !it.isService) {
+      const p = this.cache.products.find((x) => x.id === it.productId);
+      if (p) { const newConsumed = (it.qty + d) * it.factor; if (newConsumed > p.stock + 1e-9) { App.ui.toast('Not enough stock for ' + it.name, 'err'); return; } }
+    }
+    it.qty = +it.qty + d; if (it.qty <= 0) App.cart.splice(i, 1); this._renderCart();
+  },
+  _setQty(i, v) {
+    const it = App.cart[i]; if (!it) return;
+    const n = parseFloat(v);
+    if (!n || n <= 0) { App.cart.splice(i, 1); this._renderCart(); return; }
+    if (!it.isService) {
+      const p = this.cache.products.find((x) => x.id === it.productId);
+      if (p) { const newConsumed = n * it.factor; if (newConsumed > p.stock + 1e-9) { App.ui.toast('Not enough stock for ' + it.name, 'err'); this._renderCart(); return; } }
+    }
+    it.qty = n; this._renderCart();
+  },
   _setUnit(i, unit) {
     const it = App.cart[i]; if (!it) return;
     const u = (it.units || []).find((x) => x.unit === unit) || { unit, factor: 1, price: it.unitPrice };
