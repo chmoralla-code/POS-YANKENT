@@ -3,6 +3,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { execSync, exec } = require('child_process');
 const { buildReceipt, receiptPlainText } = require('../lib/receipt');
 const { encodeReceipt, testPrint } = require('../lib/escpos');
 const { checkOnline, sendMessage, buildReportMessage } = require('../lib/telegram');
@@ -101,6 +102,47 @@ function register(ipcMain, ctx) {
       counts[t] = db.prepare(`SELECT COUNT(*) AS c FROM ${t}`).get().c;
     }
     return { path: file, tables: counts };
+  });
+
+  // ---- Check for updates (pull latest from GitHub) ----------------------
+  // Public handler: return the current version only (fast, no network).
+  ipcMain.handle('pos:update:getVersion', () => {
+    return ctx.getSetting(db, 'app_version') || '1';
+  });
+  // Public (no auth) so it can be checked from Settings and Login.
+  ipcMain.handle('pos:update:check', async () => {
+    try {
+      const currentVer = ctx.getSetting(db, 'app_version') || '1';
+      const appDir = path.join(__dirname, '..', '..');
+      execSync('git fetch origin main', { cwd: appDir, timeout: 30000, stdio: 'pipe' });
+      const local = execSync('git rev-parse HEAD', { cwd: appDir, stdio: 'pipe' }).toString().trim();
+      const remote = execSync('git rev-parse origin/main', { cwd: appDir, stdio: 'pipe' }).toString().trim();
+      if (local === remote) return { ok: true, data: { upToDate: true, currentVer } };
+      const ahead = execSync('git rev-list HEAD..origin/main --count', { cwd: appDir, stdio: 'pipe' }).toString().trim();
+      const log = execSync('git log HEAD..origin/main --oneline', { cwd: appDir, stdio: 'pipe' }).toString().trim();
+      return { ok: true, data: { upToDate: false, ahead, log, currentVer } };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  });
+
+  // Apply update: git pull + bump version + restart app
+  guard(ipcMain, 'pos:update:apply', { admin: true }, async () => {
+    try {
+      const appDir = path.join(__dirname, '..', '..');
+      execSync('git pull origin main', { cwd: appDir, timeout: 60000, stdio: 'pipe' });
+      // Bump minor version (1 → 1.1 → 1.2 → …)
+      const ver = parseFloat(ctx.getSetting(db, 'app_version') || '1');
+      const newVer = Math.round((ver + 0.1) * 10) / 10;
+      ctx.setSetting(db, 'app_version', String(newVer));
+      setTimeout(() => {
+        ctx.app.relaunch();
+        ctx.app.exit(0);
+      }, 1500);
+      return { ok: true, data: { restarting: true } };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
   });
 }
 

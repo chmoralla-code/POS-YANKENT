@@ -95,6 +95,13 @@ contextBridge.exposeInMainWorld('pos', {
     set: (k, v) => call('pos:settings:set', k, v),
   },
 
+  // ---- Update ----
+  update: {
+    getVersion: () => ipcRenderer.invoke('pos:update:getVersion'),
+    check: () => { const r = ipcRenderer.invoke('pos:update:check'); return r.then((x) => x.ok ? x.data : (() => { throw new Error(x.error); })()); },
+    apply: () => call('pos:update:apply'),
+  },
+
   // ---- Reports ----
   reports: {
     summary: () => call('pos:reports:summary'),

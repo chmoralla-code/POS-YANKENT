@@ -45,6 +45,7 @@ const SETTINGS_DEFAULTS = {
   telegram_token: '',
   telegram_chat_id: '',
   telegram_enabled: '0',
+  app_version: '1',
 };
 
 function ensureSettings(db) {

@@ -61,6 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setInterval(() => App._net(), 15000);
   App._loginNet();
   setInterval(() => App._loginNet(), 15000);
+  App._loginVersion();
 });
 
 App._start = async function () {
@@ -129,6 +130,39 @@ App._loginNet = async function () {
     }
   } catch {
     el.innerHTML = '<span class="dot off"></span><span class="off-txt">Offline — POS still works</span>';
+  }
+};
+
+App._loginVersion = async function () {
+  try {
+    const ver = await App.pos.update.getVersion();
+    document.getElementById('loginVersion').textContent = 'v' + ver;
+  } catch {}
+  document.getElementById('loginCheckUpdates').onclick = async (e) => {
+    e.preventDefault();
+    App._checkUpdates();
+  };
+};
+
+App._checkUpdates = async function () {
+  const el = document.getElementById('loginCheckUpdates');
+  const orig = el.textContent;
+  el.textContent = 'Checking…';
+  try {
+    const r = await App.pos.update.check();
+    if (r.upToDate) {
+      App.ui.toast('You are up to date (v' + r.currentVer + ')', 'ok');
+    } else {
+      const ok = await App.ui.confirm(
+        'v' + r.currentVer + ' → v' + (Math.round((parseFloat(r.currentVer) + 0.1) * 10) / 10) + '\n' +
+        r.ahead + ' update(s) available.\n\nPull latest code and restart?'
+      );
+      if (ok) await App.pos.update.apply();
+    }
+  } catch (e) {
+    App.ui.toast(e.message, 'err');
+  } finally {
+    el.textContent = orig;
   }
 };
 

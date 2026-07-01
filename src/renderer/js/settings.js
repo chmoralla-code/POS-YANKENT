@@ -74,6 +74,12 @@ App.views.settings = {
           </div>
           <div id="sBackupResult"></div>
         </div></div>
+
+        <div class="panel"><div class="panel-h">Updates <small id="sVersionLabel"></small></div><div class="panel-b">
+          <div class="hint">Check if a new version is available on GitHub. Requires internet.</div>
+          <button class="btn btn-ghost btn-sm" id="sCheckUpdates">Check for Updates</button>
+          <div id="sUpdateResult"></div>
+        </div></div>
       </div>`;
     this._wire(online);
   },
@@ -89,6 +95,9 @@ App.views.settings = {
     v.querySelector('#sBtConn').textContent = App.printer.isConnected() ? '● Connected: ' + (App.settingsCache.printer_device_name || 'printer') : 'Not connected';
     v.querySelector('#sNet').textContent = online ? '● Online' : '● Offline (POS still works)';
     this._tgPreview();
+
+    const verEl = v.querySelector('#sVersionLabel');
+    if (verEl) { try { verEl.textContent = 'v' + (await App.pos.update.getVersion()); } catch {} }
 
     const save = async (keys) => {
       for (const k of keys) { const el = v.querySelector('#s_' + k); if (el) await App.pos.settings.set(k, el.value); }
@@ -110,6 +119,26 @@ App.views.settings = {
       if (!ok) return;
       try { const r = await App.pos.backup.import(); if (r) { App.ui.toast('Import complete ✓', 'ok'); v.querySelector('#sBackupResult').innerHTML = `<div class="hint">Restored from <b>${App.ui.esc(r.path)}</b><br>${Object.entries(r.tables).map(([k, n]) => k + ': ' + n).join(' · ')}</div>`; this.s = await App.pos.settings.getAll(); App.settingsCache = this.s; } }
       catch (e) { App.ui.toast(e.message, 'err'); }
+    };
+
+    v.querySelector('#sCheckUpdates').onclick = async () => {
+      try {
+        const r = await App.pos.update.check();
+        const el = v.querySelector('#sUpdateResult');
+        if (r.upToDate) {
+          el.innerHTML = '<div class="hint" style="color:var(--ok)">You are up to date.</div>';
+        } else {
+          el.innerHTML = `<div class="hint">${r.ahead} update(s) available:<br><pre style="font-size:11px;margin:4px 0">${App.ui.esc(r.log)}</pre></div>
+            <button class="btn btn-primary btn-sm" id="sApplyUpdate">Apply Update & Restart</button>`;
+          v.querySelector('#sApplyUpdate').onclick = async () => {
+            const ok = await App.ui.confirm('Pull latest code and restart the app?');
+            if (!ok) return;
+            await App.pos.update.apply();
+          };
+        }
+      } catch (e) {
+        v.querySelector('#sUpdateResult').innerHTML = `<div class="hint" style="color:var(--danger)">${App.ui.esc(e.message)}</div>`;
+      }
     };
   },
 
