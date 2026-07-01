@@ -11,6 +11,7 @@ App.views.pos = {
 
   async render(view) {
     this.viewEl = view;
+    view.classList.add('view-pos');
     // Always fetch fresh data so admin changes (price, stock, categories) sync immediately.
     const [products, categories, customers] = await Promise.all([
       App.pos.products.list({ includeServices: true }),
@@ -19,6 +20,7 @@ App.views.pos = {
     ]);
     this.cache = { products, categories, customers };
     view.innerHTML = `
+      <div class="pos-analytics" id="posAnalytics"></div>
       <div class="pos-grid">
         <div class="pos-left">
           <div class="panel pos-catalog">
@@ -41,6 +43,10 @@ App.views.pos = {
         </div>
         <div class="pos-right">
           <div class="panel">
+            <div class="printer-bar" id="posPrinterBar">
+              <span class="printer-status" id="posPrinterStatus"><span class="dot off"></span> Printer not connected</span>
+              <button class="btn btn-ghost btn-sm" id="posPrinterConnect">Connect Bluetooth</button>
+            </div>
             <div class="cust-box">
               <label class="fl">Customer</label>
               <div class="row">
@@ -73,6 +79,8 @@ App.views.pos = {
     this._renderChips();
     this._renderGrid();
     this._renderCart();
+    this._renderAnalytics();
+    this._renderPrinterStatus();
   },
 
   _applyZoom() {
@@ -126,6 +134,62 @@ App.views.pos = {
     v.querySelector('#posSearch').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') { e.preventDefault(); const first = v.querySelector('#posGrid .prod-card'); if (first) first.click(); }
     });
+    // Bluetooth printer pairing (cashier-accessible)
+    const connectBtn = v.querySelector('#posPrinterConnect');
+    if (connectBtn) connectBtn.onclick = () => this._connectPrinter();
+  },
+
+  async _connectPrinter() {
+    const v = this.viewEl;
+    const btn = v.querySelector('#posPrinterConnect');
+    if (!App.printer.available()) { App.ui.toast('Web Bluetooth not available on this device', 'err'); return; }
+    if (App.printer.isConnected()) { App.printer.disconnect(); this._renderPrinterStatus(); App.ui.toast('Printer disconnected'); return; }
+    btn.disabled = true; btn.textContent = 'Connecting…';
+    try {
+      const name = await App.printer.pair();
+      App.ui.toast('Connected to ' + name + ' ✓', 'ok');
+    } catch (e) { App.ui.toast(e.message, 'err'); }
+    finally { btn.disabled = false; this._renderPrinterStatus(); }
+  },
+
+  _renderPrinterStatus() {
+    const v = this.viewEl;
+    if (!v) return;
+    const statusEl = v.querySelector('#posPrinterStatus');
+    const btn = v.querySelector('#posPrinterConnect');
+    if (!statusEl || !btn) return;
+    if (!App.printer.available()) { statusEl.innerHTML = '<span class="dot off"></span> Bluetooth unsupported'; btn.disabled = true; btn.textContent = 'Connect Bluetooth'; return; }
+    if (App.printer.isConnected()) {
+      const name = App.printer._deviceName || 'Bluetooth Printer';
+      statusEl.innerHTML = `<span class="dot on"></span> ${App.ui.esc(name)}`;
+      btn.textContent = 'Disconnect';
+      btn.classList.remove('btn-ghost'); btn.classList.add('btn-primary');
+    } else {
+      statusEl.innerHTML = '<span class="dot off"></span> Printer not connected';
+      btn.textContent = 'Connect Bluetooth';
+      btn.classList.remove('btn-primary'); btn.classList.add('btn-ghost');
+    }
+  },
+
+  async _renderAnalytics() {
+    const el = this.viewEl.querySelector('#posAnalytics');
+    if (!el) return;
+    try {
+      const [summary, analytics] = await Promise.all([
+        App.pos.reports.summary(),
+        App.pos.reports.analytics(),
+      ]);
+      const a = analytics || {};
+      const todayTx = (summary.today && summary.today.tx) || 0;
+      const todayTotal = (summary.today && summary.today.total) || 0;
+      const avg = a.today && a.today.tx > 0 ? a.avgTx : 0;
+      const items = Math.round(a.itemsSold || 0);
+      el.innerHTML = `
+        <div class="pa-stat"><div class="k">Today's Sales</div><div class="v">${App.ui.money(todayTotal)}</div></div>
+        <div class="pa-stat"><div class="k">Transactions</div><div class="v">${todayTx}</div></div>
+        <div class="pa-stat"><div class="k">Items Sold</div><div class="v">${items}</div></div>
+        <div class="pa-stat"><div class="k">Avg. Transaction</div><div class="v">${App.ui.money(avg)}</div></div>`;
+    } catch { el.innerHTML = '<div class="pa-stat muted">Analytics unavailable</div>'; }
   },
 
   _renderCust() {
@@ -385,6 +449,7 @@ App.views.pos = {
       this.viewEl.querySelector('#posCredit').classList.add('hidden');
       this._setPay('cash');
       this._renderChips(); this._renderGrid(); this._renderCart();
+      this._renderAnalytics();
       // receipt + auto-print
       await this._showReceipt(res.txnId, res.receipt);
       await App.printer.autoPrint(res.txnId);

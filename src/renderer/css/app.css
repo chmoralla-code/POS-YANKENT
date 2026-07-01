@@ -134,6 +134,7 @@ button { cursor: pointer; }
 .topbar .tmeta { color: var(--muted); font-size: 12px; display: flex; gap: 14px; align-items: center; }
 .topbar .pill { background: var(--bg); border: 1px solid var(--line); padding: 4px 10px; border-radius: 20px; font-size: 12px; }
 .view { flex: 1; overflow: auto; padding: 14px; }
+.view-pos { display: flex; flex-direction: column; overflow: hidden; }
 
 /* ---------- Buttons --------------------------------------------------- */
 .btn { padding: 9px 14px; border: 1px solid var(--line); background: var(--panel); border-radius: var(--radius-sm); font-weight: 600; font-size: 13px; }
@@ -243,7 +244,17 @@ table.tbl tr:hover td { background: #fafbfc; }
 }
 
 /* ---------- POS layout ----------------------------------------------- */
-.pos-grid { display: grid; grid-template-columns: 1fr 400px; gap: 14px; height: calc(100vh - 52px - 28px); }
+.pos-analytics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+.pa-stat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 14px; box-shadow: var(--shadow); }
+.pa-stat .k { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+.pa-stat .v { font-size: 20px; font-weight: 800; margin-top: 2px; }
+.pa-stat.muted { color: var(--muted); font-size: 12px; }
+.printer-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: #fafafa; }
+.printer-status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.printer-status .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.printer-status .dot.on { background: var(--ok); box-shadow: 0 0 6px rgba(31,107,58,.6); }
+.printer-status .dot.off { background: var(--muted-2); }
+.pos-grid { display: grid; grid-template-columns: 1fr 400px; gap: 14px; flex: 1; min-height: 0; }
 .pos-left, .pos-right { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
 .pos-catalog { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .search-row { display: flex; gap: 8px; padding: 12px; border-bottom: 1px solid var(--line); align-items: center; }
@@ -365,7 +376,8 @@ body.theme-dark .sidebar { background: #0f0f12; }
 body.theme-dark .panel-h,
 body.theme-dark table.tbl th,
 body.theme-dark .totals,
-body.theme-dark .cust-box { background: #1f1f24; }
+body.theme-dark .cust-box,
+body.theme-dark .printer-bar { background: #1f1f24; }
 body.theme-dark table.tbl tr:hover td,
 body.theme-dark .cart-row.svc { background: #2a2a30; }
 body.theme-dark .svc-card { background: #2a2a30; border-color: #3a3a42; }

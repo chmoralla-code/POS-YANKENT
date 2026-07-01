@@ -44,6 +44,11 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('app').classList.add('hidden');
     document.getElementById('login').classList.remove('hidden');
     document.getElementById('loginPass').value = '';
+    // Reset the Sign In button so it can be used again after a session.
+    const lb = document.getElementById('loginBtn');
+    if (lb) { lb.classList.remove('is-loading', 'is-success'); lb.disabled = false; lb.textContent = 'Sign In'; }
+    const le = document.getElementById('loginError');
+    if (le) le.textContent = '';
     document.getElementById('loginUser').focus();
   };
 
@@ -100,6 +105,7 @@ App._navigate = async function (name) {
   App.current.view = name;
   document.querySelectorAll('.nav-item[data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === name));
   const view = document.getElementById('view');
+  view.classList.remove('view-pos');
   document.getElementById('viewTitle').textContent = App.views[name].title;
   view.innerHTML = '<div class="empty-state"><span class="spinner"></span> Loading…</div>';
   try { await App.views[name].render(view); }
