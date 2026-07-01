@@ -70,7 +70,48 @@ function reportMoney(n) {
 }
 
 /**
- * Build the owner sales-report message string from the local database.
+ * Build today's analytics (used by the in-app Analytics card and the
+ * enriched Telegram report).
+ */
+function buildAnalytics(db) {
+  const today = db.prepare(
+    `SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total FROM sales
+     WHERE status='completed' AND date(datetime)=date('now','localtime')`
+  ).get();
+
+  const avgTx = today.tx > 0 ? today.total / today.tx : 0;
+
+  const itemsSold = db.prepare(
+    `SELECT COALESCE(SUM(si.qty),0) AS q FROM sale_items si
+     JOIN sales s ON si.sale_id=s.id
+     WHERE s.status='completed' AND date(s.datetime)=date('now','localtime')`
+  ).get().q;
+
+  const topProducts = db.prepare(
+    `SELECT si.name, SUM(si.qty) AS qty, SUM(si.amount) AS total
+     FROM sale_items si JOIN sales s ON si.sale_id=s.id
+     WHERE s.status='completed' AND date(s.datetime)=date('now','localtime')
+     GROUP BY si.product_id ORDER BY total DESC LIMIT 3`
+  ).all();
+
+  const topCashier = db.prepare(
+    `SELECT s.cashier_name, COUNT(*) AS tx, SUM(s.total) AS total FROM sales s
+     WHERE s.status='completed' AND date(s.datetime)=date('now','localtime')
+     GROUP BY s.cashier_id ORDER BY total DESC LIMIT 1`
+  ).get();
+
+  const payBreak = db.prepare(
+    `SELECT payment_method, COUNT(*) AS tx, SUM(total) AS total FROM sales
+     WHERE status='completed' AND date(datetime)=date('now','localtime')
+     GROUP BY payment_method`
+  ).all();
+
+  return { today, avgTx, itemsSold, topProducts, topCashier, payBreak };
+}
+
+/**
+ * Build the owner sales-report message string from the local database,
+ * including an analytics breakdown.
  */
 function buildReportMessage(db) {
   const today = db.prepare(
@@ -86,12 +127,12 @@ function buildReportMessage(db) {
   ).get();
 
   const month = db.prepare(
-    `SELECT COALESCE(SUM(total),0) AS total FROM sales WHERE status='completed'
+    `SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total FROM sales WHERE status='completed'
        AND strftime('%Y-%m', datetime)=strftime('%Y-%m','now','localtime')`
   ).get();
 
   const year = db.prepare(
-    `SELECT COALESCE(SUM(total),0) AS total FROM sales WHERE status='completed'
+    `SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total FROM sales WHERE status='completed'
        AND strftime('%Y', datetime)=strftime('%Y','now','localtime')`
   ).get();
 
@@ -106,14 +147,33 @@ function buildReportMessage(db) {
     bestDay = `${dt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} - ${reportMoney(best.total)}`;
   }
 
-  return [
-    'YANKENT POS Sales Report',
-    `Today: ${reportMoney(today.total)} / ${today.tx} transactions`,
-    `Yesterday: ${reportMoney(yesterday.total)} / ${yesterday.tx} transactions`,
-    `This Month: ${reportMoney(month.total)}`,
-    `This Year: ${reportMoney(year.total)}`,
-    `Best Day: ${bestDay}`,
-  ].join('\n');
+  const a = buildAnalytics(db);
+  const lines = [
+    '<b>YANKENT POS Sales Report</b>',
+    '━━━━━━━━━━━━━━━━━━',
+    `📅 Today: ${reportMoney(today.total)} / ${today.tx} transactions`,
+    `📆 Yesterday: ${reportMoney(yesterday.total)} / ${yesterday.tx} transactions`,
+    `📊 This Month: ${reportMoney(month.total)} / ${month.tx} tx`,
+    `📈 This Year: ${reportMoney(year.total)} / ${year.tx} tx`,
+    `🏆 Best Day: ${bestDay}`,
+    '',
+    '<b>📊 Analytics (Today)</b>',
+    '━━━━━━━━━━━━━━━━━━',
+    `Avg. Transaction: ${reportMoney(a.avgTx)}`,
+    `Items Sold: ${Math.round(a.itemsSold)}`,
+  ];
+  if (a.topProducts.length) {
+    lines.push('Top Products:');
+    a.topProducts.forEach((p, i) => lines.push(`${i + 1}. ${p.name} — ${reportMoney(p.total)} (${Math.round(p.qty)} sold)`));
+  }
+  if (a.topCashier) {
+    lines.push(`Top Cashier: ${a.topCashier.cashier_name} — ${reportMoney(a.topCashier.total)} / ${a.topCashier.tx} tx`);
+  }
+  if (a.payBreak.length) {
+    lines.push('Payments: ' + a.payBreak.map((p) => `${p.payment_method} ${reportMoney(p.total)}`).join(' · '));
+  }
+  lines.push('', '<i>Sent from YANKENT POS</i>');
+  return lines.join('\n');
 }
 
-module.exports = { checkOnline, sendMessage, buildReportMessage, reportMoney };
+module.exports = { checkOnline, sendMessage, buildReportMessage, buildAnalytics, reportMoney };

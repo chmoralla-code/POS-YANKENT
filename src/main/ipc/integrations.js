@@ -56,7 +56,8 @@ function register(ipcMain, ctx) {
     return sendMessage(token, chatId, 'YANKENT POS — Telegram test message ✓');
   });
 
-  guard(ipcMain, 'pos:telegram:sendReport', { admin: true }, async () => {
+  // Any logged-in user (incl. cashier) can send the owner report.
+  guard(ipcMain, 'pos:telegram:sendReport', { auth: true }, async () => {
     const token = ctx.getSetting(db, 'telegram_token');
     const chatId = ctx.getSetting(db, 'telegram_chat_id');
     if (!token || !chatId) return { ok: false, error: 'Telegram not configured' };

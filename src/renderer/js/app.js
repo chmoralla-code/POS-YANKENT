@@ -34,6 +34,18 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', () => App._navigate(btn.dataset.view));
   });
 
+  // "Send Report" button — available to all roles (cashier + admin).
+  document.getElementById('sendReportBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('sendReportBtn');
+    btn.disabled = true; btn.textContent = '📨 Sending…';
+    try {
+      const r = await App.pos.telegram.sendReport();
+      if (r.ok) App.ui.toast('Sales report sent to owner ✓', 'ok');
+      else App.ui.toast(r.error || 'Failed to send', 'err');
+    } catch (e) { App.ui.toast(e.message, 'err'); }
+    btn.disabled = false; btn.textContent = '📨 Send Report';
+  });
+
   App._clock();
   setInterval(() => App._clock(), 1000);
   App._net();

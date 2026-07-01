@@ -20,6 +20,7 @@ App.views.reports = {
         <button class="btn btn-ghost btn-sm" id="rPrint">Print</button>
       </div>
       <div id="rStats" class="stat-grid"></div>
+      <div class="panel" style="margin-top:14px"><div class="panel-h">Analytics (Today) <button class="btn btn-sm btn-ghost" id="rSendTg" style="float:right">📨 Send to Telegram</button></div><div class="panel-b" id="rAnalytics"></div></div>
       <div class="row gap" style="align-items:flex-start;margin-top:14px;flex-wrap:wrap">
         <div class="panel fill" style="min-width:320px"><div class="panel-h">Best-selling Products <button class="btn btn-sm btn-ghost" data-x="bestSelling" style="float:right">CSV</button></div><div class="panel-b" id="rBest"></div></div>
         <div class="panel fill" style="min-width:280px"><div class="panel-h">Sales by Cashier <button class="btn btn-sm btn-ghost" data-x="byCashier" style="float:right">CSV</button></div><div class="panel-b" id="rCsr"></div></div>
@@ -34,6 +35,12 @@ App.views.reports = {
     const v = this.viewEl;
     v.querySelector('#rGo').onclick = () => { this.from = v.querySelector('#rFrom').value; this.to = v.querySelector('#rTo').value; this._load(); };
     v.querySelector('#rPrint').onclick = () => this._print();
+    v.querySelector('#rSendTg').onclick = async () => {
+      const b = v.querySelector('#rSendTg'); b.disabled = true; b.textContent = '📨 Sending…';
+      try { const r = await App.pos.telegram.sendReport(); r.ok ? App.ui.toast('Report sent ✓', 'ok') : App.ui.toast(r.error || 'Failed', 'err'); }
+      catch (e) { App.ui.toast(e.message, 'err'); }
+      b.disabled = false; b.textContent = '📨 Send to Telegram';
+    };
     v.querySelectorAll('[data-x]').forEach((b) => b.onclick = () => this._csv(b.dataset.x));
     v.querySelector('#rList').addEventListener('click', (e) => {
       const txn = e.target.closest('[data-txn]')?.dataset.txn; if (!txn) return;
@@ -43,26 +50,46 @@ App.views.reports = {
 
   async _load() {
     const f = { from: this.from || undefined, to: this.to || undefined };
-    const [summary, best, csr, day, list] = await Promise.all([
+    const [summary, best, csr, day, list, analytics] = await Promise.all([
       App.pos.reports.summary(),
       App.pos.reports.bestSelling(f),
       App.pos.reports.byCashier(f),
       App.pos.reports.salesByDay(f),
       App.pos.sales.list(f),
+      App.pos.reports.analytics(),
     ]);
-    this.data = { summary, best, csr, day, list };
+    this.data = { summary, best, csr, day, list, analytics };
     this._render();
   },
 
   _render() {
     const d = this.data; const v = this.viewEl;
     const s = d.summary;
+    const a = d.analytics || {};
     v.querySelector('#rStats').innerHTML = `
       <div class="stat"><div class="k">Today</div><div class="v">${App.ui.money(s.today.total)}<small> / ${s.today.tx} transactions</small></div></div>
       <div class="stat"><div class="k">Yesterday</div><div class="v">${App.ui.money(s.yesterday.total)}<small> / ${s.yesterday.tx} transactions</small></div></div>
       <div class="stat"><div class="k">This Month</div><div class="v">${App.ui.money(s.month.total)}<small> / ${s.month.tx} transactions</small></div></div>
       <div class="stat"><div class="k">This Year</div><div class="v">${App.ui.money(s.year.total)}<small> / ${s.year.tx} transactions</small></div></div>
       <div class="stat"><div class="k">Best Sales Day</div><div class="v">${s.bestDay ? App.ui.money(s.bestDay.total) : '—'}<small>${s.bestDay ? '<br>' + App.ui.esc(s.bestDay.label) : ''}</small></div></div>`;
+    // Analytics (today)
+    if (v.querySelector('#rAnalytics')) {
+      const avg = a.today && a.today.tx > 0 ? a.avgTx : 0;
+      const items = Math.round(a.itemsSold || 0);
+      const tops = (a.topProducts || []).map((p, i) => `<tr><td>${i + 1}. ${App.ui.esc(p.name)}</td><td class="right">${App.ui.qty(p.qty)}</td><td class="right">${App.ui.money(p.total)}</td></tr>`).join('');
+      const tc = a.topCashier ? `<tr><td>${App.ui.esc(a.topCashier.cashier_name)}</td><td class="right">${a.topCashier.tx}</td><td class="right">${App.ui.money(a.topCashier.total)}</td></tr>` : '<tr><td colspan="3" class="muted">No sales today</td></tr>';
+      const pays = (a.payBreak || []).map((p) => `${App.ui.esc(p.payment_method)}: ${App.ui.money(p.total)}`).join(' · ') || '—';
+      v.querySelector('#rAnalytics').innerHTML = `
+        <div class="stat-grid" style="margin-bottom:10px">
+          <div class="stat"><div class="k">Avg. Transaction (Today)</div><div class="v">${App.ui.money(avg)}</div></div>
+          <div class="stat"><div class="k">Items Sold (Today)</div><div class="v">${items}</div></div>
+          <div class="stat"><div class="k">Payments (Today)</div><div class="v" style="font-size:14px">${pays}</div></div>
+        </div>
+        <div class="row gap" style="align-items:flex-start;flex-wrap:wrap">
+          <div class="panel fill" style="min-width:260px"><div class="panel-h">Top Products (Today)</div><div class="panel-b"><table class="tbl"><thead><tr><th>Item</th><th class="right">Qty</th><th class="right">Total</th></tr></thead><tbody>${tops || '<tr><td colspan="3" class="muted">No sales today</td></tr>'}</tbody></table></div></div>
+          <div class="panel fill" style="min-width:200px"><div class="panel-h">Top Cashier (Today)</div><div class="panel-b"><table class="tbl"><thead><tr><th>Cashier</th><th class="right">Tx</th><th class="right">Total</th></tr></thead><tbody>${tc}</tbody></table></div></div>
+        </div>`;
+    }
     v.querySelector('#rBest').innerHTML = d.best.length ? `<table class="tbl"><thead><tr><th>Item</th><th class="right">Qty</th><th class="right">Total</th></tr></thead><tbody>
       ${d.best.map((b) => `<tr><td>${App.ui.esc(b.name)}</td><td class="right">${App.ui.qty(b.qty)}</td><td class="right">${App.ui.money(b.total)}</td></tr>`).join('')}</tbody></table>` : '<div class="empty-state">No data.</div>';
     v.querySelector('#rCsr').innerHTML = d.csr.length ? `<table class="tbl"><thead><tr><th>Cashier</th><th class="right">Tx</th><th class="right">Total</th></tr></thead><tbody>

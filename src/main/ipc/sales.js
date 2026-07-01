@@ -2,6 +2,7 @@
 
 const { computeTotals, round2 } = require('../lib/money');
 const { buildReceipt } = require('../lib/receipt');
+const { buildAnalytics } = require('../lib/telegram');
 
 function placeholders(n) { return Array(n).fill('?').join(','); }
 
@@ -192,6 +193,8 @@ function register(ipcMain, ctx) {
     sql += ` GROUP BY date(datetime) ORDER BY date DESC`;
     return db.prepare(sql).all(...params);
   });
+
+  guard(ipcMain, 'pos:reports:analytics', { auth: true }, () => buildAnalytics(db));
 
   guard(ipcMain, 'pos:reports:exportCSV', { auth: true }, async (_c, type, f = {}) => {
     let rows, header;
