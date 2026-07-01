@@ -7,7 +7,7 @@ App.cart = App.cart || [];
 App.views.pos = {
   title: 'Point of Sale',
   cache: { products: [], categories: [], customers: [] },
-  state: { tab: 'products', cat: 'all', q: '', customer: null, pay: 'cash', zoom: parseFloat(localStorage.getItem('posZoom') || '1') },
+  state: { tab: 'products', cat: 'all', q: '', customer: null, pay: 'cash', zoom: parseFloat(localStorage.getItem('posZoom') || '1'), discountOn: false },
 
   async render(view) {
     this.viewEl = view;
@@ -60,6 +60,7 @@ App.views.pos = {
             </div>
             <div class="ck">
               <button class="btn btn-ghost" id="posVoid">Void</button>
+              <button class="btn btn-ghost" id="posDiscount" title="Apply admin-set discount %">Discount</button>
               <button class="btn btn-primary" id="posCharge">Charge ₱0.00</button>
             </div>
           </div>
@@ -107,6 +108,16 @@ App.views.pos = {
     v.querySelector('#posCust').onchange = (e) => this._selectCustomer(+e.target.value);
     v.querySelectorAll('#posPay button').forEach((b) => b.onclick = () => this._setPay(b.dataset.pay));
     v.querySelector('#posVoid').onclick = () => this._void();
+    v.querySelector('#posDiscount').onclick = () => {
+      const pct = parseFloat((App.settingsCache || {}).discount_percent) || 0;
+      if (pct <= 0) { App.ui.toast('No discount set (admin controls this)', 'err'); return; }
+      this.state.discountOn = !this.state.discountOn;
+      const btn = v.querySelector('#posDiscount');
+      btn.classList.toggle('btn-primary', this.state.discountOn);
+      btn.classList.toggle('btn-ghost', !this.state.discountOn);
+      btn.textContent = this.state.discountOn ? `Discount ${pct}% ✓` : 'Discount';
+      this._renderCart();
+    };
     v.querySelector('#posCharge').onclick = () => this._checkout();
     v.querySelector('#posCart').addEventListener('click', (e) => this._cartClick(e));
     v.querySelector('#posCart').addEventListener('change', (e) => this._cartChange(e));
@@ -255,12 +266,20 @@ App.views.pos = {
   _compute() {
     const mat = App.cart.filter((i) => !i.isService).reduce((s, i) => s + i.qty * i.unitPrice, 0);
     const svc = App.cart.filter((i) => i.isService).reduce((s, i) => s + i.qty * i.unitPrice, 0);
-    const total = mat + svc;
+    const gross = mat + svc;
+    const discPct = this.state.discountOn ? (parseFloat((App.settingsCache || {}).discount_percent) || 0) : 0;
+    const discAmt = gross * discPct / 100;
+    const total = Math.max(0, gross - discAmt);
     const vat = total - total / 1.12;
+    let discLine = '';
+    if (discPct > 0) {
+      discLine = `<div class="r"><span class="l">Discount (${discPct}% off)</span><span>−${App.ui.money(discAmt)}</span></div>`;
+    }
     this.viewEl.querySelector('#posTotals').innerHTML = `
       <div class="r"><span class="l">Materials</span><span>${App.ui.money(mat)}</span></div>
       <div class="r"><span class="l">Services</span><span>${App.ui.money(svc)}</span></div>
       <div class="r"><span class="l">VAT 12% (incl.)</span><span>${App.ui.money(vat)}</span></div>
+      ${discLine}
       <div class="r g"><span>TOTAL</span><span>${App.ui.money(total)}</span></div>`;
     this.viewEl.querySelector('#posCount').textContent = App.cart.length;
     this.viewEl.querySelector('#posCharge').textContent = 'Charge ' + App.ui.money(total);
@@ -281,7 +300,9 @@ App.views.pos = {
 
   _checkout() {
     if (!App.cart.length) { App.ui.toast('Cart is empty', 'err'); return; }
-    const total = App.cart.reduce((s, i) => s + i.qty * i.unitPrice, 0);
+    const gross = App.cart.reduce((s, i) => s + i.qty * i.unitPrice, 0);
+    const discPct = this.state.discountOn ? (parseFloat((App.settingsCache || {}).discount_percent) || 0) : 0;
+    const total = Math.max(0, gross - gross * discPct / 100);
     const pay = this.state.pay;
     const cust = this.state.customer;
     let cashHtml = '', refHtml = '';
@@ -309,6 +330,9 @@ App.views.pos = {
   },
 
   async _confirm(total, pay, cust) {
+    const gross = App.cart.reduce((s, i) => s + i.qty * i.unitPrice, 0);
+    const discPct = this.state.discountOn ? (parseFloat((App.settingsCache || {}).discount_percent) || 0) : 0;
+    const discAmt = gross * discPct / 100;
     const payload = {
       items: App.cart.map((i) => ({
         productId: i.productId, sku: i.sku, name: i.name, unit: i.unit,
@@ -319,6 +343,7 @@ App.views.pos = {
       customerName: cust ? cust.name : 'Walk-in Customer',
       paymentMethod: pay,
       amountTendered: pay === 'cash' ? total : 0,
+      discount: discAmt,
       reference: '',
     };
     try {
@@ -329,6 +354,9 @@ App.views.pos = {
       this.cache.customers = await App.pos.customers.list();
       App.cart = [];
       this.state.customer = null;
+      this.state.discountOn = false;
+      const dBtn = this.viewEl.querySelector('#posDiscount');
+      if (dBtn) { dBtn.classList.remove('btn-primary'); dBtn.classList.add('btn-ghost'); dBtn.textContent = 'Discount'; }
       this.viewEl.querySelector('#posCust').value = '0';
       this.viewEl.querySelector('#posCredit').classList.add('hidden');
       this._setPay('cash');

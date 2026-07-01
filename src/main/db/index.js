@@ -34,6 +34,7 @@ const SETTINGS_DEFAULTS = {
   currency_symbol: '₱',
   receipt_footer: "Thank you for your business!\nKeep receipt for returns (7 days).",
   receipt_width: '32',       // 32 or 48 chars for ESC/POS
+  discount_percent: '0',     // admin-set discount % available to cashiers
   // thermal printer
   printer_type: 'bluetooth', // 'bluetooth' | 'none'
   printer_service_uuid: '000018f0-0000-1000-8000-00805f9b34fb',

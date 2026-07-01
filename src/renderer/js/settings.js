@@ -26,6 +26,7 @@ App.views.settings = {
             <div style="flex:1">${this._row('VAT rate % (inclusive)', 'vat_rate', this.s.vat_rate)}</div>
             <div style="flex:1">${this._row('Currency symbol', 'currency_symbol', this.s.currency_symbol)}</div>
             <div style="flex:1">${this._row('Receipt width (chars)', 'receipt_width', this.s.receipt_width)}</div>
+            <div style="flex:1">${this._row('Discount % (cashier can apply)', 'discount_percent', this.s.discount_percent || '0')}</div>
           </div>
           ${this._row('Receipt footer message', 'receipt_footer', this.s.receipt_footer, 'textarea')}
           <button class="btn btn-primary btn-sm" id="sSaveStore">Save store info</button>
@@ -93,7 +94,7 @@ App.views.settings = {
       for (const k of keys) { const el = v.querySelector('#s_' + k); if (el) await App.pos.settings.set(k, el.value); }
       App.settingsCache = await App.pos.settings.getAll(); App.currencySymbol = App.settingsCache.currency_symbol || '₱';
     };
-    v.querySelector('#sSaveStore').onclick = async () => { await save(['store_name','store_address','store_tin','store_phone','vat_rate','currency_symbol','receipt_width','receipt_footer']); App.ui.toast('Store info saved ✓', 'ok'); };
+    v.querySelector('#sSaveStore').onclick = async () => { await save(['store_name','store_address','store_tin','store_phone','vat_rate','currency_symbol','receipt_width','discount_percent','receipt_footer']); App.ui.toast('Store info saved ✓', 'ok'); };
     v.querySelector('#sSavePrinter').onclick = async () => { await save(['printer_service_uuid','printer_char_uuid','printer_type']); const c = v.querySelector('#sAuto').checked ? '1' : '0'; await App.pos.settings.set('printer_auto_print', c); App.settingsCache.printer_auto_print = c; App.ui.toast('Printer settings saved ✓', 'ok'); };
     v.querySelector('#sSaveTg').onclick = async () => { await save(['telegram_token','telegram_chat_id']); App.ui.toast('Telegram settings saved ✓', 'ok'); };
 
