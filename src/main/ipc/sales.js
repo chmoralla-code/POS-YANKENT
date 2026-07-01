@@ -137,6 +137,99 @@ function register(ipcMain, ctx) {
     return buildReceipt(db, sale.id);
   });
 
+  // ---- Refunds -----------------------------------------------------------
+  // Find a sale by txn ID (for the refund lookup screen)
+  guard(ipcMain, 'pos:refunds:lookup', { auth: true }, (_c, txnId) => {
+    const sale = db.prepare('SELECT * FROM sales WHERE txn_id=? AND status=?').get(txnId, 'completed');
+    if (!sale) return null;
+    sale.items = db.prepare('SELECT * FROM sale_items WHERE sale_id=? ORDER BY id').all(sale.id);
+    return sale;
+  });
+
+  // Verify admin PIN (for refund approval)
+  guard(ipcMain, 'pos:refunds:verifyAdmin', { auth: true }, async (_c, pin) => {
+    const { verifyPassword } = require('../lib/auth');
+    const admin = db.prepare("SELECT * FROM users WHERE role='admin' AND active=1").all();
+    for (const a of admin) {
+      if (verifyPassword(pin, a.password_hash)) {
+        return { ok: true, admin: { id: a.id, name: a.full_name } };
+      }
+    }
+    return { ok: false };
+  });
+
+  // Process a refund: restock items, mark sale as refunded, log refund, print receipt
+  guard(ipcMain, 'pos:refunds:process', { auth: true }, (_c, payload) => {
+    const { txnId, adminName, adminId, reason, refundAll } = payload;
+    const sale = db.prepare('SELECT * FROM sales WHERE txn_id=? AND status=?').get(txnId, 'completed');
+    if (!sale) throw new Error('Sale not found or already refunded');
+    const items = db.prepare('SELECT * FROM sale_items WHERE sale_id=? ORDER BY id').all(sale.id);
+
+    const result = db.transaction(() => {
+      // Mark original sale as refunded
+      db.prepare("UPDATE sales SET status='refunded', note=? WHERE id=?").run('Refunded: ' + (reason || ''), sale.id);
+
+      // Restock items (non-service only)
+      const restockStmt = db.prepare('UPDATE products SET stock = stock + ? WHERE id=?');
+      const movStmt = db.prepare('INSERT INTO stock_movements(product_id,movement,qty_change,reason,user_id) VALUES(?,?,?,?,?)');
+      for (const it of items) {
+        if (it.line_type === 'product' && it.product_id && it.stock_consumed > 0) {
+          restockStmt.run(it.stock_consumed, it.product_id);
+          movStmt.run(it.product_id, 'refund', it.stock_consumed, 'Refund ' + txnId, _c.session?.id || null);
+        }
+      }
+
+      // If on-account, reduce credit_used
+      if (sale.payment_method === 'account') {
+        db.prepare('UPDATE customers SET credit_used = MAX(0, credit_used - ?) WHERE id=?').run(sale.total, sale.customer_id || 0);
+      }
+
+      // Create refund record
+      const refundSeq = db.prepare('SELECT COALESCE(MAX(seq),0)+1 AS s FROM refunds').get().s;
+      const refundTxnId = 'RF-' + String(refundSeq).padStart(6, '0');
+      const now = new Date();
+      const dt = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' +
+        String(now.getDate()).padStart(2, '0') + ' ' + String(now.getHours()).padStart(2, '0') + ':' +
+        String(now.getMinutes()).padStart(2, '0') + ':' + String(now.getSeconds()).padStart(2, '0');
+
+      db.prepare(
+        `INSERT INTO refunds(original_txn_id, original_sale_id, refund_txn_id, datetime, cashier_id, cashier_name, admin_id, admin_name, customer_name, total, reason, items_json)
+         VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`
+      ).run(
+        txnId, sale.id, refundTxnId, dt,
+        _c.session?.id || null, _c.session?.full_name || '',
+        adminId, adminName,
+        sale.customer_name, sale.total, reason || '',
+        JSON.stringify(items)
+      );
+
+      return { refundTxnId, total: sale.total };
+    })();
+
+    return result;
+  });
+
+  // List refunds (for reports)
+  guard(ipcMain, 'pos:refunds:list', { auth: true }, (_c, f = {}) => {
+    let sql = `SELECT r.*, s.payment_method FROM refunds r JOIN sales s ON r.original_sale_id = s.id WHERE 1=1`;
+    const params = [];
+    if (f.from) { sql += ` AND r.datetime >= ?`; params.push(f.from + ' 00:00:00'); }
+    if (f.to) { sql += ` AND r.datetime <= ?`; params.push(f.to + ' 23:59:59'); }
+    sql += ` ORDER BY r.datetime DESC LIMIT ?`;
+    params.push(f.limit || 100);
+    return db.prepare(sql).all(...params);
+  });
+
+  guard(ipcMain, 'pos:refunds:summary', { auth: true }, () => {
+    const today = db.prepare(
+      `SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total FROM refunds WHERE date(datetime)=date('now','localtime')`
+    ).get();
+    const month = db.prepare(
+      `SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total FROM refunds WHERE strftime('%Y-%m',datetime)=strftime('%Y-%m','now','localtime')`
+    ).get();
+    return { today, month };
+  });
+
   // ---- Reports -----------------------------------------------------------
   guard(ipcMain, 'pos:reports:summary', { auth: true }, () => {
     const today = db.prepare(

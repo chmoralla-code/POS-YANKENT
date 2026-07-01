@@ -73,6 +73,14 @@ contextBridge.exposeInMainWorld('pos', {
     receipt: (txn) => call('pos:sales:receipt', txn),
   },
 
+  refunds: {
+    lookup: (txn) => call('pos:refunds:lookup', txn),
+    verifyAdmin: (pin) => call('pos:refunds:verifyAdmin', pin),
+    process: (p) => call('pos:refunds:process', p),
+    list: (f) => call('pos:refunds:list', f || {}),
+    summary: () => call('pos:refunds:summary'),
+  },
+
   // ---- Users ----
   users: {
     list: () => call('pos:users:list'),

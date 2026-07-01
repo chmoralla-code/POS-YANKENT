@@ -117,11 +117,28 @@ CREATE TABLE IF NOT EXISTS sale_items (
 CREATE TABLE IF NOT EXISTS stock_movements (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   product_id  INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-  movement    TEXT NOT NULL CHECK (movement IN ('sale','restock','adjustment')),
+  movement    TEXT NOT NULL CHECK (movement IN ('sale','restock','adjustment','refund')),
   qty_change  REAL NOT NULL,
   reason      TEXT,
   user_id     INTEGER REFERENCES users(id),
   datetime    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Refunds (linked to original sale, with admin approver)
+CREATE TABLE IF NOT EXISTS refunds (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  original_txn_id TEXT NOT NULL,
+  original_sale_id INTEGER NOT NULL REFERENCES sales(id),
+  refund_txn_id TEXT NOT NULL UNIQUE,
+  datetime      TEXT NOT NULL DEFAULT (datetime('now')),
+  cashier_id    INTEGER REFERENCES users(id),
+  cashier_name  TEXT NOT NULL,
+  admin_id      INTEGER REFERENCES users(id),
+  admin_name    TEXT NOT NULL,
+  customer_name TEXT,
+  total         REAL NOT NULL,
+  reason        TEXT,
+  items_json    TEXT
 );
 
 -- Key/value store for store info, printer config, telegram config, etc.

@@ -224,6 +224,13 @@ function buildReportMessage(db) {
   if (a.payBreak.length) {
     lines.push('Payments: ' + a.payBreak.map((p) => `${p.payment_method} ${reportMoney(p.total)}`).join(' · '));
   }
+  // Refunds
+  try {
+    const refToday = db.prepare(`SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total FROM refunds WHERE date(datetime)=date('now','localtime')`).get();
+    if (refToday && refToday.tx > 0) {
+      lines.push('', '<b>↩️ Refunds (Today)</b>', '━━━━━━━━━━━━━━━━━━', `Refunds: ${refToday.tx} / ${reportMoney(refToday.total)}`);
+    }
+  } catch {}
   lines.push('', '<i>Sent from YANKENT POS</i>');
   return lines.join('\n');
 }

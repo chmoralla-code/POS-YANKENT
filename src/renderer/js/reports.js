@@ -26,7 +26,8 @@ App.views.reports = {
         <div class="panel fill" style="min-width:280px"><div class="panel-h">Sales by Cashier <button class="btn btn-sm btn-ghost" data-x="byCashier" style="float:right">CSV</button></div><div class="panel-b" id="rCsr"></div></div>
       </div>
       <div class="panel" style="margin-top:14px"><div class="panel-h">Sales by Day <button class="btn btn-sm btn-ghost" data-x="salesByDay" style="float:right">CSV</button></div><div class="panel-b" id="rDay"></div></div>
-      <div class="panel" style="margin-top:14px"><div class="panel-h">Recent Sales <button class="btn btn-sm btn-ghost" data-x="sales" style="float:right">CSV</button></div><div style="overflow:auto;max-height:360px"><table class="tbl" id="rList"></table></div></div>`;
+      <div class="panel" style="margin-top:14px"><div class="panel-h">Recent Sales <button class="btn btn-sm btn-ghost" data-x="sales" style="float:right">CSV</button></div><div style="overflow:auto;max-height:360px"><table class="tbl" id="rList"></table></div></div>
+      <div class="panel" style="margin-top:14px;border-color:#e6c9c9"><div class="panel-h" style="color:var(--danger)">Refund Log</div><div style="overflow:auto;max-height:300px"><table class="tbl" id="rRefunds"></table></div></div>`;
     this._wire();
     await this._load();
   },
@@ -50,15 +51,17 @@ App.views.reports = {
 
   async _load() {
     const f = { from: this.from || undefined, to: this.to || undefined };
-    const [summary, best, csr, day, list, analytics] = await Promise.all([
+    const [summary, best, csr, day, list, analytics, refunds, refundSummary] = await Promise.all([
       App.pos.reports.summary(),
       App.pos.reports.bestSelling(f),
       App.pos.reports.byCashier(f),
       App.pos.reports.salesByDay(f),
       App.pos.sales.list(f),
       App.pos.reports.analytics(),
+      App.pos.refunds.list(f),
+      App.pos.refunds.summary(),
     ]);
-    this.data = { summary, best, csr, day, list, analytics };
+    this.data = { summary, best, csr, day, list, analytics, refunds, refundSummary };
     this._render();
   },
 
@@ -71,7 +74,8 @@ App.views.reports = {
       <div class="stat"><div class="k">Yesterday</div><div class="v">${App.ui.money(s.yesterday.total)}<small> / ${s.yesterday.tx} transactions</small></div></div>
       <div class="stat"><div class="k">This Month</div><div class="v">${App.ui.money(s.month.total)}<small> / ${s.month.tx} transactions</small></div></div>
       <div class="stat"><div class="k">This Year</div><div class="v">${App.ui.money(s.year.total)}<small> / ${s.year.tx} transactions</small></div></div>
-      <div class="stat"><div class="k">Best Sales Day</div><div class="v">${s.bestDay ? App.ui.money(s.bestDay.total) : '—'}<small>${s.bestDay ? '<br>' + App.ui.esc(s.bestDay.label) : ''}</small></div></div>`;
+      <div class="stat"><div class="k">Best Sales Day</div><div class="v">${s.bestDay ? App.ui.money(s.bestDay.total) : '—'}<small>${s.bestDay ? '<br>' + App.ui.esc(s.bestDay.label) : ''}</small></div></div>
+      <div class="stat" style="border-color:#e6c9c9"><div class="k">Refunds (Today)</div><div class="v" style="color:var(--danger)">${App.ui.money((d.refundSummary || {}).today ? d.refundSummary.today.total : 0)}<small> / ${(d.refundSummary || {}).today ? d.refundSummary.today.tx : 0} refunds</small></div></div>`;
     // Analytics (today)
     if (v.querySelector('#rAnalytics')) {
       const avg = a.today && a.today.tx > 0 ? a.avgTx : 0;
@@ -98,6 +102,14 @@ App.views.reports = {
       ${d.day.map((x) => `<tr><td>${App.ui.esc(x.date)}</td><td class="right">${x.tx}</td><td class="right">${App.ui.money(x.total)}</td></tr>`).join('')}</tbody></table>` : '<div class="empty-state">No data.</div>';
     v.querySelector('#rList').innerHTML = `<thead><tr><th>Txn</th><th>Date</th><th>Cashier</th><th>Customer</th><th class="right">Total</th><th>Pay</th><th></th></tr></thead><tbody>
       ${d.list.map((r) => `<tr><td class="mono" data-txn="${App.ui.esc(r.txn_id)}" style="cursor:pointer;text-decoration:underline">${App.ui.esc(r.txn_id)}</td><td>${App.ui.fmtDate(r.datetime)}</td><td>${App.ui.esc(r.cashier_name)}</td><td>${App.ui.esc(r.customer_name)}</td><td class="right">${App.ui.money(r.total)}</td><td>${App.ui.esc(r.payment_method)}</td><td><button class="btn btn-sm btn-ghost" data-txn="${App.ui.esc(r.txn_id)}">Reprint</button></td></tr>`).join('')}</tbody>`;
+
+    // Refund log
+    const rf = v.querySelector('#rRefunds');
+    if (rf) {
+      const rs = d.refunds || [];
+      rf.innerHTML = `<thead><tr><th>Refund ID</th><th>Original Txn</th><th>Date</th><th>Cashier</th><th>Admin</th><th class="right">Amount</th><th>Reason</th></tr></thead><tbody>
+        ${rs.length ? rs.map((r) => `<tr style="color:var(--danger)"><td class="mono">${App.ui.esc(r.refund_txn_id)}</td><td class="mono">${App.ui.esc(r.original_txn_id)}</td><td>${App.ui.fmtDate(r.datetime)}</td><td>${App.ui.esc(r.cashier_name)}</td><td>${App.ui.esc(r.admin_name)}</td><td class="right">${App.ui.money(r.total)}</td><td>${App.ui.esc(r.reason || '—')}</td></tr>`).join('') : '<tr><td colspan="7" class="muted" style="text-align:center;padding:20px">No refunds</td></tr>'}</tbody>`;
+    }
   },
 
   async _csv(type) {

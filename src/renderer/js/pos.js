@@ -60,6 +60,7 @@ App.views.pos = {
             <div class="ck">
               <button class="btn btn-ghost" id="posVoid">Void</button>
               <button class="btn btn-ghost" id="posDiscount" title="Apply admin-set discount %">Discount</button>
+              <button class="btn btn-ghost" id="posRefund" title="Process a refund for a completed sale">Refund</button>
               <button class="btn btn-primary" id="posCharge">Charge ₱0.00</button>
             </div>
           </div>
@@ -118,6 +119,7 @@ App.views.pos = {
       this._renderCart();
     };
     v.querySelector('#posCharge').onclick = () => this._checkout();
+    v.querySelector('#posRefund').onclick = () => this._startRefund();
     v.querySelector('#posCart').addEventListener('click', (e) => this._cartClick(e));
     v.querySelector('#posCart').addEventListener('change', (e) => this._cartChange(e));
     // keyboard: Enter in search adds first match
@@ -431,5 +433,100 @@ App.views.pos = {
       ${r.paymentMethod === 'cash' ? `<div class="r"><span>Cash</span><span>${App.ui.money(r.tendered)}</span></div><div class="r"><span>Change</span><span>${App.ui.money(r.change)}</span></div>` : ''}
       <hr style="border:none;border-top:1px dashed #ccc;margin:8px 0">
       <div style="text-align:center">${App.ui.esc(r.footer || '').replace(/\n/g, '<br>')}</div></div>`;
+  },
+
+  // ---- Refund flow --------------------------------------------------------
+  // Step 1: enter transaction ID from the receipt
+  _startRefund() {
+    const m = App.ui.modal({
+      title: 'Process Refund',
+      bodyHtml: `<div class="hint" style="margin-bottom:10px">Enter the transaction ID from the customer's receipt (e.g. YK-000042).</div>
+        <div class="field"><label class="fl">Transaction ID</label><input id="rfTxn" placeholder="YK-000042" autofocus></div>`,
+      footerHtml: `<button class="btn btn-ghost" data-a="cancel">Cancel</button><button class="btn btn-primary" data-a="lookup">Look Up</button>`,
+    });
+    m.el.querySelector('[data-a="cancel"]').onclick = () => m.close();
+    m.el.querySelector('[data-a="lookup"]').onclick = async () => {
+      const txn = m.el.querySelector('#rfTxn').value.trim().toUpperCase();
+      if (!txn) { App.ui.toast('Enter a transaction ID', 'err'); return; }
+      try {
+        const sale = await App.pos.refunds.lookup(txn);
+        if (!sale) { App.ui.toast('Sale not found or already refunded', 'err'); return; }
+        m.close();
+        this._showRefundSale(sale);
+      } catch (e) { App.ui.toast(e.message, 'err'); }
+    };
+  },
+
+  // Step 2: show the sale details + ask for admin PIN
+  _showRefundSale(sale) {
+    const itemsHtml = sale.items.map((i) => `<tr><td>${App.ui.esc(i.name)}</td><td class="right">${App.ui.qty(i.qty)} ${App.ui.esc(i.unit)}</td><td class="right">${App.ui.money(i.amount)}</td></tr>`).join('');
+    const m = App.ui.modal({
+      title: 'Refund — ' + sale.txn_id, wide: true,
+      bodyHtml: `<div class="hint" style="margin-bottom:8px">
+          <b>Date:</b> ${App.ui.esc(sale.datetime)} · <b>Cashier:</b> ${App.ui.esc(sale.cashier_name)} · <b>Pay:</b> ${App.ui.esc(sale.payment_method.toUpperCase())} · <b>Customer:</b> ${App.ui.esc(sale.customer_name)}
+        </div>
+        <table class="tbl"><thead><tr><th>Item</th><th class="right">Qty</th><th class="right">Amount</th></tr></thead><tbody>${itemsHtml}</tbody></table>
+        <div class="totals" style="border:none;padding:8px 0"><div class="r g"><span>TOTAL REFUND</span><span>${App.ui.money(sale.total)}</span></div></div>
+        <div class="field"><label class="fl">Reason (optional)</label><input id="rfReason" placeholder="Customer return / wrong item / damaged"></div>
+        <div class="sec-title">Admin approval required</div>
+        <div class="field"><label class="fl">Admin PIN (password)</label>
+          <div class="pw-field"><input id="rfAdminPin" type="password"><button type="button" class="pw-toggle" data-tgt="rfAdminPin">👁</button></div>
+        </div>
+        <div class="hint">Only an admin can approve refunds. The cashier cannot refund alone.</div>`,
+      footerHtml: `<button class="btn btn-ghost" data-a="cancel">Cancel</button><button class="btn btn-danger" data-a="refund">Approve &amp; Process Refund</button>`,
+    });
+    m.el.querySelectorAll('.pw-toggle').forEach((b) => {
+      b.onclick = () => { const inp = m.el.querySelector('#' + b.dataset.tgt); const show = inp.type === 'password'; inp.type = show ? 'text' : 'password'; b.textContent = show ? '🙈' : '👁'; };
+    });
+    m.el.querySelector('[data-a="cancel"]').onclick = () => m.close();
+    m.el.querySelector('[data-a="refund"]').onclick = async () => {
+      const pin = m.el.querySelector('#rfAdminPin').value;
+      if (!pin) { App.ui.toast('Enter admin PIN', 'err'); return; }
+      const btn = m.el.querySelector('[data-a="refund"]'); btn.disabled = true; btn.textContent = 'Processing…';
+      try {
+        // Verify admin PIN
+        const adminRes = await App.pos.refunds.verifyAdmin(pin);
+        if (!adminRes.ok) { App.ui.toast('Invalid admin PIN', 'err'); btn.disabled = false; btn.textContent = 'Approve & Process Refund'; return; }
+        // Process the refund
+        const reason = m.el.querySelector('#rfReason').value.trim();
+        const result = await App.pos.refunds.process({ txnId: sale.txn_id, adminName: adminRes.admin.name, adminId: adminRes.admin.id, reason });
+        m.close();
+        // Show refund receipt
+        this._showRefundReceipt(sale, result, reason, adminRes.admin.name);
+        // Refresh stock
+        this.cache.products = await App.pos.products.list({ includeServices: true });
+        this._renderGrid();
+      } catch (e) { App.ui.toast(e.message, 'err'); btn.disabled = false; btn.textContent = 'Approve & Process Refund'; }
+    };
+  },
+
+  // Step 3: show the refund receipt confirmation
+  _showRefundReceipt(sale, result, reason, adminName) {
+    const m = App.ui.modal({
+      title: 'Refund Processed ✓', wide: true,
+      bodyHtml: `<div class="receipt"><div class="store">YANKENT POS</div>
+        <div style="text-align:center;color:#666;font-size:10px">REFUND RECEIPT</div>
+        <hr style="border:none;border-top:1px dashed #ccc;margin:8px 0">
+        <div class="r"><span>Refund ID</span><span>${App.ui.esc(result.refundTxnId)}</span></div>
+        <div class="r"><span>Original Txn</span><span>${App.ui.esc(sale.txn_id)}</span></div>
+        <div class="r"><span>Date</span><span>${new Date().toLocaleString()}</span></div>
+        <div class="r"><span>Cashier</span><span>${App.ui.esc(App.current.user.full_name)}</span></div>
+        <div class="r"><span>Approved by</span><span>${App.ui.esc(adminName)}</span></div>
+        <div class="r"><span>Customer</span><span>${App.ui.esc(sale.customer_name)}</span></div>
+        <div class="r"><span>Pay</span><span>${App.ui.esc(sale.payment_method.toUpperCase())}</span></div>
+        ${reason ? `<div class="r"><span>Reason</span><span>${App.ui.esc(reason)}</span></div>` : ''}
+        <hr style="border:none;border-top:1px dashed #ccc;margin:8px 0">
+        <div class="r g"><span>REFUND TOTAL</span><span>${App.ui.money(result.total)}</span></div>
+        <hr style="border:none;border-top:1px dashed #ccc;margin:8px 0">
+        <div style="text-align:center">Items returned to stock.<br>Customer refunded ${App.ui.money(result.total)}.</div>
+      </div>`,
+      footerHtml: `<button class="btn btn-ghost" data-a="print">Print</button><button class="btn btn-primary" data-a="close">Done</button>`,
+    });
+    m.el.querySelector('[data-a="close"]').onclick = () => m.close();
+    m.el.querySelector('[data-a="print"]').onclick = async () => {
+      const text = `YANKENT POS\nREFUND RECEIPT\n${result.refundTxnId}\nOriginal: ${sale.txn_id}\n${new Date().toLocaleString()}\nCashier: ${App.current.user.full_name}\nAdmin: ${adminName}\nCustomer: ${sale.customer_name}\nPay: ${sale.payment_method.toUpperCase()}\n${reason ? 'Reason: ' + reason : ''}\n\nREFUND TOTAL: ${App.ui.money(result.total)}\nItems returned to stock.`;
+      try { await App.printer.printTextFallback(text); } catch (e) { App.ui.toast(e.message, 'err'); }
+    };
+    App.ui.toast(`Refund ${result.refundTxnId} processed — ${App.ui.money(result.total)} returned, items restocked`, 'ok');
   },
 };
