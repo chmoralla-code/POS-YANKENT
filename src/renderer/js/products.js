@@ -47,10 +47,14 @@ App.views.products = {
       this.cat = chip.dataset.cat; this._renderChips(); this._renderGrid();
     });
     v.querySelector('#pGrid').addEventListener('click', (e) => {
-      const id = +e.target.closest('[data-id]')?.dataset.id; if (!id) return;
-      if (e.target.dataset.act === 'edit') this._edit(id);
-      else if (e.target.dataset.act === 'stock') this._stock(id);
-      else if (e.target.dataset.act === 'del') this._del(id);
+      const card = e.target.closest('[data-id]'); if (!card) return;
+      const id = +card.dataset.id; if (!id) return;
+      const btn = e.target.closest('[data-act]');
+      if (!btn) return;
+      const act = btn.dataset.act;
+      if (act === 'edit') this._edit(id);
+      else if (act === 'stock') this._stock(id);
+      else if (act === 'del') this._del(id);
     });
   },
 
@@ -208,7 +212,7 @@ App.views.products = {
         if (id) await App.pos.products.update(id, data);
         else await App.pos.products.create(data);
         App.ui.toast('Saved ✓', 'ok'); m.close();
-        await this._load(); this._render();
+        await this._load(); this._renderChips(); this._renderGrid();
       } catch (e) { App.ui.toast(e.message, 'err'); }
     };
   },
