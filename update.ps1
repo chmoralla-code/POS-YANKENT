@@ -1,6 +1,9 @@
 # YANKENT POS - one-command remote update
-# Usage:  .\update.ps1 -Message "describe what changed"  [-Bump patch|minor|major]
-# Default bump: patch (1.0.0 -> 1.0.1). Use -Bump minor for new features, -Bump major for breaking changes.
+# Usage:
+#   .\update.ps1 -Message "describe what changed"                       # auto bump patch
+#   .\update.ps1 -Message "describe what changed" -Bump minor           # 2.0.5 -> 2.1.0
+#   .\update.ps1 -Message "describe what changed" -Version "2.1.0"      # set exact version
+# -Version takes priority over -Bump. Use -SkipBuild to commit/push/bump only.
 # This script does lint, test, commit, version bump, build, publish release, and print the client message.
 # The ONLY thing left for you is to forward the printed message to the client.
 
@@ -8,7 +11,9 @@ param(
   [Parameter(Mandatory = $true)]
   [string]$Message,
   [ValidateSet("patch", "minor", "major")]
-  [string]$Bump = "patch"
+  [string]$Bump = "patch",
+  [string]$Version = "",
+  [switch]$SkipBuild
 )
 
 $ErrorActionPreference = "Stop"
@@ -21,7 +26,7 @@ function Step($n, $label) { Write-Host "`n==> [$n] $label" -ForegroundColor Cyan
 
 Write-Host "YANKENT POS auto-update" -ForegroundColor Cyan
 Write-Host "Message: $Message"
-Write-Host "Bump:    $Bump"
+if ($Version) { Write-Host "Version: $Version (explicit)" } else { Write-Host "Bump:    $Bump" }
 
 # ---- [1] Lint + test --------------------------------------------------
 Step 1 "Lint + unit tests"
@@ -50,20 +55,36 @@ $pkgPath = Join-Path $root "package.json"
 $pkg = Get-Content $pkgPath -Raw
 if ($pkg -notmatch '"version"\s*:\s*"(\d+)\.(\d+)\.(\d+)"') { Fail "Could not parse version from package.json" }
 $ma = [int]$Matches[1]; $mi = [int]$Matches[2]; $pa = [int]$Matches[3]
-switch ($Bump) {
-  "major" { $ma++; $mi = 0; $pa = 0 }
-  "minor" { $mi++; $pa = 0 }
-  "patch" { $pa++ }
+if ($Version) {
+  if ($Version -notmatch '^\d+\.\d+\.\d+$') { Fail "-Version must look like 2.1.0 (got: $Version)" }
+  $newVersion = $Version
+} else {
+  switch ($Bump) {
+    "major" { $ma++; $mi = 0; $pa = 0 }
+    "minor" { $mi++; $pa = 0 }
+    "patch" { $pa++ }
+  }
+  $newVersion = "$ma.$mi.$pa"
 }
-$newVersion = "$ma.$mi.$pa"
+# Guard: must be higher than current, or electron-updater will say "up to date".
+$cmp = "$ma.$mi.$pa"
+if ($newVersion -le $cmp) {
+  Write-Host "Warning: new version $newVersion is not higher than current $cmp. The client will see 'up to date'." -ForegroundColor Yellow
+}
 $pkg = $pkg -replace '"version"\s*:\s*"\d+\.\d+\.\d+"', "`"version`": `"$newVersion`""
 $utf8NoBom = New-Object System.Text.UTF8Encoding $false
 [System.IO.File]::WriteAllText($pkgPath, $pkg, $utf8NoBom)
 git add package.json
 git commit -m "Bump version to $newVersion"
+if ($LASTEXITCODE -ne 0) { Fail "git commit of version bump failed." }
 git push origin main
 if ($LASTEXITCODE -ne 0) { Fail "git push of version bump failed." }
 Write-Host "Version: $newVersion" -ForegroundColor Green
+
+if ($SkipBuild) {
+  Write-Host "`n=== -SkipBuild: code + version pushed. Build/release skipped. ===" -ForegroundColor Green
+  exit 0
+}
 
 # ---- [4] Build installer ----------------------------------------------
 Step 4 "Build Windows installer (this takes ~3 minutes)"

@@ -164,6 +164,34 @@ Then message the client: "Click Check for Updates in the app."
 
 ---
 
+## One-command shortcut: update.ps1
+
+Does lint + test + commit + push + version bump + build + GitHub release in one shot.
+
+  cd C:\Users\Cyrhiel\POS-YANKENT
+  .\update.ps1 -Message "what you changed"
+
+Set an exact version (any X.Y.Z higher than the client's current one):
+
+  .\update.ps1 -Message "what you changed" -Version "2.1.0"
+
+Auto-bump instead (default is patch):
+
+  .\update.ps1 -Message "what you changed" -Bump minor   # 2.0.5 -> 2.1.0
+  .\update.ps1 -Message "what you changed" -Bump major   # 2.0.5 -> 3.0.0
+
+Skip the build/release (commit + push + version bump only):
+
+  .\update.ps1 -Message "what you changed" -SkipBuild
+
+Notes:
+  - -Version takes priority over -Bump.
+  - The new version MUST be higher than what the client runs, or "Check for Updates" says "up to date".
+  - If PowerShell blocks the script, run once:  Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+  - Requires `gh` (GitHub CLI) to be authenticated with repo access.
+
+---
+
 ## File map (where things live if something breaks)
 
   package.json                          -> version + publish target + build config
