@@ -4,6 +4,21 @@ window.App = window.App || {};
 App.pos = window.pos;          // bridge from preload (contextBridge)
 App.currencySymbol = '₱';
 
+// Category color coding (muted, professional palette)
+App.categoryColors = {
+  'Cement':     '#8d6e63',
+  'Masonry':    '#e65100',
+  'Lumber':     '#6d4c41',
+  'Steel':      '#546e7a',
+  'Plumbing':   '#1565c0',
+  'Electrical': '#f9a825',
+  'Paint':      '#2e7d32',
+  'Tools':      '#c62828',
+  'Fasteners':  '#6a1b9a',
+  'Services':   '#00838f',
+};
+App.catColor = function (cat) { return (App.categoryColors && App.categoryColors[cat]) || '#757575'; };
+
 App.ui = {
   esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

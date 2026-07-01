@@ -142,7 +142,11 @@ App.views.pos = {
     if (this.state.tab === 'services') { el.innerHTML = ''; return; }
     const cats = this.cache.categories;
     const all = `<div class="chip ${this.state.cat === 'all' ? 'active' : ''}" data-cat="all">All</div>`;
-    el.innerHTML = all + cats.map((c) => `<div class="chip ${this.state.cat === c.name ? 'active' : ''}" data-cat="${App.ui.esc(c.name)}">${App.ui.esc(c.name)}</div>`).join('');
+    el.innerHTML = all + cats.map((c) => {
+      const col = App.catColor(c.name);
+      const isActive = this.state.cat === c.name;
+      return `<div class="chip ${isActive ? 'active' : ''}" data-cat="${App.ui.esc(c.name)}" style="${isActive ? `background:${col};border-color:${col}` : `border-left:3px solid ${col}`}">${App.ui.esc(c.name)}</div>`;
+    }).join('');
     el.querySelectorAll('.chip').forEach((ch) => ch.onclick = () => { this.state.cat = ch.dataset.cat; this._renderChips(); this._renderGrid(); });
   },
 
@@ -159,7 +163,8 @@ App.views.pos = {
       el.innerHTML = list.map((p) => {
         const def = (p.units && p.units[0]) || { unit: p.base_unit, price: p.price };
         const low = p.stock <= (p.low || 10);
-        return `<div class="prod-card" data-id="${p.id}">
+        const col = App.catColor(p.category);
+        return `<div class="prod-card" data-id="${p.id}" style="border-left:4px solid ${col}">
           <div class="nm">${App.ui.esc(p.name)}</div>
           <div class="pr">${App.ui.money(def.price)} <small>/${App.ui.esc(def.unit)}</small></div>
           <div class="stk ${low ? 'low' : ''}">Stock: ${App.ui.qty(p.stock)} ${App.ui.esc(p.base_unit)}${(p.units && p.units.length > 1) ? ' · ' + p.units.length + ' units' : ''}</div>

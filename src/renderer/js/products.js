@@ -59,7 +59,7 @@ App.views.products = {
     body.innerHTML = this.cache.products.map((p) => `
       <tr data-id="${p.id}">
         <td>${App.ui.esc(p.name)}</td>
-        <td>${App.ui.esc(p.category || '—')}</td>
+        <td><span class="cat-badge" style="background:${App.catColor(p.category)}">${App.ui.esc(p.category || '—')}</span></td>
         <td>${App.ui.esc(p.base_unit)}</td>
         <td class="${p.stock <= (p.low || 10) && !p.is_service ? 'muted' : ''}">${p.is_service ? '—' : App.ui.qty(p.stock)}</td>
         <td>${App.ui.money(p.price)}</td>
