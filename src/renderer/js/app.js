@@ -203,14 +203,27 @@ App._awaitApproval = function (token, username) {
   setTimeout(check, 2000);
 };
 
-// Step 3: reset password form
+// Step 3: reset password form (applies to existing admin or cashier usernames)
 App._resetForm = function (token, username) {
   const m = App.ui.modal({
-    title: 'Reset Password — ' + username,
-    bodyHtml: `<div class="field"><label class="fl">New password</label><input id="rpPw" type="password" autofocus></div>
-      <div class="field"><label class="fl">Confirm password</label><input id="rpPw2" type="password"></div>
+    title: 'Reset Password',
+    bodyHtml: `<div class="field"><label class="fl">Username</label><input value="${App.ui.esc(username)}" readonly></div>
+      <div class="field"><label class="fl">New password</label>
+        <div class="pw-field"><input id="rpPw" type="password" autofocus><button type="button" class="pw-toggle" data-tgt="rpPw" title="Show/hide">👁</button></div>
+      </div>
+      <div class="field"><label class="fl">Confirm password</label>
+        <div class="pw-field"><input id="rpPw2" type="password"><button type="button" class="pw-toggle" data-tgt="rpPw2" title="Show/hide">👁</button></div>
+      </div>
       <div class="hint">Minimum 4 characters.</div>`,
-    footerHtml: `<button class="btn btn-ghost" data-a="cancel">Cancel</button><button class="btn btn-primary" data-a="ok">Reset Password</button>`,
+    footerHtml: `<button class="btn btn-ghost" data-a="cancel">Cancel</button><button class="btn btn-primary" data-a="ok">SAVE</button>`,
+  });
+  m.el.querySelectorAll('.pw-toggle').forEach((b) => {
+    b.onclick = () => {
+      const inp = m.el.querySelector('#' + b.dataset.tgt);
+      const show = inp.type === 'password';
+      inp.type = show ? 'text' : 'password';
+      b.textContent = show ? '🙈' : '👁';
+    };
   });
   m.el.querySelector('[data-a="cancel"]').onclick = () => m.close();
   m.el.querySelector('[data-a="ok"]').onclick = async () => {
@@ -227,7 +240,7 @@ App._resetForm = function (token, username) {
       document.getElementById('loginPass').focus();
     } catch (e) {
       App.ui.toast(e.message, 'err');
-      btn.disabled = false; btn.textContent = 'Reset Password';
+      btn.disabled = false; btn.textContent = 'SAVE';
     }
   };
 };

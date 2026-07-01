@@ -92,6 +92,16 @@ button { cursor: pointer; }
 @keyframes pop { 0% { transform: scale(0); } 70% { transform: scale(1.18); } 100% { transform: scale(1); } }
 @keyframes shake { 0%,100% { transform: translateX(0); } 20% { transform: translateX(-8px); } 40% { transform: translateX(8px); } 60% { transform: translateX(-6px); } 80% { transform: translateX(6px); } }
 .login-card.shake-err { animation: shake .4s; }
+
+/* Password field with show/hide toggle */
+.pw-field { position: relative; display: flex; align-items: center; }
+.pw-field input { flex: 1; padding-right: 38px; }
+.pw-toggle {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; cursor: pointer; font-size: 17px; padding: 4px 6px; line-height: 1;
+  color: var(--muted);
+}
+.pw-toggle:hover { color: var(--ink); }
 .login-card .sub { text-align: center; color: var(--muted); font-size: 12px; margin: 4px 0 22px; }
 .login-error { color: var(--danger); font-size: 12px; min-height: 16px; margin-bottom: 6px; text-align: center; }
 
