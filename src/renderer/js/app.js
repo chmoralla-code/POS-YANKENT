@@ -33,7 +33,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('logoutBtn').onclick = async () => {
     await App.pos.logout();
     App.current.user = null;
-    document.body.classList.remove('theme-dark');
     document.getElementById('app').classList.add('hidden');
     document.getElementById('login').classList.remove('hidden');
     document.getElementById('loginPass').value = '';
@@ -55,8 +54,6 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) { App.ui.toast(e.message, 'err'); }
     btn.disabled = false; btn.textContent = '📨 Send Report';
   });
-
-  document.getElementById('themeToggle').addEventListener('click', App._toggleTheme);
 
   App._clock();
   setInterval(() => App._clock(), 1000);
@@ -81,23 +78,9 @@ App._start = async function () {
   const isAdmin = u.role === 'admin';
   document.querySelectorAll('.nav-item.admin-only').forEach((n) => n.classList.toggle('hidden', !isAdmin));
 
-  App._applyTheme(localStorage.getItem('yankent-theme') || 'light');
   document.getElementById('login').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
   App._navigate(isAdmin ? 'pos' : 'pos');
-};
-
-App._applyTheme = function (theme) {
-  const isDark = theme === 'dark';
-  document.body.classList.toggle('theme-dark', isDark);
-  const btn = document.getElementById('themeToggle');
-  if (btn) { btn.textContent = isDark ? '☀' : '☾'; btn.title = isDark ? 'Switch to light mode' : 'Switch to dark mode'; }
-};
-
-App._toggleTheme = function () {
-  const next = document.body.classList.contains('theme-dark') ? 'light' : 'dark';
-  localStorage.setItem('yankent-theme', next);
-  App._applyTheme(next);
 };
 
 App._navigate = async function (name) {

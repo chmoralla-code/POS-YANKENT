@@ -19,8 +19,8 @@ test('seeded admin password verifies against DB', async () => {
   assert.ok(user);
   assert.equal(user.role, 'admin');
   assert.ok(verifyPassword('admin123', user.password_hash));
-  const cashier = db.prepare('SELECT * FROM users WHERE username=?').get('maria');
-  assert.ok(verifyPassword('cashier123', cashier.password_hash));
+  const cashier = db.prepare('SELECT * FROM users WHERE username=?').get('cashier');
+  assert.ok(cashier && verifyPassword('cashier123', cashier.password_hash));
   close();
 });
 
