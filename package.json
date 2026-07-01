@@ -1,7 +1,7 @@
 {
   "name": "yankent-pos",
-  "version": "2.0.4",
-  "description": "YANKENT POS ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â offline construction & supply point-of-sale desktop application",
+  "version": "2.0.5",
+  "description": "YANKENT POS ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â offline construction & supply point-of-sale desktop application",
   "productName": "YANKENT POS",
   "main": "src/main/main.js",
   "author": "YANKENT",
