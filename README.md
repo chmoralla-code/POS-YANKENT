@@ -87,7 +87,7 @@ seeded with demo data (products, units, customers, and two user accounts):
 | Role    | Username | Password    |
 |---------|----------|-------------|
 | Admin   | `admin`  | `admin123`  |
-| Cashier | `maria`  | `cashier123`|
+| Cashier | `cashier`  | `cashier123`|
 
 **Change these passwords immediately** from **Admin → Users**.
 
@@ -108,7 +108,7 @@ the user's app data / project `data/` folder.
 ## Usage
 
 ### Cashier (sell & print)
-1. Log in as `maria` / `cashier123`.
+1. Log in as `cashier` / `cashier123`.
 2. Search or click a category, click items to add to the cart.
 3. Edit quantity & unit (for bulk items), choose payment method.
 4. **Charge** → enter cash (if Cash) → receipt prints automatically.

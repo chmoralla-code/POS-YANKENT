@@ -16,7 +16,7 @@ function seedDatabase(db) {
       'INSERT INTO users(username, password_hash, full_name, role, active) VALUES(?,?,?,?,1)'
     );
     insUser.run('admin', hashPassword('admin123'), 'YANKENT Admin', 'admin');
-    insUser.run('maria', hashPassword('cashier123'), 'Maria Santos', 'cashier');
+    insUser.run('cashier', hashPassword('cashier123'), 'Maria Santos', 'cashier');
 
     // ---- Categories ------------------------------------------------------
     const insCat = db.prepare('INSERT INTO categories(name, sort) VALUES(?, ?)');
