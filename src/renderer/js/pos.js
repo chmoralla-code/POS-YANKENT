@@ -11,14 +11,13 @@ App.views.pos = {
 
   async render(view) {
     this.viewEl = view;
-    if (!this.cache.products.length) {
-      const [products, categories, customers] = await Promise.all([
-        App.pos.products.list({ includeServices: true }),
-        App.pos.categories.list(),
-        App.pos.customers.list(),
-      ]);
-      this.cache = { products, categories, customers };
-    }
+    // Always fetch fresh data so admin changes (price, stock, categories) sync immediately.
+    const [products, categories, customers] = await Promise.all([
+      App.pos.products.list({ includeServices: true }),
+      App.pos.categories.list(),
+      App.pos.customers.list(),
+    ]);
+    this.cache = { products, categories, customers };
     view.innerHTML = `
       <div class="pos-grid">
         <div class="pos-left">
