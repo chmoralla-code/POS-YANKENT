@@ -7,39 +7,24 @@ App.views.products = {
   title: 'Products & Inventory',
   cache: { products: [], categories: [] },
   q: '',
+  cat: 'all',
 
   async render(view) {
     this.viewEl = view;
     await this._load();
     view.innerHTML = `
-      <div class="row gap" style="align-items:flex-start;flex-wrap:wrap">
-        <div style="flex:1;min-width:280px">
-          <div class="toolbar">
-            <input id="pSearch" placeholder="Search name…" class="fill" style="max-width:280px">
-            <button class="btn btn-ghost btn-sm" id="pClear">Clear</button>
-            <div class="fill"></div>
-            <button class="btn btn-primary btn-sm" id="pAdd">+ Add Product</button>
-          </div>
-          <div class="panel">
-            <div class="panel-h">Catalog <small id="pCount"></small></div>
-            <div style="overflow:auto;max-height:calc(100vh - 220px)">
-              <table class="tbl">
-                <thead><tr><th>Name</th><th>Category</th><th>Base unit</th><th>Stock</th><th>Price</th><th>Units</th><th></th></tr></thead>
-                <tbody id="pBody"></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-        <div style="width:280px">
-          <div class="panel">
-            <div class="panel-h">Categories <button class="btn btn-sm btn-primary" id="catAdd" style="float:right">+ Add</button></div>
-            <div class="panel-b" id="catList"></div>
-          </div>
-        </div>
-      </div>`;
+      <div class="toolbar">
+        <input id="pSearch" placeholder="Search name…" class="fill" style="max-width:300px">
+        <button class="btn btn-ghost btn-sm" id="pClear">Clear</button>
+        <div class="fill"></div>
+        <button class="btn btn-ghost btn-sm" id="catManage">Manage Categories</button>
+        <button class="btn btn-primary btn-sm" id="pAdd">+ Add Product</button>
+      </div>
+      <div class="chips" id="pChips"></div>
+      <div class="prod-grid" id="pGrid" style="max-height:calc(100vh - 210px)"></div>`;
     this._wire();
-    this._render();
-    this._renderCats();
+    this._renderChips();
+    this._renderGrid();
   },
 
   async _load() {
@@ -52,53 +37,59 @@ App.views.products = {
 
   _wire() {
     const v = this.viewEl;
-    const d = App.ui.debounce(async () => { await this._load(); this._render(); }, 250);
+    const d = App.ui.debounce(async () => { await this._load(); this._renderChips(); this._renderGrid(); }, 250);
     v.querySelector('#pSearch').addEventListener('input', (e) => { this.q = e.target.value; d(); });
-    v.querySelector('#pClear').onclick = async () => { this.q = ''; v.querySelector('#pSearch').value = ''; await this._load(); this._render(); };
+    v.querySelector('#pClear').onclick = async () => { this.q = ''; v.querySelector('#pSearch').value = ''; await this._load(); this._renderChips(); this._renderGrid(); };
     v.querySelector('#pAdd').onclick = () => this._edit(null);
-    v.querySelector('#pBody').addEventListener('click', (e) => {
+    v.querySelector('#catManage').onclick = () => this._catModal();
+    v.querySelector('#pChips').addEventListener('click', (e) => {
+      const chip = e.target.closest('[data-cat]'); if (!chip) return;
+      this.cat = chip.dataset.cat; this._renderChips(); this._renderGrid();
+    });
+    v.querySelector('#pGrid').addEventListener('click', (e) => {
       const id = +e.target.closest('[data-id]')?.dataset.id; if (!id) return;
       if (e.target.dataset.act === 'edit') this._edit(id);
       else if (e.target.dataset.act === 'stock') this._stock(id);
       else if (e.target.dataset.act === 'del') this._del(id);
     });
-    // Category management
-    v.querySelector('#catAdd').onclick = () => this._editCat(null);
-    v.querySelector('#catList').addEventListener('click', (e) => {
-      const id = +e.target.closest('[data-catid]')?.dataset.catid; if (!id) return;
-      if (e.target.dataset.act === 'rename') this._editCat(id);
-      else if (e.target.dataset.act === 'delcat') this._delCat(id);
-    });
   },
 
-  _render() {
-    const body = this.viewEl.querySelector('#pBody');
-    this.viewEl.querySelector('#pCount').textContent = this.cache.products.length + ' items';
-    body.innerHTML = this.cache.products.map((p) => {
-      const low = !p.is_service && p.stock <= (p.low || 10);
-      const svcBadge = p.is_service ? ' <span class="badge svc">svc</span>' : '';
-      const lowBadge = low ? ' <span class="badge low">low</span>' : '';
-      return `<tr data-id="${p.id}">
-        <td>${App.ui.esc(p.name)}${svcBadge}${lowBadge}</td>
-        <td><span class="cat-badge" style="background:${App.catColor(p.category)}">${App.ui.esc(p.category || '—')}</span></td>
-        <td>${App.ui.esc(p.base_unit)}</td>
-        <td class="${low ? 'muted' : ''}" style="font-weight:${low ? 700 : 400}">${p.is_service ? '—' : App.ui.qty(p.stock)}</td>
-        <td>${App.ui.money(p.price)}</td>
-        <td class="muted" style="font-size:11px">${(p.units || []).map((u) => App.ui.esc(u.unit)).join(', ') || '—'}</td>
-        <td class="right">
-          <button class="btn btn-sm btn-ghost" data-act="edit">Edit</button>
-          ${p.is_service ? '' : '<button class="btn btn-sm btn-ghost" data-act="stock">Stock</button>'}
-          <button class="btn btn-sm btn-danger" data-act="del">Del</button>
-        </td>
-      </tr>`;
+  _renderChips() {
+    const el = this.viewEl.querySelector('#pChips');
+    const cats = this.cache.categories;
+    const all = `<div class="chip ${this.cat === 'all' ? 'active' : ''}" data-cat="all">All <span class="muted" style="font-weight:400">(${this.cache.products.length})</span></div>`;
+    el.innerHTML = all + cats.map((c) => {
+      const col = App.catColor(c.name);
+      const isActive = this.cat === c.name;
+      return `<div class="chip ${isActive ? 'active' : ''}" data-cat="${App.ui.esc(c.name)}" style="${isActive ? `background:${col};border-color:${col}` : `border-left:3px solid ${col}`}">${App.ui.esc(c.name)} <span style="font-weight:400;opacity:.7">${c.productCount || 0}</span></div>`;
     }).join('');
   },
 
-  _renderCats() {
-    const el = this.viewEl.querySelector('#catList');
-    if (!el) return;
-    el.innerHTML = this.cache.categories.map((c) => {
-      const col = App.catColor(c.name);
+  _renderGrid() {
+    const el = this.viewEl.querySelector('#pGrid');
+    const q = this.q.toLowerCase().trim();
+    let list = this.cache.products;
+    if (this.cat !== 'all') list = list.filter((p) => p.category === this.cat);
+    if (q) list = list.filter((p) => p.name.toLowerCase().includes(q));
+    if (!list.length) { el.innerHTML = '<div class="empty-state">No products found.</div>'; return; }
+    el.innerHTML = list.map((p) => {
+      const def = (p.units && p.units[0]) || { unit: p.base_unit, price: p.price };
+      const low = !p.is_service && p.stock <= (p.low || 10);
+      const col = App.catColor(p.category);
+      const svcTag = p.is_service ? '<span class="badge svc">svc</span>' : '';
+      const lowTag = low ? '<span class="badge low">low</span>' : '';
+      return `<div class="prod-card" data-id="${p.id}" style="border-left:4px solid ${col}">
+        <div class="nm">${App.ui.esc(p.name)} ${svcTag}${lowTag}</div>
+        <div class="pr">${App.ui.money(def.price)} <small>/${App.ui.esc(def.unit)}</small></div>
+        <div class="stk ${low ? 'low' : ''}">${p.is_service ? 'Service' : 'Stock: ' + App.ui.qty(p.stock) + ' ' + App.ui.esc(p.base_unit)}${(p.units && p.units.length > 1) ? ' · ' + p.units.length + ' units' : ''}</div>
+        <div class="prod-actions">
+          <button class="btn btn-sm btn-ghost" data-act="edit">Edit</button>
+          ${p.is_service ? '' : '<button class="btn btn-sm btn-ghost" data-act="stock">Stock</button>'}
+          <button class="btn btn-sm btn-danger" data-act="del">Del</button>
+        </div>
+      </div>`;
+    }).join('');
+  },
       return `<div class="cat-row" data-catid="${c.id}">
         <span class="cat-dot" style="background:${col}"></span>
         <span class="cat-nm">${App.ui.esc(c.name)}</span>
@@ -109,34 +100,44 @@ App.views.products = {
     }).join('');
   },
 
-  _editCat(id) {
-    const cat = id ? this.cache.categories.find((c) => c.id === id) : null;
+  _catModal() {
     const m = App.ui.modal({
-      title: id ? 'Rename Category' : 'Add Category',
-      bodyHtml: `<div class="field"><label class="fl">Category name</label><input id="catName" value="${cat ? App.ui.esc(cat.name) : ''}" autofocus></div>`,
-      footerHtml: `<button class="btn btn-ghost" data-a="cancel">Cancel</button><button class="btn btn-primary" data-a="ok">Save</button>`,
+      title: 'Manage Categories', wide: true,
+      bodyHtml: `<div id="catMgrList"></div>
+        <div class="row gap" style="margin-top:12px"><input id="catNewName" placeholder="New category name…" class="fill"><button class="btn btn-primary btn-sm" id="catNewAdd">+ Add</button></div>`,
+      footerHtml: `<button class="btn btn-primary" data-a="done">Done</button>`,
     });
-    m.el.querySelector('[data-a="cancel"]').onclick = () => m.close();
-    m.el.querySelector('[data-a="ok"]').onclick = async () => {
-      const name = m.el.querySelector('#catName').value.trim();
-      if (!name) { App.ui.toast('Name required', 'err'); return; }
-      try {
-        if (id) await App.pos.categories.update(id, name);
-        else await App.pos.categories.create(name);
-        App.ui.toast('Saved ✓', 'ok'); m.close();
-        await this._load(); this._render(); this._renderCats();
-      } catch (e) { App.ui.toast(e.message, 'err'); }
+    const refresh = () => {
+      m.el.querySelector('#catMgrList').innerHTML = this.cache.categories.map((c) => {
+        const col = App.catColor(c.name);
+        return `<div class="cat-row" data-catid="${c.id}">
+          <span class="cat-dot" style="background:${col}"></span>
+          <span class="cat-nm">${App.ui.esc(c.name)}</span>
+          <span class="cat-cnt muted">${c.productCount || 0} products</span>
+          <button class="btn btn-sm btn-ghost" data-act="rename">✎</button>
+          <button class="btn btn-sm btn-danger" data-act="delcat">✕</button>
+        </div>`;
+      }).join('');
     };
-  },
-
-  _delCat(id) {
-    const cat = this.cache.categories.find((c) => c.id === id);
-    if (!cat) return;
-    const count = cat.productCount || 0;
-    App.ui.confirm(`Delete category "${cat.name}"?${count ? ` ${count} product(s) will have no category.` : ''}`, { danger: true }).then(async (ok) => {
-      if (!ok) return;
-      try { await App.pos.categories.delete(id); App.ui.toast('Category deleted', 'ok'); await this._load(); this._render(); this._renderCats(); }
+    refresh();
+    m.el.querySelector('[data-a="done"]').onclick = () => { m.close(); this._load().then(() => { this._renderChips(); this._renderGrid(); }); };
+    m.el.querySelector('#catNewAdd').onclick = async () => {
+      const name = m.el.querySelector('#catNewName').value.trim();
+      if (!name) return;
+      try { await App.pos.categories.create(name); App.ui.toast('Added ✓', 'ok'); m.el.querySelector('#catNewName').value = ''; await this._load(); refresh(); }
       catch (e) { App.ui.toast(e.message, 'err'); }
+    };
+    m.el.querySelector('#catMgrList').addEventListener('click', async (e) => {
+      const id = +e.target.closest('[data-catid]')?.dataset.catid; if (!id) return;
+      if (e.target.dataset.act === 'rename') {
+        const cat = this.cache.categories.find((c) => c.id === id);
+        const nn = prompt('Rename category:', cat ? cat.name : '');
+        if (nn && nn.trim()) { try { await App.pos.categories.update(id, nn.trim()); await this._load(); refresh(); App.ui.toast('Renamed ✓', 'ok'); } catch (err) { App.ui.toast(err.message, 'err'); } }
+      } else if (e.target.dataset.act === 'delcat') {
+        const cat = this.cache.categories.find((c) => c.id === id);
+        const ok = await App.ui.confirm(`Delete "${cat.name}"? ${cat.productCount || 0} product(s) will lose their category.`, { danger: true });
+        if (ok) { try { await App.pos.categories.delete(id); await this._load(); refresh(); App.ui.toast('Deleted', 'ok'); } catch (err) { App.ui.toast(err.message, 'err'); } }
+      }
     });
   },
 

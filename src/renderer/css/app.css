@@ -224,6 +224,8 @@ table.tbl tr:hover td { background: #fafbfc; }
 .prod-card .pr small { font-weight: 400; font-size: 10px; color: var(--muted); }
 .prod-card .stk { font-size: 10px; color: var(--muted); }
 .prod-card .stk.low { color: var(--danger); font-weight: 700; }
+.prod-actions { display: flex; gap: 4px; margin-top: 6px; }
+.prod-actions .btn { padding: 4px 8px; font-size: 11px; }
 .svc-card { background: #f6f7f9; border: 1px dashed #cfd2d7; }
 .svc-card .pr { color: var(--ink-2); }
 
