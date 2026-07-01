@@ -17,6 +17,9 @@ protocol.registerSchemesAsPrivileged([
   { scheme: 'yankent', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
 ]);
 
+// Allow autoplay of muted videos (login background) without user gesture.
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+
 let db;
 let mainWindow;
 

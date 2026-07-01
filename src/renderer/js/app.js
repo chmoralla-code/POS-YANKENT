@@ -5,6 +5,10 @@ window.App = window.App || {};
 App.current = { user: null, view: 'pos' };
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Force-play the login background video (in case autoplay is blocked).
+  const bgVideo = document.querySelector('.login-bg');
+  if (bgVideo) { bgVideo.play().catch(() => {}); }
+
   const loginForm = document.getElementById('loginForm');
   loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
