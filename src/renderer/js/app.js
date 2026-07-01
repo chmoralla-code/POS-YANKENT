@@ -159,7 +159,7 @@ App._forgotPassword = function () {
     if (!username) { App.ui.toast('Enter your username', 'err'); return; }
     const btn = m.el.querySelector('[data-a="send"]'); btn.disabled = true; btn.textContent = 'Sending…';
     try {
-      const res = await App.pos.auth.requestPasswordReset(username);
+      const res = await App.pos.requestPasswordReset(username);
       m.close();
       App._awaitApproval(res.token, res.username);
     } catch (e) {
@@ -185,7 +185,7 @@ App._awaitApproval = function (token, username) {
   m.el.querySelector('[data-a="cancel"]').onclick = () => { clearInterval(interval); m.close(); };
   const check = async () => {
     try {
-      const r = await App.pos.auth.checkResetApproval(token);
+      const r = await App.pos.checkResetApproval(token);
       if (r.status === 'approved') {
         clearInterval(interval); m.close();
         App._resetForm(token, username);
@@ -233,7 +233,7 @@ App._resetForm = function (token, username) {
     if (pw.length < 4) { App.ui.toast('Password too short (min 4)', 'err'); return; }
     const btn = m.el.querySelector('[data-a="ok"]'); btn.disabled = true; btn.textContent = 'Saving…';
     try {
-      await App.pos.auth.resetPassword(token, pw);
+      await App.pos.resetPassword(token, pw);
       m.close();
       App.ui.toast('Password reset! You can now sign in.', 'ok');
       document.getElementById('loginUser').value = username;
