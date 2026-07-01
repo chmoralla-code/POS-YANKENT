@@ -230,7 +230,7 @@ App.views.products = {
     m.el.querySelector('[data-a="ok"]').onclick = async () => {
       try {
         await App.pos.products.setStock(id, parseFloat(m.el.querySelector('#sNew').value) || 0, m.el.querySelector('#sReason').value);
-        App.ui.toast('Stock updated ✓', 'ok'); m.close(); await this._load(); this._render();
+        App.ui.toast('Stock updated ✓', 'ok'); m.close(); await this._load(); this._renderChips(); this._renderGrid();
       } catch (e) { App.ui.toast(e.message, 'err'); }
     };
   },
@@ -239,7 +239,7 @@ App.views.products = {
     const p = this.cache.products.find((x) => x.id === id);
     App.ui.confirm(`Deactivate "${p.name}"? It stays in history but can no longer be sold.`, { danger: true }).then(async (ok) => {
       if (!ok) return;
-      try { await App.pos.products.delete(id); App.ui.toast('Deactivated', 'ok'); await this._load(); this._render(); }
+      try { await App.pos.products.delete(id); App.ui.toast('Deactivated', 'ok'); await this._load(); this._renderChips(); this._renderGrid(); }
       catch (e) { App.ui.toast(e.message, 'err'); }
     });
   },
