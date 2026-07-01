@@ -65,6 +65,60 @@ function sendMessage(token, chatId, text) {
   });
 }
 
+/**
+ * Send a document (file) via the Telegram Bot API using multipart/form-data.
+ * @param {string} token - bot token
+ * @param {string} chatId - target chat id
+ * @param {string} filename - name to show in Telegram
+ * @param {Buffer} buffer - file contents
+ * @param {string} [caption] - optional caption (HTML parse mode)
+ * @returns {Promise<{ok:boolean, error?:string}>}
+ */
+function sendDocument(token, chatId, filename, buffer, caption) {
+  return new Promise((resolve) => {
+    if (!token || !chatId) return resolve({ ok: false, error: 'Missing token or chat ID' });
+    const boundary = 'yankent-' + Math.random().toString(16).slice(2) + Date.now().toString(16);
+    const parts = [];
+    const push = (name, value) => {
+      parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n`));
+      parts.push(Buffer.from(value + '\r\n'));
+    };
+    push('chat_id', String(chatId));
+    if (caption) push('caption', caption);
+    parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="document"; filename="${filename}"\r\nContent-Type: application/octet-stream\r\n\r\n`));
+    parts.push(buffer);
+    parts.push(Buffer.from('\r\n'));
+    parts.push(Buffer.from(`--${boundary}--\r\n`));
+    const body = Buffer.concat(parts);
+    const url = new URL(`https://api.telegram.org/bot${token}/sendDocument`);
+    const req = https.request(
+      {
+        method: 'POST',
+        hostname: url.hostname,
+        path: url.pathname,
+        headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}`, 'Content-Length': body.length },
+        timeout: 60000,
+      },
+      (res) => {
+        let data = '';
+        res.on('data', (c) => (data += c));
+        res.on('end', () => {
+          try {
+            const j = JSON.parse(data);
+            resolve(j.ok ? { ok: true } : { ok: false, error: j.description || 'Telegram error' });
+          } catch {
+            resolve({ ok: false, error: 'Bad response' });
+          }
+        });
+      }
+    );
+    req.on('error', (e) => resolve({ ok: false, error: e.message }));
+    req.on('timeout', () => { req.destroy(); resolve({ ok: false, error: 'timeout' }); });
+    req.write(body);
+    req.end();
+  });
+}
+
 /** Generic Telegram Bot API call (POST JSON). */
 function callApi(token, method, payload) {
   return new Promise((resolve) => {
@@ -235,4 +289,4 @@ function buildReportMessage(db) {
   return lines.join('\n');
 }
 
-module.exports = { checkOnline, sendMessage, buildReportMessage, buildAnalytics, reportMoney, callApi, sendApprovalRequest, pollUpdates, answerCallback, deleteWebhook };
+module.exports = { checkOnline, sendMessage, sendDocument, buildReportMessage, buildAnalytics, reportMoney, callApi, sendApprovalRequest, pollUpdates, answerCallback, deleteWebhook };

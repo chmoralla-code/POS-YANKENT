@@ -273,7 +273,17 @@ table.tbl tr:hover td { background: #fafbfc; }
 .svc-card .pr { color: var(--ink-2); }
 
 /* cart */
-.cart { flex: 1; overflow-y: auto; }
+.pos-right .panel { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.pos-right .cust-box,
+.pos-right .panel-h,
+.pos-right .totals,
+.pos-right .pay-grid,
+.pos-right .ck { flex: 0 0 auto; }
+.cart { flex: 1 1 auto; overflow-y: auto; min-height: 0; scroll-behavior: smooth; }
+.cart::-webkit-scrollbar { width: 8px; }
+.cart::-webkit-scrollbar-track { background: transparent; }
+.cart::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 4px; }
+.cart::-webkit-scrollbar-thumb:hover { background: var(--muted-2); }
 .cart-row { display: grid; grid-template-columns: 1fr 84px 84px; gap: 6px; padding: 9px 12px; border-bottom: 1px solid var(--line-2); align-items: center; font-size: 13px; }
 .cart-row.svc { background: #fafbfc; }
 .cart-row .nm { font-weight: 600; }

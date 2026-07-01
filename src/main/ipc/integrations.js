@@ -5,7 +5,7 @@ const os = require('os');
 const path = require('path');
 const { buildReceipt, receiptPlainText } = require('../lib/receipt');
 const { encodeReceipt, testPrint } = require('../lib/escpos');
-const { checkOnline, sendMessage, buildReportMessage } = require('../lib/telegram');
+const { checkOnline, sendMessage, sendDocument, buildReportMessage } = require('../lib/telegram');
 const { exportAll, importAll } = require('../backup');
 
 function register(ipcMain, ctx) {
@@ -64,7 +64,20 @@ function register(ipcMain, ctx) {
     const online = await checkOnline();
     if (!online) return { ok: false, error: 'Offline — report skipped (no data lost)' };
     const text = buildReportMessage(db);
-    return sendMessage(token, chatId, text);
+    const msgRes = await sendMessage(token, chatId, text);
+    if (!msgRes.ok) return msgRes;
+    // Attach the latest data backup alongside the report.
+    try {
+      const data = exportAll(db);
+      const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      const filename = `yankent-backup-${stamp}.yankent`;
+      const buffer = Buffer.from(JSON.stringify(data, null, 2), 'utf8');
+      const docRes = await sendDocument(token, chatId, filename, buffer, 'YANKENT POS data backup');
+      if (!docRes.ok) return { ok: true, warning: 'Report sent, but backup file upload failed: ' + (docRes.error || 'unknown') };
+    } catch (e) {
+      return { ok: true, warning: 'Report sent, but backup file failed: ' + e.message };
+    }
+    return { ok: true };
   });
 
   // ---- Backup & import (admin) ------------------------------------------

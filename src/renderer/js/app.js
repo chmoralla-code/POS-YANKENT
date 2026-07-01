@@ -57,7 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.disabled = true; btn.textContent = '📨 Sending…';
     try {
       const r = await App.pos.telegram.sendReport();
-      if (r.ok) App.ui.toast('Sales report sent to owner ✓', 'ok');
+      if (r.ok) App.ui.toast(r.warning ? ('Report sent, backup failed: ' + r.warning) : 'Report + backup sent to owner ✓', r.warning ? 'err' : 'ok');
       else App.ui.toast(r.error || 'Failed to send', 'err');
     } catch (e) { App.ui.toast(e.message, 'err'); }
     btn.disabled = false; btn.textContent = '📨 Send Report';
