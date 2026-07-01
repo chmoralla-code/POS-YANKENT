@@ -90,15 +90,6 @@ App.views.products = {
       </div>`;
     }).join('');
   },
-      return `<div class="cat-row" data-catid="${c.id}">
-        <span class="cat-dot" style="background:${col}"></span>
-        <span class="cat-nm">${App.ui.esc(c.name)}</span>
-        <span class="cat-cnt muted">${c.productCount || 0}</span>
-        <button class="btn btn-sm btn-ghost" data-act="rename" title="Rename">✎</button>
-        <button class="btn btn-sm btn-danger" data-act="delcat" title="Delete">✕</button>
-      </div>`;
-    }).join('');
-  },
 
   _catModal() {
     const m = App.ui.modal({
