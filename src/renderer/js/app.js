@@ -160,11 +160,8 @@ App._checkUpdates = async function () {
     const r = await App.pos.update.check();
     if (r.devMode) {
       App.ui.toast('Dev mode — publish a GitHub Release to test updates', 'ok');
-    } else if (r.available) {
-      const ok = await App.ui.confirm(
-        'v' + r.currentVersion + ' → v' + r.version + '\n\n' +
-        (r.releaseNotes || 'New version available.') + '\n\nDownload and install?'
-      );
+    } else if (r.available && App._isNewer(r.version, r.currentVersion)) {
+      const ok = await App._showWhatsNew(r);
       if (!ok) return;
       App.ui.toast('Downloading update…', 'ok');
       await App.pos.update.download();
@@ -173,13 +170,112 @@ App._checkUpdates = async function () {
         setTimeout(() => App.pos.update.install(), 1500);
       });
     } else {
-      App.ui.toast('You are up to date (v' + r.currentVersion + ')', 'ok');
+      App._showUpToDate(r.currentVersion);
     }
   } catch (e) {
     App.ui.toast(e.message, 'err');
   } finally {
     el.textContent = orig;
   }
+};
+
+// ---- "What's New" modal ------------------------------------------------
+App._isNewer = function (a, b) {
+  const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0);
+  const pb = String(b).split('.').map((n) => parseInt(n, 10) || 0);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    const da = pa[i] || 0, db = pb[i] || 0;
+    if (da > db) return true;
+    if (da < db) return false;
+  }
+  return false; // equal
+};
+
+App._WHATS_NEW_CATS = [
+  { key: 'feat',  icon: '✨', label: "What's New",        test: /\b(added|adds|new|introduc|support|now|launch|enabl)/i },
+  { key: 'fix',   icon: '🐛', label: 'Fixes & Stability', test: /\b(fix|fixes|fixed|patch|resolve|resolves|resolved|bug|crash)/i },
+  { key: 'perf',  icon: '⚡', label: 'Performance',       test: /\b(performance|faster|optim|speed|quicker|snappy)/i },
+  { key: 'sec',   icon: '🔒', label: 'Security',          test: /\b(security|vulnerab|safe|hardened|cve)/i },
+  { key: 'chore', icon: '🧹', label: 'Maintenance',       test: /\b(refactor|clean|deps|depend|chore|bump|tidy|internal)/i },
+];
+
+App._parseReleaseNotes = function (notes) {
+  const raw = String(notes || '').trim();
+  if (!raw) return [];
+  const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const out = [];
+  let current = null;
+  for (const line of lines) {
+    // Strip leading bullets / numbering
+    const text = line.replace(/^[-*•]\s+/, '').replace(/^\d+\.\s+/, '');
+    const lower = text.toLowerCase();
+    // Section headers in the notes like "### Fixes" or "## New"
+    const headerMatch = text.match(/^#{1,6}\s+(.+)$/);
+    if (headerMatch && text.length < 40) {
+      // Treat short header lines as captions for subsequent items
+      current = { icon: '▸', label: headerMatch[1], items: [] };
+      out.push(current);
+      continue;
+    }
+    const cat = App._WHATS_NEW_CATS.find((c) => c.test.test(lower)) || null;
+    if (current) {
+      current.items.push({ text });
+    } else {
+      const bucket = cat || { key: 'misc', icon: '•', label: 'Other' };
+      let group = out.find((g) => g.label === bucket.label);
+      if (!group) { group = { icon: bucket.icon, label: bucket.label, items: [] }; out.push(group); }
+      group.items.push({ text });
+    }
+  }
+  // Drop empty groups
+  return out.filter((g) => g.items && g.items.length);
+};
+
+App._showWhatsNew = function (r) {
+  return new Promise((resolve) => {
+    const groups = App._parseReleaseNotes(r.releaseNotes);
+    const from = r.currentVersion, to = r.version;
+    const body = `
+      <div class="wn-head">
+        <div class="wn-ver">
+          <span class="wn-from">v${App.ui.esc(from)}</span>
+          <span class="wn-arrow">→</span>
+          <span class="wn-to">v${App.ui.esc(to)}</span>
+        </div>
+        <div class="wn-caption">A new version of YANKENT POS is ready to install.</div>
+      </div>
+      <div class="wn-list">
+        ${groups.length ? groups.map((g) => `
+          <div class="wn-group">
+            <div class="wn-group-h"><span class="wn-ic">${g.icon}</span>${App.ui.esc(g.label)} <span class="wn-cnt">${g.items.length}</span></div>
+            ${g.items.map((it) => `<div class="wn-item">${App.ui.esc(it.text)}</div>`).join('')}
+          </div>`).join('') : `<div class="wn-empty">A new version is available. Release notes were not provided.</div>`}
+      </div>`;
+    const m = App.ui.modal({
+      title: "What's New",
+      wide: true,
+      bodyHtml: body,
+      footerHtml: `<button class="btn btn-ghost" data-a="no">Later</button>
+        <button class="btn btn-primary" data-a="yes">Download &amp; Install</button>`,
+    });
+    m.el.querySelector('[data-a="yes"]').onclick = () => { m.close(); resolve(true); };
+    m.el.querySelector('[data-a="no"]').onclick = () => { m.close(); resolve(false); };
+  });
+};
+
+App._showUpToDate = function (ver) {
+  const m = App.ui.modal({
+    title: 'You’re up to date',
+    bodyHtml: `
+      <div style="text-align:center;padding:14px 4px">
+        <div class="wn-ok-badge">✓</div>
+        <div class="wn-ver" style="margin-top:10px"><span class="wn-to">v${App.ui.esc(ver)}</span></div>
+        <div class="wn-caption" style="margin-top:6px">YANKENT POS is already running the latest version.</div>
+      </div>`,
+    footerHtml: `<button class="btn btn-primary" data-a="ok">OK</button>`,
+  });
+  m.el.querySelector('[data-a="ok"]').onclick = () => m.close();
 };
 
 // ---- Login success animation ------------------------------------------

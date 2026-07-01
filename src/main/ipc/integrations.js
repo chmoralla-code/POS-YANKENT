@@ -121,16 +121,16 @@ function register(ipcMain, ctx) {
     }
   });
 
-  // Admin: start downloading the update
-  guard(ipcMain, 'pos:update:download', { admin: true }, () => {
+  // Public: start downloading the update (available pre-login too)
+  ipcMain.handle('pos:update:download', async () => {
     updater.downloadUpdate();
-    return true;
+    return { ok: true, data: true };
   });
 
-  // Admin: install the downloaded update
-  guard(ipcMain, 'pos:update:install', { admin: true }, () => {
+  // Public: install the downloaded update (available pre-login too)
+  ipcMain.handle('pos:update:install', async () => {
     updater.installUpdate();
-    return true;
+    return { ok: true, data: true };
   });
 }
 

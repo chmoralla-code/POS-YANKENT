@@ -8,6 +8,23 @@ autoUpdater.allowPrerelease = false;
 let checkPromise = null;
 
 /**
+ * Compare two semver-ish version strings.
+ * Returns 1 if a > b, -1 if a < b, 0 if equal.
+ */
+function compareVersions(a, b) {
+  const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0);
+  const pb = String(b).split('.').map((n) => parseInt(n, 10) || 0);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    const da = pa[i] || 0;
+    const db = pb[i] || 0;
+    if (da > db) return 1;
+    if (da < db) return -1;
+  }
+  return 0;
+}
+
+/**
  * Initialize the auto-updater.
  * Call once after the main window is created to start checking in background.
  */
@@ -47,15 +64,21 @@ async function checkForUpdates() {
     }
     checkPromise = autoUpdater.checkForUpdates().then((result) => {
       checkPromise = null;
+      const currentVersion = require('electron').app.getVersion();
       if (result && result.updateInfo) {
-        return {
-          available: true,
-          version: result.updateInfo.version,
-          releaseNotes: result.updateInfo.releaseNotes || '',
-          currentVersion: require('electron').app.getVersion(),
-        };
+        const remoteVersion = result.updateInfo.version;
+        // Only treat as available when the remote version is strictly newer.
+        if (compareVersions(remoteVersion, currentVersion) > 0) {
+          return {
+            available: true,
+            version: remoteVersion,
+            releaseNotes: result.updateInfo.releaseNotes || '',
+            currentVersion,
+          };
+        }
+        return { available: false, currentVersion };
       }
-      return { available: false, currentVersion: require('electron').app.getVersion() };
+      return { available: false, currentVersion };
     }).catch((err) => {
       checkPromise = null;
       throw err;

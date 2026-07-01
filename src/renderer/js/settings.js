@@ -122,31 +122,29 @@ App.views.settings = {
     };
 
     v.querySelector('#sCheckUpdates').onclick = async () => {
+      const el = v.querySelector('#sUpdateResult');
+      el.innerHTML = '<div class="hint">Checking…</div>';
       try {
         const r = await App.pos.update.check();
-        const el = v.querySelector('#sUpdateResult');
         if (r.devMode) {
           el.innerHTML = '<div class="hint">Dev mode — publish a GitHub Release to test updates.</div>';
-        } else if (r.available) {
-          el.innerHTML = `<div class="hint">v${r.currentVersion} → v${r.version} available</div>
-            <div class="row gap" style="margin:6px 0">
-              <button class="btn btn-primary btn-sm" id="sDownloadUpdate">Download</button>
-            </div>
-            <div id="sUpdateProgress"></div>`;
-          v.querySelector('#sDownloadUpdate').onclick = async () => {
-            await App.pos.update.download();
-            const prog = v.querySelector('#sUpdateProgress');
-            prog.innerHTML = '<div class="hint">Downloading… <span id="sDlPct">0%</span></div>';
-            App.pos.update.onDownloadProgress((p) => {
-              const pct = Math.round(p.percent);
-              v.querySelector('#sDlPct').textContent = pct + '%';
-            });
-            App.pos.update.onDownloaded(() => {
-              prog.innerHTML = '<div class="hint" style="color:var(--ok)">Download complete.</div>' +
-                '<button class="btn btn-primary btn-sm" id="sInstallUpdate">Install & Restart</button>';
-              v.querySelector('#sInstallUpdate').onclick = () => App.pos.update.install();
-            });
-          };
+        } else if (r.available && App._isNewer(r.version, r.currentVersion)) {
+          el.innerHTML = `<div class="hint">v${r.currentVersion} → v${r.version} available</div>`;
+          const ok = await App._showWhatsNew(r);
+          if (!ok) return;
+          await App.pos.update.download();
+          const prog = v.querySelector('#sUpdateProgress') || el;
+          prog.innerHTML = '<div class="hint">Downloading… <span id="sDlPct">0%</span></div>';
+          App.pos.update.onDownloadProgress((p) => {
+            const pct = Math.round(p.percent);
+            const node = v.querySelector('#sDlPct');
+            if (node) node.textContent = pct + '%';
+          });
+          App.pos.update.onDownloaded(() => {
+            el.innerHTML = '<div class="hint" style="color:var(--ok)">Download complete.</div>' +
+              '<button class="btn btn-primary btn-sm" id="sInstallUpdate" style="margin-top:8px">Install & Restart</button>';
+            v.querySelector('#sInstallUpdate').onclick = () => App.pos.update.install();
+          });
         } else {
           el.innerHTML = '<div class="hint" style="color:var(--ok)">You are up to date (v' + r.currentVersion + ').</div>';
         }
