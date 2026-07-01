@@ -95,11 +95,16 @@ contextBridge.exposeInMainWorld('pos', {
     set: (k, v) => call('pos:settings:set', k, v),
   },
 
-  // ---- Update ----
+  // ---- Auto-update (electron-updater via GitHub Releases) ----------------
   update: {
     getVersion: () => ipcRenderer.invoke('pos:update:getVersion'),
     check: () => { const r = ipcRenderer.invoke('pos:update:check'); return r.then((x) => x.ok ? x.data : (() => { throw new Error(x.error); })()); },
-    apply: () => call('pos:update:apply'),
+    download: () => call('pos:update:download'),
+    install: () => call('pos:update:install'),
+    onUpdateAvailable: (cb) => ipcRenderer.on('pos:update:available', (_e, info) => cb(info)),
+    onDownloadProgress: (cb) => ipcRenderer.on('pos:update:download-progress', (_e, p) => cb(p)),
+    onDownloaded: (cb) => ipcRenderer.on('pos:update:downloaded', () => cb()),
+    onError: (cb) => ipcRenderer.on('pos:update:error', (_e, msg) => cb(msg)),
   },
 
   // ---- Reports ----

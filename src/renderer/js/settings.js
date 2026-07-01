@@ -125,16 +125,30 @@ App.views.settings = {
       try {
         const r = await App.pos.update.check();
         const el = v.querySelector('#sUpdateResult');
-        if (r.upToDate) {
-          el.innerHTML = '<div class="hint" style="color:var(--ok)">You are up to date.</div>';
-        } else {
-          el.innerHTML = `<div class="hint">${r.ahead} update(s) available:<br><pre style="font-size:11px;margin:4px 0">${App.ui.esc(r.log)}</pre></div>
-            <button class="btn btn-primary btn-sm" id="sApplyUpdate">Apply Update & Restart</button>`;
-          v.querySelector('#sApplyUpdate').onclick = async () => {
-            const ok = await App.ui.confirm('Pull latest code and restart the app?');
-            if (!ok) return;
-            await App.pos.update.apply();
+        if (r.devMode) {
+          el.innerHTML = '<div class="hint">Dev mode — publish a GitHub Release to test updates.</div>';
+        } else if (r.available) {
+          el.innerHTML = `<div class="hint">v${r.currentVersion} → v${r.version} available</div>
+            <div class="row gap" style="margin:6px 0">
+              <button class="btn btn-primary btn-sm" id="sDownloadUpdate">Download</button>
+            </div>
+            <div id="sUpdateProgress"></div>`;
+          v.querySelector('#sDownloadUpdate').onclick = async () => {
+            await App.pos.update.download();
+            const prog = v.querySelector('#sUpdateProgress');
+            prog.innerHTML = '<div class="hint">Downloading… <span id="sDlPct">0%</span></div>';
+            App.pos.update.onDownloadProgress((p) => {
+              const pct = Math.round(p.percent);
+              v.querySelector('#sDlPct').textContent = pct + '%';
+            });
+            App.pos.update.onDownloaded(() => {
+              prog.innerHTML = '<div class="hint" style="color:var(--ok)">Download complete.</div>' +
+                '<button class="btn btn-primary btn-sm" id="sInstallUpdate">Install & Restart</button>';
+              v.querySelector('#sInstallUpdate').onclick = () => App.pos.update.install();
+            });
           };
+        } else {
+          el.innerHTML = '<div class="hint" style="color:var(--ok)">You are up to date (v' + r.currentVersion + ').</div>';
         }
       } catch (e) {
         v.querySelector('#sUpdateResult').innerHTML = `<div class="hint" style="color:var(--danger)">${App.ui.esc(e.message)}</div>`;

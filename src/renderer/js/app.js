@@ -150,14 +150,22 @@ App._checkUpdates = async function () {
   el.textContent = 'Checking…';
   try {
     const r = await App.pos.update.check();
-    if (r.upToDate) {
-      App.ui.toast('You are up to date (v' + r.currentVer + ')', 'ok');
-    } else {
+    if (r.devMode) {
+      App.ui.toast('Dev mode — publish a GitHub Release to test updates', 'ok');
+    } else if (r.available) {
       const ok = await App.ui.confirm(
-        'v' + r.currentVer + ' → v' + (Math.round((parseFloat(r.currentVer) + 0.1) * 10) / 10) + '\n' +
-        r.ahead + ' update(s) available.\n\nPull latest code and restart?'
+        'v' + r.currentVersion + ' → v' + r.version + '\n\n' +
+        (r.releaseNotes || 'New version available.') + '\n\nDownload and install?'
       );
-      if (ok) await App.pos.update.apply();
+      if (!ok) return;
+      App.ui.toast('Downloading update…', 'ok');
+      await App.pos.update.download();
+      App.pos.update.onDownloaded(() => {
+        App.ui.toast('Update ready — restarting…', 'ok');
+        setTimeout(() => App.pos.update.install(), 1500);
+      });
+    } else {
+      App.ui.toast('You are up to date (v' + r.currentVersion + ')', 'ok');
     }
   } catch (e) {
     App.ui.toast(e.message, 'err');

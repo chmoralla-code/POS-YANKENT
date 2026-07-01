@@ -8,6 +8,7 @@ const { openDatabase, ensureSettings, getSetting, setSetting, getAllSettings } =
 const { seedDatabase } = require('./db/seed');
 const { getSession, requireRole, logout } = require('./lib/auth');
 const { registerAll } = require('./ipc');
+const { initUpdater } = require('./updater');
 
 const RENDERER_DIR = path.join(__dirname, '..', 'renderer');
 
@@ -94,6 +95,9 @@ app.whenReady().then(async () => {
     getMainWindow: () => mainWindow,
   };
   registerAll(ipcMain, ctx);
+
+  // Auto-updater
+  initUpdater(mainWindow);
 
   // Smoke test: boot, wait for the window to load, then quit.
   if (process.env.YANKENT_SMOKE) {

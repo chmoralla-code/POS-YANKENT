@@ -12,7 +12,7 @@
     "smoke": "set YANKENT_SMOKE=1&& set YANKENT_DB=%TEMP%\\yankent-smoke.sqlite&& electron .",
     "pack": "electron-builder --dir",
     "dist": "electron-builder --win",
-    "lint": "node --check src/main/main.js && node --check src/main/preload.js && node --check src/main/db/index.js && node --check src/main/db/seed.js && node --check src/main/lib/money.js && node --check src/main/lib/auth.js && node --check src/main/lib/receipt.js && node --check src/main/lib/escpos.js && node --check src/main/lib/telegram.js && node --check src/main/backup.js && node --check src/main/ipc/index.js && node --check src/main/ipc/catalog.js && node --check src/main/ipc/sales.js && node --check src/main/ipc/integrations.js && node --check tests/dbutil.js && node --check tests/money.test.js && node --check tests/backup.test.js && node --check tests/auth.test.js"
+    "lint": "node --check src/main/main.js && node --check src/main/preload.js && node --check src/main/updater.js && node --check src/main/db/index.js && node --check src/main/db/seed.js && node --check src/main/lib/money.js && node --check src/main/lib/auth.js && node --check src/main/lib/receipt.js && node --check src/main/lib/escpos.js && node --check src/main/lib/telegram.js && node --check src/main/backup.js && node --check src/main/ipc/index.js && node --check src/main/ipc/catalog.js && node --check src/main/ipc/sales.js && node --check src/main/ipc/integrations.js && node --check tests/dbutil.js && node --check tests/money.test.js && node --check tests/backup.test.js && node --check tests/auth.test.js"
   },
   "build": {
     "appId": "com.yankent.pos",
@@ -25,12 +25,18 @@
       {
         "from": "data",
         "to": "data",
-        "filter": ["*.sqlite"]
+        "filter": [
+          "*.sqlite"
+        ]
       }
     ],
-    "directories": { "output": "dist" },
+    "directories": {
+      "output": "dist"
+    },
     "win": {
-      "target": ["nsis"],
+      "target": [
+        "nsis"
+      ],
       "artifactName": "YANKENT-POS-Setup-${version}.${ext}"
     },
     "nsis": {
@@ -39,9 +45,16 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "shortcutName": "YANKENT POS"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "chmoralla-code",
+      "repo": "POS-YANKENT",
+      "releaseType": "release"
     }
   },
   "dependencies": {
+    "electron-updater": "^6.8.9",
     "sql.js": "^1.13.0"
   },
   "devDependencies": {
