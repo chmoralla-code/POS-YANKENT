@@ -177,6 +177,14 @@ table.tbl tr:hover td { background: #fafbfc; }
   display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; color: #fff;
 }
 
+/* Category management panel */
+.cat-row {
+  display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line-2);
+}
+.cat-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+.cat-nm { font-weight: 600; font-size: 13px; flex: 1; }
+.cat-cnt { font-size: 11px; }
+
 /* ---------- Toast / modal -------------------------------------------- */
 #toast {
   position: fixed; bottom: 22px; right: 22px; background: var(--ink); color: #fff; padding: 12px 18px;

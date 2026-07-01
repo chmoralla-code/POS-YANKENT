@@ -42,7 +42,13 @@ contextBridge.exposeInMainWorld('pos', {
   },
 
   // ---- Catalog ----
-  categories: { list: () => call('pos:categories:list') },
+  categories: {
+    list: () => call('pos:categories:list'),
+    create: (name) => call('pos:categories:create', name),
+    update: (id, name) => call('pos:categories:update', id, name),
+    delete: (id) => call('pos:categories:delete', id),
+    withCounts: () => call('pos:categories:withCounts'),
+  },
   customers: {
     list: () => call('pos:customers:list'),
     create: (c) => call('pos:customers:create', c),

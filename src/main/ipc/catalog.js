@@ -10,6 +10,37 @@ function register(ipcMain, ctx) {
     db.prepare('SELECT * FROM categories ORDER BY sort, name').all()
   );
 
+  guard(ipcMain, 'pos:categories:create', { admin: true }, (_c, name) => {
+    const n = String(name || '').trim();
+    if (!n) throw new Error('Category name is required');
+    const ex = db.prepare('SELECT id FROM categories WHERE name=?').get(n);
+    if (ex) throw new Error('Category already exists');
+    const maxSort = db.prepare('SELECT COALESCE(MAX(sort),0) AS s FROM categories').get().s;
+    return { id: db.prepare('INSERT INTO categories(name, sort) VALUES(?,?)').run(n, maxSort + 1).lastInsertRowid };
+  });
+
+  guard(ipcMain, 'pos:categories:update', { admin: true }, (_c, id, name) => {
+    const n = String(name || '').trim();
+    if (!n) throw new Error('Category name is required');
+    const ex = db.prepare('SELECT id FROM categories WHERE name=? AND id!=?').get(n, id);
+    if (ex) throw new Error('Category name already in use');
+    db.prepare('UPDATE categories SET name=? WHERE id=?').run(n, id);
+    return true;
+  });
+
+  guard(ipcMain, 'pos:categories:delete', { admin: true }, (_c, id) => {
+    // Products in this category get category_id = NULL (SET NULL in schema)
+    db.prepare('DELETE FROM categories WHERE id=?').run(id);
+    return true;
+  });
+
+  guard(ipcMain, 'pos:categories:withCounts', { auth: true }, () => {
+    const cats = db.prepare('SELECT * FROM categories ORDER BY sort, name').all();
+    const counts = db.prepare('SELECT category_id, COUNT(*) AS c FROM products WHERE active=1 GROUP BY category_id').all();
+    const map = {}; counts.forEach((r) => (map[r.category_id] = r.c));
+    return cats.map((c) => ({ ...c, productCount: map[c.id] || 0 }));
+  });
+
   // ---- Customers ---------------------------------------------------------
   guard(ipcMain, 'pos:customers:list', { auth: true }, () =>
     db.prepare('SELECT * FROM customers ORDER BY id').all()
