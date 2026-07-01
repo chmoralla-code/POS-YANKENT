@@ -16,12 +16,20 @@ document.addEventListener('DOMContentLoaded', () => {
     err.textContent = '';
     const u = document.getElementById('loginUser').value.trim();
     const p = document.getElementById('loginPass').value;
+    const btn = document.getElementById('loginBtn');
+    btn.classList.add('is-loading'); btn.disabled = true;
+    btn.textContent = '';
     try {
       const data = await App.pos.login(u, p);
       App.current.user = data.user;
+      btn.classList.remove('is-loading');
+      btn.classList.add('is-success');
+      btn.textContent = '✓ Welcome';
       await App._showLoginSuccess();
       await App._start();
     } catch (e2) {
+      btn.classList.remove('is-loading', 'is-success');
+      btn.disabled = false; btn.textContent = 'Sign In';
       err.textContent = e2.message;
       const card = document.querySelector('.login-card');
       card.style.animation = 'none'; void card.offsetWidth; card.style.animation = 'shake .4s';
