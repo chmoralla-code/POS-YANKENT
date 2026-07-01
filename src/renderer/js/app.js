@@ -15,11 +15,16 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const data = await App.pos.login(u, p);
       App.current.user = data.user;
+      await App._showLoginSuccess();
       await App._start();
     } catch (e2) {
       err.textContent = e2.message;
+      const card = document.querySelector('.login-card');
+      card.style.animation = 'none'; void card.offsetWidth; card.style.animation = 'shake .4s';
     }
   });
+
+  document.getElementById('forgotPw').onclick = (e) => { e.preventDefault(); App._forgotPassword(); };
 
   document.getElementById('logoutBtn').onclick = async () => {
     await App.pos.logout();
@@ -121,4 +126,108 @@ App._loginNet = async function () {
   } catch {
     el.innerHTML = '<span class="dot off"></span><span class="off-txt">Offline — POS still works</span>';
   }
+};
+
+// ---- Login success animation ------------------------------------------
+App._showLoginSuccess = function () {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'login-success-overlay';
+    overlay.innerHTML = '<div class="check"></div>';
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add('show'));
+    setTimeout(() => {
+      overlay.style.transition = 'opacity .3s';
+      overlay.style.opacity = '0';
+      setTimeout(() => { overlay.remove(); resolve(); }, 300);
+    }, 700);
+  });
+};
+
+// ---- Forgot password flow ---------------------------------------------
+App._forgotPassword = function () {
+  // Step 1: ask for username
+  const m = App.ui.modal({
+    title: 'Forgot Password',
+    bodyHtml: `<div class="field"><label class="fl">Enter your username</label><input id="fpUser" placeholder="username" autofocus></div>
+      <div class="hint">A request will be sent to the admin's Telegram for approval.</div>`,
+    footerHtml: `<button class="btn btn-ghost" data-a="cancel">Cancel</button><button class="btn btn-primary" data-a="send">Send Request</button>`,
+  });
+  m.el.querySelector('[data-a="cancel"]').onclick = () => m.close();
+  m.el.querySelector('[data-a="send"]').onclick = async () => {
+    const username = m.el.querySelector('#fpUser').value.trim();
+    if (!username) { App.ui.toast('Enter your username', 'err'); return; }
+    const btn = m.el.querySelector('[data-a="send"]'); btn.disabled = true; btn.textContent = 'Sending…';
+    try {
+      const res = await App.pos.auth.requestPasswordReset(username);
+      m.close();
+      App._awaitApproval(res.token, res.username);
+    } catch (e) {
+      App.ui.toast(e.message, 'err');
+      btn.disabled = false; btn.textContent = 'Send Request';
+    }
+  };
+};
+
+// Step 2: wait for admin approval (polls every 5s)
+App._awaitApproval = function (token, username) {
+  let interval = null;
+  const m = App.ui.modal({
+    title: 'Waiting for Approval',
+    bodyHtml: `<div style="text-align:center;padding:10px 0">
+      <div class="spinner" style="margin:0 auto 12px"></div>
+      <div style="font-weight:700">Request sent for <b>${App.ui.esc(username)}</b></div>
+      <div class="hint" style="margin-top:6px">The admin will receive a Telegram message.<br>Waiting for approval…</div>
+      <div class="hint" style="margin-top:8px">This will expire in 10 minutes.</div>
+    </div>`,
+    footerHtml: `<button class="btn btn-ghost" data-a="cancel">Cancel</button>`,
+  });
+  m.el.querySelector('[data-a="cancel"]').onclick = () => { clearInterval(interval); m.close(); };
+  const check = async () => {
+    try {
+      const r = await App.pos.auth.checkResetApproval(token);
+      if (r.status === 'approved') {
+        clearInterval(interval); m.close();
+        App._resetForm(token, username);
+      } else if (r.status === 'denied') {
+        clearInterval(interval); m.close();
+        App.ui.toast('Request was denied by admin', 'err');
+      } else if (r.status === 'expired') {
+        clearInterval(interval); m.close();
+        App.ui.toast('Request expired', 'err');
+      }
+    } catch {}
+  };
+  // Start polling (first check after 2s, then every 6s).
+  interval = setInterval(check, 6000);
+  setTimeout(check, 2000);
+};
+
+// Step 3: reset password form
+App._resetForm = function (token, username) {
+  const m = App.ui.modal({
+    title: 'Reset Password — ' + username,
+    bodyHtml: `<div class="field"><label class="fl">New password</label><input id="rpPw" type="password" autofocus></div>
+      <div class="field"><label class="fl">Confirm password</label><input id="rpPw2" type="password"></div>
+      <div class="hint">Minimum 4 characters.</div>`,
+    footerHtml: `<button class="btn btn-ghost" data-a="cancel">Cancel</button><button class="btn btn-primary" data-a="ok">Reset Password</button>`,
+  });
+  m.el.querySelector('[data-a="cancel"]').onclick = () => m.close();
+  m.el.querySelector('[data-a="ok"]').onclick = async () => {
+    const pw = m.el.querySelector('#rpPw').value;
+    const pw2 = m.el.querySelector('#rpPw2').value;
+    if (pw !== pw2) { App.ui.toast('Passwords do not match', 'err'); return; }
+    if (pw.length < 4) { App.ui.toast('Password too short (min 4)', 'err'); return; }
+    const btn = m.el.querySelector('[data-a="ok"]'); btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+      await App.pos.auth.resetPassword(token, pw);
+      m.close();
+      App.ui.toast('Password reset! You can now sign in.', 'ok');
+      document.getElementById('loginUser').value = username;
+      document.getElementById('loginPass').focus();
+    } catch (e) {
+      App.ui.toast(e.message, 'err');
+      btn.disabled = false; btn.textContent = 'Reset Password';
+    }
+  };
 };

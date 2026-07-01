@@ -28,7 +28,14 @@ function makeGuard({ getSession, requireRole }) {
 function registerAll(ipcMain, ctx) {
   const guard = makeGuard(ctx);
   const { db } = ctx;
+  const crypto = require('crypto');
   const { verifyPassword, createSession, logout, hashPassword } = require('../lib/auth');
+  const { checkOnline, sendApprovalRequest, pollUpdates, answerCallback, deleteWebhook } = require('../lib/telegram');
+
+  // In-memory pending password-reset requests (token -> {userId, username, status, createdAt})
+  const pendingResets = new Map();
+  let tgOffset = 0;
+  let webhookCleared = false;
 
   // ---- Auth --------------------------------------------------------------
   ipcMain.handle('pos:auth:login', async (_e, { username, password }) => {
@@ -41,6 +48,69 @@ function registerAll(ipcMain, ctx) {
   });
 
   ipcMain.handle('pos:auth:logout', async (_e, token) => { logout(token); return { ok: true, data: true }; });
+
+  // ---- Forgot password (public — no session required) -------------------
+  ipcMain.handle('pos:auth:requestPasswordReset', async (_e, username) => {
+    try {
+      const user = db.prepare('SELECT id, username, full_name FROM users WHERE username=? AND active=1').get(username);
+      if (!user) return { ok: false, error: 'User not found' };
+      const token = crypto.randomBytes(4).toString('hex');
+      pendingResets.set(token, { userId: user.id, username: user.username, status: 'pending', createdAt: Date.now() });
+      const tgToken = ctx.getSetting(db, 'telegram_token');
+      const chatId = ctx.getSetting(db, 'telegram_chat_id');
+      if (!tgToken || !chatId) return { ok: false, error: 'Telegram is not configured. Contact an administrator.' };
+      const online = await checkOnline();
+      if (!online) return { ok: false, error: 'No internet — cannot send approval request.' };
+      if (!webhookCleared) { await deleteWebhook(tgToken); webhookCleared = true; }
+      const r = await sendApprovalRequest(tgToken, chatId, token, user.username);
+      if (!r.ok) return { ok: false, error: r.description || 'Failed to send Telegram request' };
+      return { ok: true, data: { token, username: user.username } };
+    } catch (e) { return { ok: false, error: e.message }; }
+  });
+
+  ipcMain.handle('pos:auth:checkResetApproval', async (_e, token) => {
+    try {
+      const req = pendingResets.get(token);
+      if (!req) return { ok: true, data: { status: 'expired' } };
+      if (req.status !== 'pending') return { ok: true, data: { status: req.status } };
+      if (Date.now() - req.createdAt > 10 * 60 * 1000) { pendingResets.delete(token); return { ok: true, data: { status: 'expired' } }; }
+      // Poll Telegram once for the admin's button press.
+      const tgToken = ctx.getSetting(db, 'telegram_token');
+      if (!tgToken) return { ok: true, data: { status: 'pending' } };
+      const r = await pollUpdates(tgToken, tgOffset, 5);
+      if (r.ok && Array.isArray(r.result)) {
+        for (const u of r.result) {
+          if (u.update_id >= tgOffset) tgOffset = u.update_id + 1;
+          const cq = u.callback_query;
+          if (cq && cq.data) {
+            const parts = cq.data.split(':'); // reset:approve:<token> | reset:deny:<token>
+            if (parts[0] === 'reset' && parts[2]) {
+              const pr = pendingResets.get(parts[2]);
+              if (pr && pr.status === 'pending') {
+                pr.status = parts[1] === 'approve' ? 'approved' : 'denied';
+                await answerCallback(tgToken, cq.id, parts[1] === 'approve' ? '✅ Approved' : '❌ Denied');
+              } else {
+                await answerCallback(tgToken, cq.id, 'Request no longer valid');
+              }
+            }
+          }
+        }
+      }
+      return { ok: true, data: { status: req.status } };
+    } catch (e) { return { ok: true, data: { status: 'pending' } }; }
+  });
+
+  ipcMain.handle('pos:auth:resetPassword', async (_e, token, newPassword) => {
+    try {
+      const req = pendingResets.get(token);
+      if (!req) return { ok: false, error: 'Invalid or expired reset token' };
+      if (req.status !== 'approved') return { ok: false, error: 'Reset has not been approved' };
+      if (!newPassword || newPassword.length < 4) return { ok: false, error: 'Password must be at least 4 characters' };
+      db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(hashPassword(newPassword), req.userId);
+      pendingResets.delete(token);
+      return { ok: true, data: true };
+    } catch (e) { return { ok: false, error: e.message }; }
+  });
 
   guard(ipcMain, 'pos:auth:session', { auth: true }, ({ session }) => {
     if (!session) return null;

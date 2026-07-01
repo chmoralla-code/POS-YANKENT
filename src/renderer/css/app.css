@@ -76,6 +76,22 @@ button { cursor: pointer; }
 .login-status .dot.off { background: var(--muted-2); }
 .login-status .on-txt { color: var(--ok); font-weight: 700; }
 .login-status .off-txt { color: var(--muted); font-weight: 700; }
+
+/* ---------- Login success effect ------------------------------------- */
+.login-success-overlay {
+  position: fixed; inset: 0; background: rgba(17,17,20,.9); z-index: 300;
+  display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity .2s;
+}
+.login-success-overlay.show { opacity: 1; }
+.login-success-overlay .check {
+  width: 84px; height: 84px; border-radius: 50%; background: var(--ok);
+  display: flex; align-items: center; justify-content: center; transform: scale(0); box-shadow: 0 0 30px rgba(31,107,58,.5);
+}
+.login-success-overlay.show .check { animation: pop .45s .1s forwards; }
+.login-success-overlay .check::after { content: '✓'; color: #fff; font-size: 46px; font-weight: 700; }
+@keyframes pop { 0% { transform: scale(0); } 70% { transform: scale(1.18); } 100% { transform: scale(1); } }
+@keyframes shake { 0%,100% { transform: translateX(0); } 20% { transform: translateX(-8px); } 40% { transform: translateX(8px); } 60% { transform: translateX(-6px); } 80% { transform: translateX(6px); } }
+.login-card.shake-err { animation: shake .4s; }
 .login-card .sub { text-align: center; color: var(--muted); font-size: 12px; margin: 4px 0 22px; }
 .login-error { color: var(--danger); font-size: 12px; min-height: 16px; margin-bottom: 6px; text-align: center; }
 

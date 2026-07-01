@@ -28,6 +28,18 @@ contextBridge.exposeInMainWorld('pos', {
   },
   async logout() { await ipcRenderer.invoke('pos:auth:logout', token); token = null; },
   session: () => call('pos:auth:session'),
+  async requestPasswordReset(username) {
+    const r = await ipcRenderer.invoke('pos:auth:requestPasswordReset', username);
+    if (r && r.ok) return r.data; throw new Error((r && r.error) || 'Request failed');
+  },
+  async checkResetApproval(t) {
+    const r = await ipcRenderer.invoke('pos:auth:checkResetApproval', t);
+    if (r && r.ok) return r.data; throw new Error((r && r.error) || 'Check failed');
+  },
+  async resetPassword(t, pw) {
+    const r = await ipcRenderer.invoke('pos:auth:resetPassword', t, pw);
+    if (r && r.ok) return r.data; throw new Error((r && r.error) || 'Reset failed');
+  },
 
   // ---- Catalog ----
   categories: { list: () => call('pos:categories:list') },

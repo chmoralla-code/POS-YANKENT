@@ -65,6 +65,58 @@ function sendMessage(token, chatId, text) {
   });
 }
 
+/** Generic Telegram Bot API call (POST JSON). */
+function callApi(token, method, payload) {
+  return new Promise((resolve) => {
+    if (!token) return resolve({ ok: false, error: 'no token' });
+    const body = JSON.stringify(payload || {});
+    const url = new URL(`https://api.telegram.org/bot${token}/${method}`);
+    const req = https.request(
+      {
+        method: 'POST', hostname: url.hostname, path: url.pathname,
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+        timeout: 35000,
+      },
+      (res) => {
+        let data = '';
+        res.on('data', (c) => (data += c));
+        res.on('end', () => { try { resolve(JSON.parse(data)); } catch { resolve({ ok: false }); } });
+      }
+    );
+    req.on('error', (e) => resolve({ ok: false, error: e.message }));
+    req.on('timeout', () => { req.destroy(); resolve({ ok: false, error: 'timeout' }); });
+    req.write(body);
+    req.end();
+  });
+}
+
+/** Send a password-reset approval request with Approve/Deny buttons. */
+async function sendApprovalRequest(token, chatId, resetToken, username) {
+  return callApi(token, 'sendMessage', {
+    chat_id: String(chatId),
+    text: `🔐 Password Reset Request\n\nUser: <b>${username}</b>\nTime: ${new Date().toLocaleString()}\n\nClick <b>Approve</b> to allow the password reset.`,
+    parse_mode: 'HTML',
+    reply_markup: { inline_keyboard: [[
+      { text: '✅ Approve', callback_data: `reset:approve:${resetToken}` },
+      { text: '❌ Deny', callback_data: `reset:deny:${resetToken}` },
+    ]] },
+  });
+}
+
+/** Poll the bot for updates (callback queries from button presses). */
+async function pollUpdates(token, offset, timeout) {
+  return callApi(token, 'getUpdates', { offset, timeout: timeout || 5, allowed_updates: ['callback_query'] });
+}
+
+/** Acknowledge a callback query (removes the loading spinner on the button). */
+async function answerCallback(token, callbackId, text) {
+  return callApi(token, 'answerCallbackQuery', { callback_query_id: callbackId, text });
+}
+
+async function deleteWebhook(token) {
+  return callApi(token, 'deleteWebhook', { drop_pending_updates: true });
+}
+
 function reportMoney(n) {
   return '₱' + Math.round(Number(n) || 0).toLocaleString('en-PH');
 }
@@ -176,4 +228,4 @@ function buildReportMessage(db) {
   return lines.join('\n');
 }
 
-module.exports = { checkOnline, sendMessage, buildReportMessage, buildAnalytics, reportMoney };
+module.exports = { checkOnline, sendMessage, buildReportMessage, buildAnalytics, reportMoney, callApi, sendApprovalRequest, pollUpdates, answerCallback, deleteWebhook };
