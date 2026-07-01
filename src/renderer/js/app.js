@@ -128,13 +128,16 @@ App._net = async function () {
 App._loginNet = async function () {
   const el = document.getElementById('loginStatus');
   if (!el) return;
+  const checking = '<span class="dot checking"></span><span class="chk-txt">Checking connection<span class="chk-ellipsis"></span></span>';
+  // Show the animated "checking" state while the reachability ping is in flight.
+  el.innerHTML = checking;
   // Instant first pass using the browser's network state.
-  if (navigator.onLine) {
-    el.innerHTML = '<span class="dot on"></span><span class="on-txt">Online</span>';
-  } else {
+  if (!navigator.onLine) {
     el.innerHTML = '<span class="dot off"></span><span class="off-txt">Offline — POS still works</span>';
+    return;
   }
-  // Confirm with a real reachability ping.
+  // Confirm with a real reachability ping (keep the animated state until it resolves).
+  el.innerHTML = checking;
   try {
     const online = await App.pos.telegram.isOnline();
     if (online) {
@@ -169,12 +172,7 @@ App._checkUpdates = async function () {
     } else if (r.available && App._isNewer(r.version, r.currentVersion)) {
       const ok = await App._showWhatsNew(r);
       if (!ok) return;
-      App.ui.toast('Downloading update…', 'ok');
-      await App.pos.update.download();
-      App.pos.update.onDownloaded(() => {
-        App.ui.toast('Update ready — restarting…', 'ok');
-        setTimeout(() => App.pos.update.install(), 1500);
-      });
+      await App._showDownloadProgress(r);
     } else {
       App._showUpToDate(r.currentVersion);
     }
@@ -282,6 +280,92 @@ App._showUpToDate = function (ver) {
     footerHtml: `<button class="btn btn-primary" data-a="ok">OK</button>`,
   });
   m.el.querySelector('[data-a="ok"]').onclick = () => m.close();
+};
+
+// ---- Download progress modal ------------------------------------------
+App._fmtBytes = function (n) {
+  if (!n || n < 0) return '0 B';
+  const u = ['B', 'KB', 'MB', 'GB'];
+  let i = 0, v = n;
+  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+  return v.toFixed(i === 0 ? 0 : 1) + ' ' + u[i];
+};
+
+App._showDownloadProgress = function (r) {
+  return new Promise((resolve) => {
+    const from = r.currentVersion, to = r.version;
+    const body = `
+      <div class="dl-head">
+        <div class="dl-ver"><span class="dl-from">v${App.ui.esc(from)}</span><span class="dl-arrow">→</span><span class="dl-to">v${App.ui.esc(to)}</span></div>
+        <div class="dl-caption">Downloading the latest version of YANKENT POS.</div>
+      </div>
+      <div class="dl-bar-wrap">
+        <div class="dl-bar" id="dlBar" style="width:0%"></div>
+      </div>
+      <div class="dl-meta">
+        <div class="dl-pct" id="dlPct">0%</div>
+        <div class="dl-stat" id="dlStat">Starting download…</div>
+      </div>
+      <div class="dl-sub" id="dlSub">—</div>`;
+    const m = App.ui.modal({
+      title: 'Updating YANKENT POS',
+      bodyHtml: body,
+      footerHtml: `<button class="btn btn-ghost" data-a="hide">Run in background</button>`,
+    });
+    const root = m.el;
+    let done = false;
+    const setPct = (pct) => {
+      const p = Math.max(0, Math.min(100, pct));
+      const bar = root.querySelector('#dlBar');
+      const pc = root.querySelector('#dlPct');
+      if (bar) bar.style.width = p + '%';
+      if (pc) pc.textContent = Math.round(p) + '%';
+    };
+
+    const onProgress = (p) => {
+      if (done) return;
+      const pct = (p && typeof p.percent === 'number') ? p.percent : 0;
+      setPct(pct);
+      const stat = root.querySelector('#dlStat');
+      const sub = root.querySelector('#dlSub');
+      const transferred = App._fmtBytes(p.transferred);
+      const total = App._fmtBytes(p.total);
+      const speed = p.bytesPerSecond ? App._fmtBytes(p.bytesPerSecond) + '/s' : '';
+      if (stat) stat.textContent = `${transferred} / ${total}${speed ? ' · ' + speed : ''}`;
+      if (sub) sub.textContent = pct >= 100 ? 'Finalizing…' : 'Downloading…';
+    };
+    const onDownloaded = () => {
+      done = true;
+      setPct(100);
+      const stat = root.querySelector('#dlStat');
+      const sub = root.querySelector('#dlSub');
+      if (stat) stat.textContent = 'Update downloaded successfully';
+      if (sub) sub.textContent = 'The app will restart to install.';
+      m.body.innerHTML = `<div class="dl-done"><div class="dl-ok-badge">✓</div><div class="dl-ver" style="margin-top:10px"><span class="dl-to">v${App.ui.esc(to)}</span></div><div class="dl-caption">Update ready. Restart to finish installing.</div></div>`;
+      // Replace footer with Install button
+      m.el.querySelector('.modal-f').innerHTML = `<button class="btn btn-primary" data-a="install">Restart & Install</button>`;
+      m.el.querySelector('[data-a="install"]').onclick = () => { m.close(); App.pos.update.install(); };
+      App.ui.toast('Update ready — install on restart', 'ok');
+      resolve();
+    };
+    const onError = (msg) => {
+      if (done) return;
+      done = true;
+      const sub = root.querySelector('#dlSub');
+      if (sub) { sub.textContent = 'Error: ' + (msg || 'download failed'); sub.style.color = 'var(--danger)'; }
+      m.el.querySelector('.modal-f').innerHTML = `<button class="btn btn-primary" data-a="close">Close</button>`;
+      m.el.querySelector('[data-a="close"]').onclick = () => { m.close(); resolve(); };
+      App.ui.toast('Update download failed: ' + (msg || 'error'), 'err');
+    };
+
+    App.pos.update.onDownloadProgress(onProgress);
+    App.pos.update.onDownloaded(onDownloaded);
+    App.pos.update.onError(onError);
+    m.el.querySelector('[data-a="hide"]').onclick = () => { m.close(); /* download continues; listeners remain */ };
+
+    // Kick off the download now that listeners are attached.
+    App.pos.update.download().catch((e) => onError(e.message));
+  });
 };
 
 // ---- Login success animation ------------------------------------------

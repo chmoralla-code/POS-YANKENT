@@ -132,19 +132,8 @@ App.views.settings = {
           el.innerHTML = `<div class="hint">v${r.currentVersion} → v${r.version} available</div>`;
           const ok = await App._showWhatsNew(r);
           if (!ok) return;
-          await App.pos.update.download();
-          const prog = v.querySelector('#sUpdateProgress') || el;
-          prog.innerHTML = '<div class="hint">Downloading… <span id="sDlPct">0%</span></div>';
-          App.pos.update.onDownloadProgress((p) => {
-            const pct = Math.round(p.percent);
-            const node = v.querySelector('#sDlPct');
-            if (node) node.textContent = pct + '%';
-          });
-          App.pos.update.onDownloaded(() => {
-            el.innerHTML = '<div class="hint" style="color:var(--ok)">Download complete.</div>' +
-              '<button class="btn btn-primary btn-sm" id="sInstallUpdate" style="margin-top:8px">Install & Restart</button>';
-            v.querySelector('#sInstallUpdate').onclick = () => App.pos.update.install();
-          });
+          await App._showDownloadProgress(r);
+          el.innerHTML = '<div class="hint" style="color:var(--ok)">Update downloaded — restart to install.</div>';
         } else {
           el.innerHTML = '<div class="hint" style="color:var(--ok)">You are up to date (v' + r.currentVersion + ').</div>';
         }
