@@ -8,19 +8,28 @@ App.views.products = {
   cache: { products: [], categories: [] },
   q: '',
   cat: 'all',
+  chipsOpen: false,
 
   async render(view) {
     this.viewEl = view;
+    this.q = '';
     await this._load();
     view.innerHTML = `
       <div class="toolbar">
         <input id="pSearch" placeholder="Search name…" class="fill" style="max-width:300px">
-        <button class="btn btn-ghost btn-sm" id="pClear">Clear</button>
         <div class="fill"></div>
         <button class="btn btn-ghost btn-sm" id="catManage">Manage Categories</button>
+        <button class="btn btn-ghost btn-sm" id="pImportCatalog" title="Bulk-import the saved product catalog (245 items, ₱0 price, 0 stock)">Import Catalog</button>
+        <button class="btn btn-danger btn-sm" id="pDeleteAll" title="Erase ALL products (and their units / stock movements). Category names are preserved.">Delete All Products</button>
         <button class="btn btn-primary btn-sm" id="pAdd">+ Add Product</button>
+        <button class="btn btn-primary btn-sm" id="pAddSvc" title="Add a service (labor, delivery, etc.) — no stock tracking">+ Add Service</button>
       </div>
-      <div class="chips" id="pChips"></div>
+      <div class="chips-wrap" id="pChipsWrap">
+        <button class="chips-toggle" id="pChipsToggle" type="button" aria-expanded="false">
+          <span class="chips-toggle-arrow">▸</span><span>Categories</span>
+        </button>
+        <div class="chips" id="pChips" hidden></div>
+      </div>
       <div class="prod-grid" id="pGrid" style="max-height:calc(100vh - 210px)"></div>`;
     this._wire();
     this._renderChips();
@@ -39,9 +48,13 @@ App.views.products = {
     const v = this.viewEl;
     const d = App.ui.debounce(async () => { await this._load(); this._renderChips(); this._renderGrid(); }, 250);
     v.querySelector('#pSearch').addEventListener('input', (e) => { this.q = e.target.value; d(); });
-    v.querySelector('#pClear').onclick = async () => { this.q = ''; v.querySelector('#pSearch').value = ''; await this._load(); this._renderChips(); this._renderGrid(); };
     v.querySelector('#pAdd').onclick = () => this._edit(null);
+    v.querySelector('#pAddSvc').onclick = () => this._editService(null);
     v.querySelector('#catManage').onclick = () => this._catModal();
+    v.querySelector('#pDeleteAll').onclick = () => this._deleteAll();
+    v.querySelector('#pImportCatalog').onclick = () => this._importCatalog();
+    const toggle = v.querySelector('#pChipsToggle');
+    if (toggle) toggle.onclick = () => { this.chipsOpen = !this.chipsOpen; this._renderChips(); };
     v.querySelector('#pChips').addEventListener('click', (e) => {
       const chip = e.target.closest('[data-cat]'); if (!chip) return;
       this.cat = chip.dataset.cat; this._renderChips(); this._renderGrid();
@@ -52,14 +65,23 @@ App.views.products = {
       const btn = e.target.closest('[data-act]');
       if (!btn) return;
       const act = btn.dataset.act;
-      if (act === 'edit') this._edit(id);
+      const isSvc = this.cache.products.find((x) => x.id === id)?.is_service;
+      if (act === 'edit') { if (isSvc) this._editService(id); else this._edit(id); }
       else if (act === 'stock') this._stock(id);
       else if (act === 'del') this._del(id);
     });
   },
 
   _renderChips() {
+    const wrap = this.viewEl.querySelector('#pChipsWrap');
+    const toggle = this.viewEl.querySelector('#pChipsToggle');
     const el = this.viewEl.querySelector('#pChips');
+    if (!wrap || !el) return;
+    const open = !!this.chipsOpen;
+    toggle.setAttribute('aria-expanded', String(open));
+    toggle.querySelector('.chips-toggle-arrow').textContent = open ? '▾' : '▸';
+    el.hidden = !open;
+    if (!open) return;
     const cats = this.cache.categories;
     const all = `<div class="chip ${this.cat === 'all' ? 'active' : ''}" data-cat="all">All <span class="muted" style="font-weight:400">(${this.cache.products.length})</span></div>`;
     el.innerHTML = all + cats.map((c) => {
@@ -87,9 +109,9 @@ App.views.products = {
         <div class="pr">${App.ui.money(def.price)} <small>/${App.ui.esc(def.unit)}</small></div>
         <div class="stk ${low ? 'low' : ''}">${p.is_service ? 'Service' : 'Stock: ' + App.ui.qty(p.stock) + ' ' + App.ui.esc(p.base_unit)}${(p.units && p.units.length > 1) ? ' · ' + p.units.length + ' units' : ''}</div>
         <div class="prod-actions">
-          <button class="btn btn-sm btn-ghost" data-act="edit">Edit</button>
-          ${p.is_service ? '' : '<button class="btn btn-sm btn-ghost" data-act="stock">Stock</button>'}
-          <button class="btn btn-sm btn-danger" data-act="del">Del</button>
+          <button class="btn btn-sm btn-edit" data-act="edit">Edit</button>
+          ${p.is_service ? '' : '<button class="btn btn-sm btn-stock" data-act="stock">Stock</button>'}
+          <button class="btn btn-sm btn-del" data-act="del">Del</button>
         </div>
       </div>`;
     }).join('');
@@ -126,8 +148,24 @@ App.views.products = {
       const id = +e.target.closest('[data-catid]')?.dataset.catid; if (!id) return;
       if (e.target.dataset.act === 'rename') {
         const cat = this.cache.categories.find((c) => c.id === id);
-        const nn = prompt('Rename category:', cat ? cat.name : '');
-        if (nn && nn.trim()) { try { await App.pos.categories.update(id, nn.trim()); await this._load(); refresh(); App.ui.toast('Renamed ✓', 'ok'); } catch (err) { App.ui.toast(err.message, 'err'); } }
+        if (!cat) return;
+        // Use a styled modal instead of the native prompt() which can be
+        // blocked or theme-inconsistent in the Electron renderer.
+        const rm = App.ui.modal({
+          title: 'Rename Category', closeOnOverlay: false,
+          bodyHtml: `<div class="field"><label class="fl">Category name</label><input id="catRenameInput" value="${App.ui.esc(cat.name)}" autofocus></div>`,
+          footerHtml: `<button class="btn btn-ghost" data-a="cancel">Cancel</button><button class="btn btn-primary" data-a="ok">Rename</button>`,
+        });
+        rm.el.querySelector('[data-a="cancel"]').onclick = () => rm.close();
+        const inp = rm.el.querySelector('#catRenameInput');
+        inp.focus(); inp.select();
+        inp.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') rm.el.querySelector('[data-a="ok"]').click(); });
+        rm.el.querySelector('[data-a="ok"]').onclick = async () => {
+          const nn = inp.value.trim();
+          if (!nn) { App.ui.toast('Name is required', 'err'); return; }
+          try { await App.pos.categories.update(id, nn); await this._load(); refresh(); App.ui.toast('Renamed ✓', 'ok'); rm.close(); }
+          catch (err) { App.ui.toast(err.message, 'err'); }
+        };
       } else if (e.target.dataset.act === 'delcat') {
         const cat = this.cache.categories.find((c) => c.id === id);
         const ok = await App.ui.confirm(`Delete "${cat.name}"? ${cat.productCount || 0} product(s) will lose their category.`, { danger: true });
@@ -139,79 +177,165 @@ App.views.products = {
   _edit(id) {
     const p = id ? this.cache.products.find((x) => x.id === id) : null;
     const cats = this.cache.categories;
-    const units = (p && p.units) || [{ unit: p ? p.base_unit : 'pc', factor: 1, price: p ? p.price : 0 }];
     const m = App.ui.modal({
-      title: id ? 'Edit Product' : 'Add Product', wide: true,
-      bodyHtml: `<div class="field"><label class="fl">Name</label><input id="fName" value="${p ? App.ui.esc(p.name) : ''}"></div>
+      title: id ? 'Edit Product' : 'Add Product', closeOnOverlay: false,
+      bodyHtml: `<div class="field"><label class="fl">Product Name</label><input id="fName" value="${p ? App.ui.esc(p.name) : ''}" autofocus></div>
         <div class="row gap wrap">
           <div class="field" style="flex:1"><label class="fl">Category</label><select id="fCat">
             <option value="">— No category —</option>
             ${cats.map((c) => `<option value="${c.id}" ${p && p.category_id === c.id ? 'selected' : ''}>${App.ui.esc(c.name)}</option>`).join('')}
             <option value="__new">+ Add new category…</option>
           </select></div>
-          <div class="field" style="flex:1"><label class="fl">Base unit (stock unit)</label><input id="fBase" value="${p ? App.ui.esc(p.base_unit) : 'pc'}"></div>
+          <div class="field" style="flex:1"><label class="fl">Unit</label><input id="fUnit" value="${p ? App.ui.esc(p.base_unit) : 'pc'}" placeholder="e.g. bag, pc, kg"></div>
         </div>
         <div class="row gap wrap">
-          <div class="field" style="flex:1"><label class="fl">Stock (in base unit)</label><input id="fStock" type="number" step="0.001" value="${p ? p.stock : 0}" ${id ? 'readonly' : ''}></div>
-          <div class="field" style="flex:1"><label class="fl">Cost</label><input id="fCost" type="number" step="0.01" value="${p ? p.cost : 0}"></div>
-          <div class="field" style="flex:1"><label class="fl">Default price</label><input id="fPrice" type="number" step="0.01" value="${p ? p.price : 0}"></div>
-          <div class="field" style="flex:1"><label class="fl">Low-stock threshold</label><input id="fLow" type="number" step="0.001" value="${p ? p.low : 10}"></div>
-        </div>
-        <label class="row gap-sm"><input type="checkbox" id="fSvc" ${p && p.is_service ? 'checked' : ''}> This is a service (no stock)</label>
-        <div class="sec-title" style="margin-top:12px">Sellable units &amp; conversion factors</div>
-        <div class="hint">Factor = base units consumed per 1 of this unit (e.g. cement: bag=1, sack(50kg)=1.25).</div>
-        <div id="fUnits"></div>
-        <button class="btn btn-sm btn-ghost" id="fAddUnit">+ Add unit</button>`,
+          <div class="field" style="flex:1"><label class="fl">Stock</label><input id="fStock" type="number" step="0.001" value="${p ? p.stock : 0}"${id ? ' data-orig="' + p.stock + '"' : ''}></div>
+          <div class="field" style="flex:1"><label class="fl">Price</label><input id="fPrice" type="number" step="0.01" value="${p ? p.price : 0}"></div>
+        </div>${id ? '<div class="hint" style="margin-top:-4px">Changing Stock here logs an adjustment movement. Use the <b>Stock</b> button on the card for date/location.</div>' : ''}`,
       footerHtml: `<button class="btn btn-ghost" data-a="cancel">Cancel</button><button class="btn btn-primary" data-a="save">Save</button>`,
     });
-    const uList = m.el.querySelector('#fUnits');
-    const renderUnits = () => {
-      uList.innerHTML = units.map((u, i) => `<div class="row gap-sm" style="margin-bottom:6px">
-        <input class="fill" data-u="unit" placeholder="unit" value="${App.ui.esc(u.unit)}" style="max-width:160px">
-        <input data-u="factor" type="number" step="0.0001" placeholder="factor" value="${u.factor}" style="max-width:100px">
-        <input data-u="price" type="number" step="0.01" placeholder="price" value="${u.price}" style="max-width:120px">
-        <button class="btn btn-sm btn-danger" data-u="del">✕</button></div>`).join('');
-      uList.querySelectorAll('div').forEach((d, i) => {
-        d.querySelectorAll('input').forEach((inp) => inp.oninput = () => { units[i][inp.dataset.u] = inp.value; });
-        d.querySelector('[data-u="del"]').onclick = () => { units.splice(i, 1); renderUnits(); };
-      });
-    };
-    renderUnits();
-    m.el.querySelector('#fAddUnit').onclick = () => { units.push({ unit: '', factor: 1, price: 0 }); renderUnits(); };
     // "Add new category" handler
     m.el.querySelector('#fCat').onchange = async (e) => {
       if (e.target.value !== '__new') return;
-      const name = prompt('New category name:');
-      if (!name) { e.target.value = p && p.category_id ? p.category_id : ''; return; }
-      try {
-        const r = await App.pos.categories.create(name.trim());
-        await this._load();
-        const sel = m.el.querySelector('#fCat');
-        sel.innerHTML = `<option value="">— No category —</option>` +
-          this.cache.categories.map((c) => `<option value="${c.id}" ${c.id === r.id ? 'selected' : ''}>${App.ui.esc(c.name)}</option>`).join('') +
-          `<option value="__new">+ Add new category…</option>`;
-        App.ui.toast('Category added ✓', 'ok');
-      } catch (err) { App.ui.toast(err.message, 'err'); e.target.value = ''; }
+      // Use a styled modal instead of the native prompt().
+      const cm = App.ui.modal({
+        title: 'New Category', closeOnOverlay: false,
+        bodyHtml: `<div class="field"><label class="fl">Category name</label><input id="newCatInput" autofocus></div>`,
+        footerHtml: `<button class="btn btn-ghost" data-a="cancel">Cancel</button><button class="btn btn-primary" data-a="ok">Add</button>`,
+      });
+      cm.el.querySelector('[data-a="cancel"]').onclick = () => { cm.close(); e.target.value = p && p.category_id ? p.category_id : ''; };
+      const catInput = cm.el.querySelector('#newCatInput');
+      catInput.focus();
+      catInput.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') cm.el.querySelector('[data-a="ok"]').click(); });
+      cm.el.querySelector('[data-a="ok"]').onclick = async () => {
+        const name = catInput.value.trim();
+        if (!name) { App.ui.toast('Name is required', 'err'); return; }
+        try {
+          const r = await App.pos.categories.create(name);
+          await this._load();
+          const sel = m.el.querySelector('#fCat');
+          sel.innerHTML = `<option value="">— No category —</option>` +
+            this.cache.categories.map((c) => `<option value="${c.id}" ${c.id === r.id ? 'selected' : ''}>${App.ui.esc(c.name)}</option>`).join('') +
+            `<option value="__new">+ Add new category…</option>`;
+          App.ui.toast('Category added ✓', 'ok');
+          cm.close();
+        } catch (err) { App.ui.toast(err.message, 'err'); e.target.value = ''; cm.close(); }
+      };
     };
     m.el.querySelector('[data-a="cancel"]').onclick = () => m.close();
     m.el.querySelector('[data-a="save"]').onclick = async () => {
+      const num = (s, fallback = 0) => {
+        const n = parseFloat(String(s).replace(/,/g, ''));
+        return Number.isFinite(n) ? n : fallback;
+      };
+      const name = m.el.querySelector('#fName').value.trim();
+      if (!name) { App.ui.toast('Name is required', 'err'); return; }
+      const baseUnit = m.el.querySelector('#fUnit').value.trim() || 'pc';
+      const price = num(m.el.querySelector('#fPrice').value);
       const data = {
         sku: id && p ? p.sku : '',
-        name: m.el.querySelector('#fName').value.trim(),
+        name,
         category_id: +m.el.querySelector('#fCat').value || null,
-        base_unit: m.el.querySelector('#fBase').value.trim() || 'pc',
+        base_unit: baseUnit,
         stock: parseFloat(m.el.querySelector('#fStock').value) || 0,
-        cost: parseFloat(m.el.querySelector('#fCost').value) || 0,
-        price: parseFloat(m.el.querySelector('#fPrice').value) || 0,
-        low_stock_threshold: parseFloat(m.el.querySelector('#fLow').value) || 0,
-        is_service: m.el.querySelector('#fSvc').checked,
-        units: units.filter((u) => u.unit).map((u) => ({ unit: u.unit, factor: +u.factor || 1, price: +u.price || 0 })),
+        cost: id && p ? p.cost : 0,
+        price,
+        low_stock_threshold: id && p ? (p.low != null ? p.low : 10) : 10,
+        is_service: false,
+        units: [{ unit: baseUnit, factor: 1, price }],
       };
-      if (!data.name) { App.ui.toast('Name is required', 'err'); return; }
+      try {
+        if (id) {
+          await App.pos.products.update(id, data);
+          // If the cashier edited the stock field, route the change through
+          // setStock so a stock_movements audit row is written (the UPDATE
+          // statement in pos:products:update intentionally does not touch
+          // stock — that's setStock's job). This keeps the audit log intact
+          // while letting admins adjust stock directly from the Edit modal.
+          const stockEl = m.el.querySelector('#fStock');
+          const orig = parseFloat(stockEl.dataset.orig);
+          const newStock = parseFloat(stockEl.value) || 0;
+          if (Number.isFinite(orig) && Math.abs(newStock - orig) > 1e-9) {
+            await App.pos.products.setStock(id, newStock, 'Adjusted via Edit', null, null);
+          }
+        } else {
+          await App.pos.products.create(data);
+        }
+        App.ui.toast('Saved ✓', 'ok'); m.close();
+        await this._load(); this._renderChips(); this._renderGrid();
+      } catch (e) { App.ui.toast(e.message, 'err'); }
+    };
+  },
+
+  _editService(id) {
+    const p = id ? this.cache.products.find((x) => x.id === id) : null;
+    const cats = this.cache.categories;
+    const m = App.ui.modal({
+      title: id ? 'Edit Service' : 'Add Service', closeOnOverlay: false,
+      bodyHtml: `<div class="field"><label class="fl">Service Name</label><input id="fName" value="${p ? App.ui.esc(p.name) : ''}" autofocus placeholder="e.g. Delivery, Labor, Installation"></div>
+        <div class="row gap wrap">
+          <div class="field" style="flex:1"><label class="fl">Price</label><input id="fPrice" type="number" step="0.01" value="${p ? p.price : 0}"></div>
+          <div class="field" style="flex:1"><label class="fl">Category (optional)</label><select id="fCat">
+            <option value="">— No category —</option>
+            ${cats.map((c) => `<option value="${c.id}" ${p && p.category_id === c.id ? 'selected' : ''}>${App.ui.esc(c.name)}</option>`).join('')}
+            <option value="__new">+ Add new category…</option>
+          </select></div>
+        </div>
+        <div class="hint">Services have no stock tracking. Price is per unit of service.</div>`,
+      footerHtml: `<button class="btn btn-ghost" data-a="cancel">Cancel</button><button class="btn btn-primary" data-a="save">Save</button>`,
+    });
+    m.el.querySelector('#fCat').onchange = async (e) => {
+      if (e.target.value !== '__new') return;
+      const cm = App.ui.modal({
+        title: 'New Category', closeOnOverlay: false,
+        bodyHtml: `<div class="field"><label class="fl">Category name</label><input id="newCatInput" autofocus></div>`,
+        footerHtml: `<button class="btn btn-ghost" data-a="cancel">Cancel</button><button class="btn btn-primary" data-a="ok">Add</button>`,
+      });
+      cm.el.querySelector('[data-a="cancel"]').onclick = () => { cm.close(); e.target.value = p && p.category_id ? p.category_id : ''; };
+      const catInput = cm.el.querySelector('#newCatInput');
+      catInput.focus();
+      catInput.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') cm.el.querySelector('[data-a="ok"]').click(); });
+      cm.el.querySelector('[data-a="ok"]').onclick = async () => {
+        const name = catInput.value.trim();
+        if (!name) { App.ui.toast('Name is required', 'err'); return; }
+        try {
+          const r = await App.pos.categories.create(name);
+          await this._load();
+          const sel = m.el.querySelector('#fCat');
+          sel.innerHTML = `<option value="">— No category —</option>` +
+            this.cache.categories.map((c) => `<option value="${c.id}" ${c.id === r.id ? 'selected' : ''}>${App.ui.esc(c.name)}</option>`).join('') +
+            `<option value="__new">+ Add new category…</option>`;
+          App.ui.toast('Category added ✓', 'ok');
+          cm.close();
+        } catch (err) { App.ui.toast(err.message, 'err'); e.target.value = ''; cm.close(); }
+      };
+    };
+    m.el.querySelector('[data-a="cancel"]').onclick = () => m.close();
+    m.el.querySelector('[data-a="save"]').onclick = async () => {
+      const num = (s, fallback = 0) => {
+        const n = parseFloat(String(s).replace(/,/g, ''));
+        return Number.isFinite(n) ? n : fallback;
+      };
+      const name = m.el.querySelector('#fName').value.trim();
+      if (!name) { App.ui.toast('Service name is required', 'err'); return; }
+      const price = num(m.el.querySelector('#fPrice').value);
+      if (price <= 0) { App.ui.toast('Price must be greater than zero', 'err'); return; }
+      const data = {
+        sku: id && p ? p.sku : '',
+        name,
+        category_id: +m.el.querySelector('#fCat').value || null,
+        base_unit: 'svc',
+        stock: 0,
+        cost: id && p ? p.cost : 0,
+        price,
+        low_stock_threshold: 0,
+        is_service: true,
+        units: [{ unit: 'svc', factor: 1, price }],
+      };
       try {
         if (id) await App.pos.products.update(id, data);
         else await App.pos.products.create(data);
-        App.ui.toast('Saved ✓', 'ok'); m.close();
+        App.ui.toast('Service saved ✓', 'ok'); m.close();
         await this._load(); this._renderChips(); this._renderGrid();
       } catch (e) { App.ui.toast(e.message, 'err'); }
     };
@@ -219,17 +343,28 @@ App.views.products = {
 
   _stock(id) {
     const p = this.cache.products.find((x) => x.id === id);
+    const today = new Date().toISOString().slice(0, 10);
     const m = App.ui.modal({
-      title: 'Adjust Stock — ' + p.name,
+      title: 'Adjust Stock — ' + p.name, closeOnOverlay: false,
       bodyHtml: `<div class="field"><label class="fl">Current stock (${App.ui.esc(p.base_unit)})</label><input value="${App.ui.qty(p.stock)}" readonly></div>
         <div class="field"><label class="fl">New stock count (${App.ui.esc(p.base_unit)})</label><input id="sNew" type="number" step="0.001" value="${p.stock}" autofocus></div>
-        <div class="field"><label class="fl">Reason</label><input id="sReason" placeholder="Stock count / delivery / loss"></div>`,
+        <div class="field"><label class="fl">Reason</label><input id="sReason" placeholder="Stock count / delivery / loss"></div>
+        <div class="row gap wrap">
+          <div class="field" style="flex:1"><label class="fl">Restock Date</label><input id="sDate" type="date" value="${today}"></div>
+          <div class="field" style="flex:1"><label class="fl">Purchase Location</label><input id="sLocation" value="Cogon commercial" placeholder="Where was this purchased?"></div>
+        </div>`,
       footerHtml: `<button class="btn btn-ghost" data-a="cancel">Cancel</button><button class="btn btn-primary" data-a="ok">Save</button>`,
     });
     m.el.querySelector('[data-a="cancel"]').onclick = () => m.close();
     m.el.querySelector('[data-a="ok"]').onclick = async () => {
       try {
-        await App.pos.products.setStock(id, parseFloat(m.el.querySelector('#sNew').value) || 0, m.el.querySelector('#sReason').value);
+        await App.pos.products.setStock(
+          id,
+          parseFloat(m.el.querySelector('#sNew').value) || 0,
+          m.el.querySelector('#sReason').value,
+          m.el.querySelector('#sDate').value,
+          m.el.querySelector('#sLocation').value
+        );
         App.ui.toast('Stock updated ✓', 'ok'); m.close(); await this._load(); this._renderChips(); this._renderGrid();
       } catch (e) { App.ui.toast(e.message, 'err'); }
     };
@@ -242,5 +377,37 @@ App.views.products = {
       try { await App.pos.products.delete(id); App.ui.toast('Deactivated', 'ok'); await this._load(); this._renderChips(); this._renderGrid(); }
       catch (e) { App.ui.toast(e.message, 'err'); }
     });
+  },
+
+  async _deleteAll() {
+    const count = this.cache.products.length;
+    if (!count) { App.ui.toast('No products to delete', 'err'); return; }
+    const ok = await App.ui.confirm(
+      `This will DELETE ALL ${count} products, their sellable units, and stock movements.\n\nCategory names are PRESERVED. Historical sales keep their references (products are soft-deleted).\n\nThis cannot be undone. Consider exporting a backup first.\n\nContinue?`,
+      { danger: true, title: 'Delete all products' }
+    );
+    if (!ok) return;
+    const ok2 = await App.ui.confirm('Final confirmation: erase ALL products?', { danger: true, title: 'Are you sure?' });
+    if (!ok2) return;
+    try {
+      const r = await App.pos.products.deleteAll();
+      App.ui.toast(`Deleted ${r.products} product(s) ✓`, 'ok');
+      await this._load(); this._renderChips(); this._renderGrid();
+    } catch (e) { App.ui.toast(e.message, 'err'); }
+  },
+
+  async _importCatalog() {
+    const ok = await App.ui.confirm(
+      'Import the saved product catalog (245 construction-supply items across 11 categories)?\n\nEach item is created with ₱0 price and 0 stock — you will edit those afterward. Categories are created automatically. Duplicate names are skipped.',
+      { title: 'Import product catalog' }
+    );
+    if (!ok) return;
+    try {
+      const res = await fetch('assets/product-catalog.json');
+      const items = await res.json();
+      const r = await App.pos.products.bulkImport(items);
+      App.ui.toast(`Imported ${r.imported} product(s) ✓ (${r.skipped} skipped)`, 'ok');
+      await this._load(); this._renderChips(); this._renderGrid();
+    } catch (e) { App.ui.toast(e.message, 'err'); }
   },
 };

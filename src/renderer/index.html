@@ -5,32 +5,114 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self'; connect-src 'self';">
 <title>YANKENT POS</title>
+<style>
+  /* Critical startup styles — paint before app.css loads */
+  #startup,.startup-screen{position:fixed;inset:0;z-index:500;display:flex;align-items:center;justify-content:center;background:#0a0a0c;color:#f4f4f5}
+  .startup-inner{display:flex;flex-direction:column;align-items:center;text-align:center;width:min(320px,calc(100vw - 48px));font-family:'Segoe UI',system-ui,sans-serif}
+  .startup-spinner{width:40px;height:40px;margin-bottom:18px;border:3px solid rgba(255,255,255,.14);border-top-color:#fff;border-radius:50%;animation:bootSpin .75s linear infinite}
+  @keyframes bootSpin{to{transform:rotate(360deg)}}
+  .startup-brand{font-size:22px;font-weight:800;letter-spacing:.1em;margin-bottom:4px}
+  .startup-tag{font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.42);margin-bottom:24px}
+  .startup-bar{width:100%;height:3px;border-radius:3px;background:rgba(255,255,255,.1);overflow:hidden;margin-bottom:12px}
+  .startup-bar-fill{height:100%;width:12%;border-radius:3px;background:linear-gradient(90deg,rgba(255,255,255,.35),#fff);transition:width .35s ease}
+  .startup-status{font-size:12px;font-weight:600;color:rgba(255,255,255,.55);min-height:18px}
+  body.is-startup #login{visibility:hidden}
+</style>
 <link rel="stylesheet" href="css/app.css">
+<script src="js/theme-bootstrap.js"></script>
 </head>
-<body>
+<body class="is-startup">
+
+<!-- Startup loading -->
+<div id="startup" class="startup-screen" role="status" aria-live="polite" aria-busy="true">
+  <div class="startup-inner">
+    <div class="startup-spinner" aria-hidden="true"></div>
+    <div class="startup-brand">YANKENT POS</div>
+    <div class="startup-tag">Construction &amp; Supply</div>
+    <div class="startup-bar" aria-hidden="true"><div class="startup-bar-fill"></div></div>
+    <div class="startup-status" id="startupStatus">Starting…</div>
+    <div class="startup-version" id="startupVersion"></div>
+  </div>
+</div>
+<script src="js/startup-boot.js"></script>
 
 <!-- Login -->
 <div id="login" class="login-screen">
-  <video class="login-bg" autoplay muted loop playsinline poster="assets/yankent.png">
-    <source src="assets/yankent.mp4" type="video/mp4">
-  </video>
-  <form class="login-card" id="loginForm">
-    <div class="brand">YANKENT POS</div>
-    <div class="sub">Construction &amp; Supply · Offline</div>
-    <div class="login-error" id="loginError"></div>
-    <div class="field">
-      <label class="fl">Username</label>
-      <input id="loginUser" autocomplete="username" autofocus>
-    </div>
-    <div class="field">
-      <label class="fl">Password</label>
-      <input id="loginPass" type="password" autocomplete="current-password">
-    </div>
-      <button class="btn btn-primary btn-block" id="loginBtn" type="submit" style="padding:12px">Sign In</button>
-      <div style="text-align:center;margin-top:10px"><a href="#" id="forgotPw" style="font-size:12px;color:var(--muted);text-decoration:none">Forgot Password?</a></div>
-      <div class="login-status" id="loginStatus"><span class="dot checking"></span><span class="chk-txt">Checking connection<span class="chk-ellipsis"></span></span></div>
-      <div class="login-version"><span id="loginVersion">v1</span> · <a href="#" id="loginCheckUpdates" style="color:var(--muted);text-decoration:none">Check for Updates</a></div>
-  </form>
+  <img class="login-bg" src="assets/picturebackground.png" alt="">
+  <div class="login-scrim" aria-hidden="true"></div>
+  <div class="login-grid" aria-hidden="true"></div>
+  <div class="login-vignette" aria-hidden="true"></div>
+
+  <div class="login-layout">
+    <form class="login-panel" id="loginForm">
+      <div class="login-card-shine" aria-hidden="true"></div>
+
+      <header class="login-brand-badge">
+        <h1 class="login-brand-name">YANKENT POS</h1>
+      </header>
+
+      <div class="login-panel-head">
+        <h2 class="login-panel-title">Sign in</h2>
+        <p class="login-panel-sub">Enter your credentials to open the register.</p>
+      </div>
+
+      <div class="login-error" id="loginError" role="alert"></div>
+
+      <div class="field login-field login-field-user">
+        <label class="fl" for="loginUser">Username</label>
+        <div class="input-wrap">
+          <svg class="input-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9Zm0 2.25c-4.28 0-7.75 2.13-7.75 4.75V21h15.5v-2c0-2.62-3.47-4.75-7.75-4.75Z"/></svg>
+          <input id="loginUser" autocomplete="username" autofocus placeholder="admin or cashier">
+        </div>
+      </div>
+
+      <div class="field login-field login-field-pass">
+        <label class="fl" for="loginPass">Password</label>
+        <div class="input-wrap pw-field">
+          <svg class="input-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 9V7.25A5.25 5.25 0 0 0 6.75 7V9H5v10h14V9h-2Zm-2 0H9V7.25a3 3 0 0 1 6 0V9Zm-5 4.75a1.25 1.25 0 1 0 2.5 0 1.25 1.25 0 0 0-2.5 0Z"/></svg>
+          <input id="loginPass" type="password" autocomplete="current-password" placeholder="••••••••">
+          <button type="button" class="pw-toggle" id="loginPwToggle" title="Show password" aria-label="Show password">👁</button>
+        </div>
+      </div>
+
+      <button class="btn btn-primary btn-block login-submit" id="loginBtn" type="submit">Sign In</button>
+
+      <div class="login-links">
+        <a href="#" id="forgotPw">Forgot password?</a>
+      </div>
+
+      <div class="login-footer">
+        <div class="login-status" id="loginStatus">
+          <span class="dot checking"></span>
+          <span class="chk-txt">Checking connection<span class="chk-ellipsis"></span></span>
+        </div>
+        <div class="login-version">
+          <span id="loginVersion">v1</span>
+          <span class="login-version-sep">·</span>
+          <a href="#" id="loginCheckUpdates">Check for updates</a>
+        </div>
+        <div class="login-developer">
+          Developer · <a href="#" id="devCredit">Cyrhiel Moralla</a>
+        </div>
+      </div>
+
+      <div class="login-printer-setup" id="loginPrinterSetup" style="display:none">
+        <div class="login-printer-row">
+          <div class="login-printer-info">
+            <span class="login-printer-ic">🖨</span>
+            <div>
+              <div class="login-printer-label">Thermal Printer</div>
+              <div class="login-printer-status" id="loginPrinterStatus">
+                <span class="dot checking"></span> Checking…
+              </div>
+            </div>
+          </div>
+          <button type="button" class="btn btn-sm btn-ghost" id="loginSetupPrinter" style="display:none">Setup Printer</button>
+        </div>
+      </div>
+
+    </form>
+  </div>
 </div>
 
 <!-- App shell -->
@@ -38,11 +120,13 @@
   <aside class="sidebar">
     <div class="sbrand"><img class="slogo" src="assets/softwarelogo.png" alt="YANKENT POS"></div>
     <button class="nav-item active" data-view="pos"><span class="ic">▣</span><span>Point of Sale</span></button>
+    <button class="nav-item" data-view="analytics"><span class="ic">▦</span><span>Analytics</span></button>
     <button class="nav-item admin-only" data-view="products"><span class="ic">▤</span><span>Products</span></button>
     <button class="nav-item admin-only" data-view="users"><span class="ic">◍</span><span>Users</span></button>
-    <button class="nav-item admin-only" data-view="reports"><span class="ic">▦</span><span>Reports</span></button>
+    <button class="nav-item admin-only" data-view="reports"><span class="ic">▦</span><span>Reports &amp; Stock</span></button>
     <button class="nav-item admin-only" data-view="settings"><span class="ic">⚙</span><span>Settings</span></button>
     <div class="spacer"></div>
+    <button class="nav-item nav-action" id="sendReportBtn" title="Send sales report to owner via Telegram"><span class="ic">📨</span><span>Send Report</span></button>
     <div class="uname">Signed in as<b id="navUser">—</b><span id="navRole"></span></div>
     <button class="nav-item" id="logoutBtn"><span class="ic">⏻</span><span>Sign out</span></button>
   </aside>
@@ -50,9 +134,9 @@
     <header class="topbar">
       <div class="ttitle" id="viewTitle">Point of Sale</div>
       <div class="tmeta">
-        <button class="btn btn-sm btn-ghost" id="sendReportBtn" title="Send sales report to owner via Telegram">📨 Send Report</button>
+        <button class="btn btn-sm btn-ghost" id="themeToggle" title="Switch to dark mode">☾</button>
         <span class="pill" id="netStatus">● Offline-ready</span>
-        <span id="clock">--:--</span>
+        <span id="clock" class="clock-live" title="Philippine time">--:--:--</span>
       </div>
     </header>
     <section id="view" class="view"></section>
@@ -62,9 +146,19 @@
 <div id="toast"></div>
 <div id="modal-root"></div>
 
+<!-- Fixed bottom-left printer status indicator (visible on all pages) -->
+<div id="printerStatusBar" class="printer-status-bar" title="Thermal printer status">
+  <span class="printer-status-bar-ic">🖨</span>
+  <span class="printer-status-bar-label">Thermal Printer</span>
+  <span class="printer-status-bar-state" id="printerStatusBarState">
+    <span class="dot checking"></span> Checking…
+  </span>
+</div>
+
 <script src="js/ui.js"></script>
 <script src="js/printer.js"></script>
 <script src="js/pos.js"></script>
+<script src="js/analytics.js"></script>
 <script src="js/products.js"></script>
 <script src="js/users.js"></script>
 <script src="js/reports.js"></script>

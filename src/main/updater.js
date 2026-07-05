@@ -1,9 +1,18 @@
 'use strict';
 
-const { autoUpdater } = require('electron-updater');
-
-autoUpdater.autoDownload = false;
-autoUpdater.allowPrerelease = false;
+// Lazily acquire the electron-updater autoUpdater so this module is safe to
+// require outside Electron (e.g. in unit tests). electron-updater reads
+// app.getVersion() at import time, which throws in plain Node.
+let _autoUpdater = null;
+function autoUpdater() {
+  if (!_autoUpdater) {
+    const { autoUpdater: au } = require('electron-updater');
+    au.autoDownload = false;
+    au.allowPrerelease = false;
+    _autoUpdater = au;
+  }
+  return _autoUpdater;
+}
 
 let checkPromise = null;
 
@@ -29,26 +38,27 @@ function compareVersions(a, b) {
  * Call once after the main window is created to start checking in background.
  */
 function initUpdater(mainWindow) {
-  autoUpdater.logger = null;
+  const au = autoUpdater();
+  au.logger = null;
 
   // Forward events to renderer
-  autoUpdater.on('update-available', (info) => {
+  au.on('update-available', (info) => {
     mainWindow.webContents.send('pos:update:available', info);
   });
 
-  autoUpdater.on('update-not-available', () => {
+  au.on('update-not-available', () => {
     mainWindow.webContents.send('pos:update:not-available');
   });
 
-  autoUpdater.on('download-progress', (progress) => {
+  au.on('download-progress', (progress) => {
     mainWindow.webContents.send('pos:update:download-progress', progress);
   });
 
-  autoUpdater.on('update-downloaded', () => {
+  au.on('update-downloaded', () => {
     mainWindow.webContents.send('pos:update:downloaded');
   });
 
-  autoUpdater.on('error', (err) => {
+  au.on('error', (err) => {
     mainWindow.webContents.send('pos:update:error', err.message);
   });
 }
@@ -62,7 +72,7 @@ async function checkForUpdates() {
     if (!require('electron').app.isPackaged) {
       return { devMode: true, available: false, currentVersion: require('electron').app.getVersion() };
     }
-    checkPromise = autoUpdater.checkForUpdates().then((result) => {
+    checkPromise = autoUpdater().checkForUpdates().then((result) => {
       checkPromise = null;
       const currentVersion = require('electron').app.getVersion();
       if (result && result.updateInfo) {
@@ -91,14 +101,14 @@ async function checkForUpdates() {
  * Start downloading the update in the background.
  */
 function downloadUpdate() {
-  autoUpdater.downloadUpdate();
+  autoUpdater().downloadUpdate();
 }
 
 /**
  * Quit and install the downloaded update.
  */
 function installUpdate() {
-  autoUpdater.quitAndInstall();
+  autoUpdater().quitAndInstall();
 }
 
 module.exports = { initUpdater, checkForUpdates, downloadUpdate, installUpdate };

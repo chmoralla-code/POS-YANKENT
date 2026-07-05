@@ -27,26 +27,49 @@ function verifyPassword(password, stored) {
 }
 
 // In-memory sessions (single-window desktop app; cleared on app exit).
-// token -> { id, username, full_name, role, token, createdAt }
+// token -> { id, username, full_name, role, token, createdAt, lastActivity }
 const sessions = new Map();
+
+// Default idle timeout in milliseconds (15 minutes). Overridable via the
+// `session_idle_timeout` setting (in minutes).
+const DEFAULT_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
 
 function createSession(user) {
   const token = crypto.randomBytes(32).toString('hex');
+  const now = Date.now();
   const session = {
     token,
     id: user.id,
     username: user.username,
     full_name: user.full_name,
     role: user.role,
-    createdAt: Date.now(),
+    createdAt: now,
+    lastActivity: now,
   };
   sessions.set(token, session);
   return session;
 }
 
+/** Update the last-activity timestamp so the session stays alive. */
+function touchSession(token) {
+  const s = sessions.get(token);
+  if (s) s.lastActivity = Date.now();
+}
+
+/** Check if a session is still valid given the configured idle timeout. */
 function getSession(token) {
   if (!token) return null;
-  return sessions.get(token) || null;
+  const s = sessions.get(token);
+  if (!s) return null;
+  return s;
+}
+
+/** Returns true if the session has exceeded the idle timeout. */
+function isSessionExpired(token, idleTimeoutMs) {
+  const s = sessions.get(token);
+  if (!s) return true;
+  const timeout = idleTimeoutMs || DEFAULT_IDLE_TIMEOUT_MS;
+  return (Date.now() - s.lastActivity) > timeout;
 }
 
 function logout(token) {
@@ -56,7 +79,7 @@ function logout(token) {
 /**
  * Throw a permission error if the session lacks the required role.
  * @param {object|null} session - from getSession(token)
- * @param {'admin'|'cashier'} role
+ * @param {'admin'|'cashier'|null} role - required role, or null for any logged-in user
  */
 function requireRole(session, role) {
   if (!session) {
@@ -64,13 +87,12 @@ function requireRole(session, role) {
     err.code = 'UNAUTHENTICATED';
     throw err;
   }
-  if (role && session.role !== role && session.role !== 'admin') {
-    // 'admin' always passes; cashier only passes when role === 'cashier'
-    if (role === 'admin') {
-      const err = new Error('Administrator access required');
-      err.code = 'FORBIDDEN';
-      throw err;
-    }
+  if (!role) return session;            // any logged-in user is fine
+  if (session.role === 'admin') return session;  // admin passes every role gate
+  if (session.role !== role) {
+    const err = new Error(role === 'admin' ? 'Administrator access required' : 'Permission denied');
+    err.code = 'FORBIDDEN';
+    throw err;
   }
   return session;
 }
@@ -80,6 +102,9 @@ module.exports = {
   verifyPassword,
   createSession,
   getSession,
+  touchSession,
+  isSessionExpired,
   logout,
   requireRole,
+  DEFAULT_IDLE_TIMEOUT_MS,
 };

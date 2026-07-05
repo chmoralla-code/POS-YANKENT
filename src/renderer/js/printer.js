@@ -76,9 +76,9 @@ App.printer = {
 
   /** Print a receipt by transaction id (auto-print + reprint use this). */
   async printReceipt(txnId) {
-    const { bytesBase64 } = await App.pos.printer.encodeReceipt(txnId);
-    if (!bytesBase64) throw new Error('Receipt not found');
-    await this._writeBytes(this._decodeB64(bytesBase64));
+    const res = await App.pos.printer.encodeReceipt(txnId);
+    if (!res || !res.bytesBase64) throw new Error('Receipt not found');
+    await this._writeBytes(this._decodeB64(res.bytesBase64));
   },
 
   async testPrint() {
@@ -88,15 +88,22 @@ App.printer = {
 
   /** System-printer fallback: render plain text as a printable HTML window. */
   async printTextFallback(text) {
+    // Replace the peso sign with "PHP" — many Windows thermal printer
+    // drivers render non-ASCII as blank boxes or drop the entire line.
+    const safe = text.replace(/\u20b1/g, 'PHP ');
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>Receipt</title>
-      <style>@page{margin:8px}body{font-family:'Consolas',monospace;font-size:12px;white-space:pre;line-height:1.5}</style></head>
-      <body>${App.ui.esc(text)}</body></html>`;
+      <style>
+        @page { margin: 4mm; }
+        body { font-family: 'Consolas','Courier New',monospace; font-size: 11px; line-height: 1.4; margin: 0; padding: 0; white-space: pre-wrap; color: #000; }
+      </style></head>
+      <body>${App.ui.esc(safe)}</body></html>`;
     await App.pos.printer.printHtml(html);
   },
 
   async printReceiptFallback(txnId) {
-    const { text } = await App.pos.printer.encodeReceipt(txnId);
-    await this.printTextFallback(text);
+    const res = await App.pos.printer.encodeReceipt(txnId);
+    if (!res) throw new Error('Receipt not found');
+    await this.printTextFallback(res.text);
   },
 
   /** Called after a completed sale; respects the auto-print setting. */
@@ -111,7 +118,7 @@ App.printer = {
     // Optional: a Windows-installed thermal printer (paired as a system printer).
     if (s.printer_type === 'system') {
       try { await this.printReceiptFallback(txnId); return { printed: true, via: 'system' }; }
-      catch (e) { return { error: e.message }; }
+      catch (e) { App.ui.toast('Auto-print failed: ' + e.message, 'err'); return { error: e.message }; }
     }
     // No printer configured — receipt modal offers manual printing.
     return { skipped: true };

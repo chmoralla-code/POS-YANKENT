@@ -1,0 +1,31 @@
+YANKENT POS
+Construction & Supply Point of Sale
+Version 1.0
+
+Welcome to YANKENT POS - the offline-first point of sale system designed
+for construction supply and hardware stores.
+
+WHAT'S INCLUDED:
+  - Full POS application with product catalog, sales, and reporting
+  - Thermal printer driver (POS-58) - pre-installed to your Downloads
+  - Telegram report integration: send sales summaries to the owner
+  - Automatic backup every 5 minutes
+  - Restock history tracking
+  - VAT-exclusive pricing with configurable rate
+
+GETTING STARTED:
+  1. Install and launch YANKENT POS
+  2. Log in with: admin / admin123
+  3. Change the admin password immediately (Settings > Users)
+  4. Configure your store name, address, and TIN (Settings > Store Info)
+  5. Add your products and set prices (Products tab)
+  6. Start selling (Point of Sale tab)
+
+DEFAULT LOGIN:
+  Username: admin
+  Password: admin123
+
+IMPORTANT: Change the default password on first login.
+
+This software is provided as-is for YANKENT Construction & Supply.
+For support, contact your system administrator.

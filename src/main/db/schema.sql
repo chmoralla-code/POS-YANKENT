@@ -121,7 +121,8 @@ CREATE TABLE IF NOT EXISTS stock_movements (
   qty_change  REAL NOT NULL,
   reason      TEXT,
   user_id     INTEGER REFERENCES users(id),
-  datetime    TEXT NOT NULL DEFAULT (datetime('now'))
+  datetime    TEXT NOT NULL DEFAULT (datetime('now')),
+  source_location TEXT
 );
 
 -- Refunds (linked to original sale, with admin approver)

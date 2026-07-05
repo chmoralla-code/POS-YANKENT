@@ -172,7 +172,37 @@ async function deleteWebhook(token) {
 }
 
 function reportMoney(n) {
-  return '₱' + Math.round(Number(n) || 0).toLocaleString('en-PH');
+  // 2-decimal formatting to match the in-app Reports tab (App.ui.money).
+  // Whole-peso rounding caused the owner's Telegram report to disagree with
+  // the cashier's on-screen totals by up to ₱0.99 per line.
+  const v = Number(n) || 0;
+  const s = Math.abs(v).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return '₱' + (v < 0 ? '-' : '') + s;
+}
+
+/**
+ * Escape HTML special characters in user-supplied text before inserting
+ * into a Telegram message sent with parse_mode=HTML.  Product and cashier
+ * names routinely contain <, >, & (e.g. "Nails & Screws", 'Angle < 90°',
+ * '3/4" Pipe') — without escaping, Telegram rejects the whole message
+ * with "Bad Request: can't parse entities" and the report never arrives.
+ */
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/**
+ * Split a VAT-inclusive total into net + VAT components (for display only).
+ * The DB stores `total` = subtotal + vat (VAT-exclusive pricing model), so to
+ * show the breakdown we derive net = total / (1 + rate/100).
+ */
+function vatSplit(total, vatRate = 12) {
+  const t = Number(total) || 0;
+  const net = t / (1 + vatRate / 100);
+  return { net, vat: t - net };
 }
 
 /**
@@ -254,12 +284,20 @@ function buildReportMessage(db) {
   }
 
   const a = buildAnalytics(db);
+  // VAT breakdown for today — the owner needs to see the VAT remittance
+  // component separately now that pricing is VAT-exclusive (VAT is added on
+  // top of the net subtotal at checkout).
+  const vatRate = 12;
+  const todaySplit = vatSplit(today.total, vatRate);
+  const monthSplit = vatSplit(month.total, vatRate);
   const lines = [
     '<b>YANKENT POS Sales Report</b>',
     '━━━━━━━━━━━━━━━━━━',
     `📅 Today: ${reportMoney(today.total)} / ${today.tx} transactions`,
+    `   Net: ${reportMoney(todaySplit.net)} · VAT ${vatRate}%: ${reportMoney(todaySplit.vat)}`,
     `📆 Yesterday: ${reportMoney(yesterday.total)} / ${yesterday.tx} transactions`,
     `📊 This Month: ${reportMoney(month.total)} / ${month.tx} tx`,
+    `   Net: ${reportMoney(monthSplit.net)} · VAT ${vatRate}%: ${reportMoney(monthSplit.vat)}`,
     `📈 This Year: ${reportMoney(year.total)} / ${year.tx} tx`,
     `🏆 Best Day: ${bestDay}`,
     '',
@@ -270,10 +308,10 @@ function buildReportMessage(db) {
   ];
   if (a.topProducts.length) {
     lines.push('Top Products:');
-    a.topProducts.forEach((p, i) => lines.push(`${i + 1}. ${p.name} — ${reportMoney(p.total)} (${Math.round(p.qty)} sold)`));
+    a.topProducts.forEach((p, i) => lines.push(`${i + 1}. ${escapeHtml(p.name)} — ${reportMoney(p.total)} (${Math.round(p.qty)} sold)`));
   }
   if (a.topCashier) {
-    lines.push(`Top Cashier: ${a.topCashier.cashier_name} — ${reportMoney(a.topCashier.total)} / ${a.topCashier.tx} tx`);
+    lines.push(`Top Cashier: ${escapeHtml(a.topCashier.cashier_name)} — ${reportMoney(a.topCashier.total)} / ${a.topCashier.tx} tx`);
   }
   if (a.payBreak.length) {
     lines.push('Payments: ' + a.payBreak.map((p) => `${p.payment_method} ${reportMoney(p.total)}`).join(' · '));
@@ -289,4 +327,4 @@ function buildReportMessage(db) {
   return lines.join('\n');
 }
 
-module.exports = { checkOnline, sendMessage, sendDocument, buildReportMessage, buildAnalytics, reportMoney, callApi, sendApprovalRequest, pollUpdates, answerCallback, deleteWebhook };
+module.exports = { checkOnline, sendMessage, sendDocument, buildReportMessage, buildAnalytics, reportMoney, escapeHtml, vatSplit, callApi, sendApprovalRequest, pollUpdates, answerCallback, deleteWebhook };

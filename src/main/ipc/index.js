@@ -9,11 +9,22 @@
  * { ok, data } | { ok:false, error, code } envelope.
  */
 
-function makeGuard({ getSession, requireRole }) {
+function makeGuard({ getSession, requireRole, touchSession, isSessionExpired, getSetting, db }) {
   return function guard(ipcMain, channel, opts, handler) {
     ipcMain.handle(channel, async (event, token, ...args) => {
       try {
         const session = getSession(token);
+        // Check idle timeout for authenticated endpoints.
+        if (opts && opts.auth && session) {
+          const idleMin = Number(getSetting(db, 'session_idle_timeout') || '15');
+          if (idleMin > 0 && isSessionExpired(token, idleMin * 60 * 1000)) {
+            // Session expired — force re-authentication.
+            const err = new Error('Session expired due to inactivity');
+            err.code = 'SESSION_EXPIRED';
+            throw err;
+          }
+          touchSession(token);
+        }
         if (opts && opts.admin) requireRole(session, 'admin');
         else if (opts && opts.auth) requireRole(session, null); // any logged-in user
         const data = await handler({ event, session }, ...args);
@@ -26,11 +37,15 @@ function makeGuard({ getSession, requireRole }) {
 }
 
 function registerAll(ipcMain, ctx) {
-  const guard = makeGuard(ctx);
+  let backendReady = false;
+  ipcMain.handle('pos:app:isReady', () => ({ ok: true, data: backendReady }));
+
   const { db } = ctx;
   const crypto = require('crypto');
-  const { verifyPassword, createSession, logout, hashPassword } = require('../lib/auth');
+  const { verifyPassword, createSession, logout, hashPassword, touchSession, isSessionExpired, DEFAULT_IDLE_TIMEOUT_MS } = require('../lib/auth');
   const { checkOnline, sendApprovalRequest, pollUpdates, answerCallback, deleteWebhook } = require('../lib/telegram');
+
+  const guard = makeGuard({ ...ctx, touchSession, isSessionExpired });
 
   // In-memory pending password-reset requests (token -> {userId, username, status, createdAt})
   const pendingResets = new Map();
@@ -48,6 +63,21 @@ function registerAll(ipcMain, ctx) {
   });
 
   ipcMain.handle('pos:auth:logout', async (_e, token) => { logout(token); return { ok: true, data: true }; });
+
+  // ---- Session heartbeat (idle timeout) ---------------------------------
+  // The renderer calls this on every user activity (mouse/keyboard) to
+  // keep the session alive.  Returns whether the session is still valid.
+  ipcMain.handle('pos:auth:heartbeat', async (_e, token) => {
+    if (!token) return { ok: true, data: { alive: false } };
+    const idleMin = Number(ctx.getSetting(db, 'session_idle_timeout') || '15');
+    const idleMs = (idleMin > 0 ? idleMin : 15) * 60 * 1000;
+    if (isSessionExpired(token, idleMs)) {
+      logout(token);
+      return { ok: true, data: { alive: false } };
+    }
+    touchSession(token);
+    return { ok: true, data: { alive: true } };
+  });
 
   // ---- Forgot password (public — no session required) -------------------
   ipcMain.handle('pos:auth:requestPasswordReset', async (_e, username) => {
@@ -137,6 +167,33 @@ function registerAll(ipcMain, ctx) {
     return true;
   });
 
+  // Delete a user.  Hard-deletes when the user has no sales/refund/movement
+  // history; otherwise soft-deletes (sets active=0) to preserve audit trails.
+  guard(ipcMain, 'pos:users:delete', { admin: true }, (_c, id) => {
+    if (!id) throw new Error('User id is required');
+    const target = db.prepare('SELECT username, role FROM users WHERE id=?').get(id);
+    if (!target) throw new Error('User not found');
+    // Refuse to delete the only remaining admin — prevents lockout.
+    if (target.role === 'admin') {
+      const adminCount = db.prepare("SELECT COUNT(*) AS c FROM users WHERE role='admin' AND active=1").get().c;
+      if (adminCount <= 1) throw new Error('Cannot delete the only active admin');
+    }
+    // Refuse to delete the currently-logged-in user.
+    const me = _c.session;
+    if (me && me.id === id) throw new Error('You cannot delete your own account');
+    const hasHistory =
+      db.prepare('SELECT 1 FROM sales WHERE cashier_id=? LIMIT 1').get(id) ||
+      db.prepare('SELECT 1 FROM refunds WHERE cashier_id=? OR admin_id=? LIMIT 1').get(id, id) ||
+      db.prepare('SELECT 1 FROM stock_movements WHERE user_id=? LIMIT 1').get(id);
+    if (hasHistory) {
+      // Soft delete — preserves audit trail integrity.
+      db.prepare('UPDATE users SET active=0 WHERE id=?').run(id);
+      return { deleted: false, deactivated: true, reason: 'User has sales/movement history — deactivated instead' };
+    }
+    db.prepare('DELETE FROM users WHERE id=?').run(id);
+    return { deleted: true, deactivated: false };
+  });
+
   guard(ipcMain, 'pos:users:setPassword', { admin: true }, (_c, id, password) => {
     db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(hashPassword(password), id);
     return true;
@@ -154,6 +211,21 @@ function registerAll(ipcMain, ctx) {
   require('./catalog').register(ipcMain, { ...ctx, guard });
   require('./sales').register(ipcMain, { ...ctx, guard });
   require('./integrations').register(ipcMain, { ...ctx, guard });
+
+  const { shell } = require('electron');
+  ipcMain.handle('pos:openExternal', async (_e, url) => {
+    try {
+      if (typeof url !== 'string' || !/^https:\/\/.+/i.test(url)) {
+        return { ok: false, error: 'Invalid URL' };
+      }
+      await shell.openExternal(url);
+      return { ok: true, data: true };
+    } catch (e) { return { ok: false, error: e.message }; }
+  });
+
+  backendReady = true;
+  const win = ctx.getMainWindow && ctx.getMainWindow();
+  if (win && !win.isDestroyed()) win.webContents.send('pos:app:ready');
 }
 
 module.exports = { registerAll, makeGuard };

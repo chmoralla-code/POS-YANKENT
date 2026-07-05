@@ -1,6 +1,6 @@
 {
   "name": "yankent-pos",
-  "version": "1.0.5",
+  "version": "1.0.0",
   "description": "YANKENT POS - offline construction & supply point-of-sale desktop application",
   "productName": "YANKENT POS",
   "main": "src/main/main.js",
@@ -8,11 +8,13 @@
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "test": "node --test tests/money.test.js tests/backup.test.js tests/auth.test.js",
+    "test": "node --test tests/money.test.js tests/backup.test.js tests/auth.test.js tests/auth-edge.test.js tests/sales.test.js tests/catalog.test.js tests/receipt.test.js tests/telegram.test.js tests/deliveries.test.js",
     "smoke": "set YANKENT_SMOKE=1&& set YANKENT_DB=%TEMP%\\yankent-smoke.sqlite&& electron .",
+    "test:e2e": "npx playwright test",
+    "test:e2e:ui": "npx playwright test --ui",
     "pack": "electron-builder --dir",
     "dist": "electron-builder --win",
-    "lint": "node --check src/main/main.js && node --check src/main/preload.js && node --check src/main/updater.js && node --check src/main/db/index.js && node --check src/main/db/seed.js && node --check src/main/lib/money.js && node --check src/main/lib/auth.js && node --check src/main/lib/receipt.js && node --check src/main/lib/escpos.js && node --check src/main/lib/telegram.js && node --check src/main/backup.js && node --check src/main/ipc/index.js && node --check src/main/ipc/catalog.js && node --check src/main/ipc/sales.js && node --check src/main/ipc/integrations.js && node --check tests/dbutil.js && node --check tests/money.test.js && node --check tests/backup.test.js && node --check tests/auth.test.js"
+    "lint": "node --check src/main/main.js && node --check src/main/preload.js && node --check src/main/updater.js && node --check src/main/db/index.js && node --check src/main/db/seed.js && node --check src/main/lib/money.js && node --check src/main/lib/auth.js && node --check src/main/lib/receipt.js && node --check src/main/lib/escpos.js && node --check src/main/lib/telegram.js && node --check src/main/backup.js && node --check src/main/ipc/index.js && node --check src/main/ipc/catalog.js && node --check src/main/ipc/sales.js && node --check src/main/ipc/integrations.js && node --check tests/dbutil.js && node --check tests/money.test.js && node --check tests/backup.test.js && node --check tests/auth.test.js && node --check tests/ipc-harness.js && node --check tests/sales.test.js && node --check tests/catalog.test.js && node --check tests/receipt.test.js && node --check tests/telegram.test.js && node --check tests/auth-edge.test.js && node --check tests/deliveries.test.js && node --check tests/e2e/helpers.js && node --check tests/e2e/01-startup-login.spec.js && node --check tests/e2e/02-roles.spec.js && node --check tests/e2e/03-pos.spec.js && node --check tests/e2e/04-products.spec.js && node --check tests/e2e/05-users-reports.spec.js && node --check tests/e2e/06-settings.spec.js && node --check tests/e2e/07-regressions-edge.spec.js"
   },
   "build": {
     "appId": "com.yankent.pos",
@@ -27,6 +29,13 @@
         "to": "data",
         "filter": [
           "*.sqlite"
+        ]
+      },
+      {
+        "from": "resources",
+        "to": ".",
+        "filter": [
+          "PrinterDriver.exe"
         ]
       }
     ],
@@ -44,7 +53,17 @@
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "shortcutName": "YANKENT POS"
+      "shortcutName": "YANKENT POS",
+      "include": "build/installer.nsh",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
+      "displayLanguageSelector": false,
+      "installerLanguages": [
+        "en-US"
+      ],
+      "license": "build/installer-welcome.txt",
+      "installerSidebar": "build/installer-sidebar.bmp",
+      "installerHeader": "build/installer-header.bmp"
     },
     "publish": {
       "provider": "github",
@@ -58,6 +77,7 @@
     "sql.js": "^1.13.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "electron": "^31.7.7",
     "electron-builder": "^25.1.8"
   }

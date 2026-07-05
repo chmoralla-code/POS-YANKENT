@@ -3,11 +3,81 @@
 window.App = window.App || {};
 
 App.current = { user: null, view: 'pos' };
+App.DEV_FACEBOOK = 'https://www.facebook.com/profile.php?id=61584774638218';
 
-document.addEventListener('DOMContentLoaded', () => {
-  // Force-play the login background video (in case autoplay is blocked).
-  const bgVideo = document.querySelector('.login-bg');
-  if (bgVideo) { bgVideo.play().catch(() => {}); }
+App._delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+App._initStartup = async function () {
+  const splash = document.getElementById('startup');
+  const status = document.getElementById('startupStatus');
+  const fill = document.querySelector('.startup-bar-fill');
+  const startupVer = document.getElementById('startupVersion');
+  if (!splash) return;
+
+  const reducedMotion = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const minShow = reducedMotion ? 200 : 850;
+  const started = Date.now();
+
+  const setStep = (pct, msg) => {
+    if (typeof window.__startupSetStep === 'function') window.__startupSetStep(pct, msg);
+    else {
+      if (status) status.textContent = msg;
+      if (fill) fill.style.width = pct + '%';
+    }
+  };
+
+  if (window.__startupProgress) clearInterval(window.__startupProgress);
+
+  try {
+    setStep(12, 'Starting YANKENT POS…');
+    await App._delay(reducedMotion ? 0 : 120);
+
+    setStep(40, 'Connecting to database…');
+    if (window.pos && App.pos.waitForReady) {
+      await Promise.race([
+        App.pos.waitForReady(),
+        new Promise((resolve) => setTimeout(resolve, 15000)),
+      ]);
+    }
+    if (window.pos && App.pos.update) {
+      const ver = await App.pos.update.getVersion();
+      const label = ver ? 'v' + ver : '';
+      if (startupVer) startupVer.textContent = label;
+      const loginVer = document.getElementById('loginVersion');
+      if (loginVer && ver) loginVer.textContent = 'v' + ver;
+    }
+
+    setStep(72, 'Loading interface…');
+    const bg = document.querySelector('.login-bg');
+    if (bg && bg.tagName === 'IMG') {
+      await Promise.race([
+        new Promise((resolve) => {
+          if (bg.complete) resolve();
+          else bg.addEventListener('load', resolve, { once: true });
+        }),
+        App._delay(reducedMotion ? 0 : 700),
+      ]);
+    }
+
+    setStep(100, 'Ready');
+  } catch {
+    setStep(100, 'Ready');
+  }
+
+  const elapsed = Date.now() - started;
+  if (elapsed < minShow) await App._delay(minShow - elapsed);
+
+  splash.classList.add('leaving');
+  splash.setAttribute('aria-busy', 'false');
+  document.body.classList.remove('is-startup');
+  const login = document.getElementById('login');
+  if (login) login.style.visibility = 'visible';
+  await App._delay(reducedMotion ? 80 : 420);
+  splash.remove();
+};
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await App._initStartup();
 
   const loginForm = document.getElementById('loginForm');
   loginForm.addEventListener('submit', async (e) => {
@@ -25,31 +95,128 @@ document.addEventListener('DOMContentLoaded', () => {
       btn.classList.remove('is-loading');
       btn.classList.add('is-success');
       btn.textContent = '✓ Welcome';
-      await App._showLoginSuccess();
+      await App._showLoginSuccess(data.user);
       await App._start();
     } catch (e2) {
       btn.classList.remove('is-loading', 'is-success');
       btn.disabled = false; btn.textContent = 'Sign In';
       err.textContent = e2.message;
-      const card = document.querySelector('.login-card');
-      card.style.animation = 'none'; void card.offsetWidth; card.style.animation = 'shake .4s';
+      const panel = document.querySelector('.login-panel');
+      panel.classList.remove('shake-err');
+      void panel.offsetWidth;
+      panel.classList.add('shake-err');
     }
   });
 
   document.getElementById('forgotPw').onclick = (e) => { e.preventDefault(); App._forgotPassword(); };
 
+  const devCredit = document.getElementById('devCredit');
+  if (devCredit) {
+    devCredit.onclick = (e) => {
+      e.preventDefault();
+      App.pos.openExternal(App.DEV_FACEBOOK).catch((err) => App.ui.toast(err.message, 'err'));
+    };
+  }
+
+  const pwToggle = document.getElementById('loginPwToggle');
+  const pwInput = document.getElementById('loginPass');
+  if (pwToggle && pwInput) {
+    pwToggle.onclick = () => {
+      const show = pwInput.type === 'password';
+      pwInput.type = show ? 'text' : 'password';
+      pwToggle.textContent = show ? '🙈' : '👁';
+      pwToggle.title = show ? 'Hide password' : 'Show password';
+      pwToggle.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+    };
+  }
+
+  // ---- Bottom-left printer status indicator (visible on all pages) -----
+  App._checkLoginPrinterStatus = async function () {
+    const statusEl = document.getElementById('printerStatusBarState');
+    if (!statusEl) return;
+    try {
+      const info = await App.pos.printer.checkStatus();
+      if (info.printerConnected) {
+        statusEl.innerHTML = '<span class="dot on"></span> Printer connected';
+      } else if (info.driverAvailable) {
+        statusEl.innerHTML = '<span class="dot off"></span> Printer not connected';
+      } else {
+        statusEl.innerHTML = '<span class="dot off"></span> Driver not installed';
+      }
+    } catch {
+      statusEl.innerHTML = '<span class="dot off"></span> Printer not connected';
+    }
+  };
+  App._checkLoginPrinterStatus();
+
+  const setupBtn = document.getElementById('loginSetupPrinter');
+  if (setupBtn) {
+    setupBtn.onclick = async () => {
+      const ok = await App.ui.confirm('Install the thermal printer driver now? Windows will ask for admin permission (UAC). Click Yes when prompted.', { title: 'Printer setup' });
+      if (!ok) return;
+      setupBtn.disabled = true; setupBtn.textContent = 'Launching…';
+      try {
+        const r = await App.pos.printer.setupFromLogin();
+        if (r && r.launched) {
+          App.ui.toast('Driver installer launched — follow the Windows prompts ✓', 'ok');
+          setTimeout(() => App._checkLoginPrinterStatus(), 5000);
+        } else {
+          App.ui.toast('Could not launch installer', 'err');
+        }
+      } catch (e) {
+        App.ui.toast('Setup failed: ' + e.message, 'err');
+      } finally {
+        setupBtn.disabled = false; setupBtn.textContent = 'Setup Printer';
+      }
+    };
+  }
+
   document.getElementById('logoutBtn').onclick = async () => {
+    // Re-entrancy guard: the idle timeout can fire logoutBtn.click() while
+    // a send-report confirm/send is already in flight, which would re-enter
+    // this handler, open a second nested confirm modal, and double-send.
+    if (App._loggingOut) return;
+    App._loggingOut = true;
+    const btn = document.getElementById('logoutBtn');
+    const orig = btn ? btn.textContent : '';
+    // Ask the cashier whether to send the sales report + backup to the
+    // owner via Telegram before ending the session.  "No" skips sending
+    // and proceeds straight to logout — no data is lost either way.
+    try {
+      const send = await App.ui.confirm(
+        'Send the sales report + backup to the owner via Telegram before signing out?',
+        { title: 'Send Telegram report?', okText: 'Yes, send', cancelText: 'No, just sign out' }
+      );
+      if (send) {
+        if (btn) { btn.disabled = true; btn.textContent = 'Sending report…'; }
+        try {
+          const r = await App.pos.telegram.sendReport();
+          if (r && r.ok) App.ui.toast(r.warning ? ('Report sent, backup failed' + (r.warning ? ': ' + r.warning : '')) : 'Report + backup sent to owner ✓', r.warning ? 'err' : 'ok');
+          else if (r && r.error) App.ui.toast(r.error, 'err');
+        } catch (e) {
+          // Offline or not configured — silently skip (no data lost)
+        } finally {
+          if (btn) { btn.disabled = false; btn.textContent = orig; }
+        }
+      }
+    } catch (e) {
+      // confirm() dismissed — proceed to logout without sending
+    }
     await App.pos.logout();
     App.current.user = null;
+    App._loggingOut = false;
+    App._batteryLowSent = false; // reset low-battery flag so a new session can alert again
     document.getElementById('app').classList.add('hidden');
     document.getElementById('login').classList.remove('hidden');
+    const printerBar = document.getElementById('printerStatusBar');
+    if (printerBar) printerBar.classList.remove('hidden');
     document.getElementById('loginPass').value = '';
-    // Reset the Sign In button so it can be used again after a session.
     const lb = document.getElementById('loginBtn');
     if (lb) { lb.classList.remove('is-loading', 'is-success'); lb.disabled = false; lb.textContent = 'Sign In'; }
     const le = document.getElementById('loginError');
     if (le) le.textContent = '';
     document.getElementById('loginUser').focus();
+    App._checkLoginPrinterStatus();
   };
 
   document.querySelectorAll('.nav-item[data-view]').forEach((btn) => {
@@ -67,6 +234,12 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) { App.ui.toast(e.message, 'err'); }
     btn.disabled = false; btn.textContent = '📨 Send Report';
   });
+
+  // Theme toggle (dark / light). Persists in localStorage; respects system
+  // preference on first visit. Applies immediately so the login screen honors it.
+  const themeBtn = document.getElementById('themeToggle');
+  if (themeBtn) themeBtn.addEventListener('click', App._toggleTheme);
+  App._applyStoredTheme();
 
   App._clock();
   setInterval(() => App._clock(), 1000);
@@ -93,13 +266,80 @@ App._start = async function () {
 
   document.getElementById('login').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
+  const printerBar = document.getElementById('printerStatusBar');
+  if (printerBar) printerBar.classList.add('hidden');
   App._navigate(isAdmin ? 'pos' : 'pos');
+
+  // ---- Idle timeout --------------------------------------------------
+  // Every 30s the renderer sends a heartbeat to the main process.  If the
+  // main process reports the session is dead (exceeded the idle timeout
+  // configured in Settings), the app auto-logs out so an unattended POS
+  // can't be used by someone else.
+  if (!App._idleChecker) {
+    // Reset the idle timer on any user activity so the heartbeat carries
+    // a fresh "last activity" timestamp.
+    const resetActivity = () => { App._lastActivity = Date.now(); };
+    ['mousemove', 'keydown', 'click', 'touchstart', 'wheel'].forEach((ev) =>
+      document.addEventListener(ev, resetActivity, { passive: true })
+    );
+    App._lastActivity = Date.now();
+
+    App._idleChecker = setInterval(async () => {
+      // Only check when the app is visible (not on the login screen).
+      const appEl = document.getElementById('app');
+      if (!appEl || appEl.classList.contains('hidden')) return;
+      try {
+        const res = await App.pos.heartbeat();
+        if (res && res.alive === false) {
+          App.ui.toast('Session expired due to inactivity', 'err');
+          document.getElementById('logoutBtn').click();
+        }
+      } catch {}
+    }, 30000); // check every 30 seconds
+  }
+
+  // ---- Low-battery auto-send ------------------------------------------
+  // When the laptop battery drops to 20% or below AND it's not charging,
+  // automatically send the sales report + backup to the owner via Telegram
+  // so no data is lost if the laptop dies. Only fires once per low-battery
+  // episode (resets when the battery is charged above 25% or plugged in).
+  if (!App._batteryMonitor && navigator.getBattery) {
+    App._batteryLowSent = false;
+    navigator.getBattery().then((battery) => {
+      const check = async () => {
+        // Only act while logged in.
+        const appEl = document.getElementById('app');
+        if (!appEl || appEl.classList.contains('hidden')) return;
+        const low = battery.level <= 0.20 && !battery.charging;
+        if (low && !App._batteryLowSent) {
+          App.ui.toast('Low battery — sending report to owner…', 'err');
+          try {
+            const r = await App.pos.telegram.sendReport();
+            if (r && r.ok) {
+              // Only latch the flag after a successful send so a failed
+              // attempt (e.g. session expired mid-send, offline) can retry
+              // on the next poll instead of being lost forever.
+              App._batteryLowSent = true;
+              App.ui.toast('Report + backup sent (low battery) ✓', 'ok');
+            }
+          } catch {} // offline or not configured — skip silently (will retry)
+        } else if (!low && App._batteryLowSent) {
+          // Reset the flag once the battery recovers so it can fire again later.
+          App._batteryLowSent = false;
+        }
+      };
+      battery.addEventListener('levelchange', check);
+      battery.addEventListener('chargingchange', check);
+      // Also poll every 60s as a safety net (the events can be unreliable).
+      App._batteryMonitor = setInterval(check, 60000);
+    }).catch(() => {}); // some machines don't expose the Battery API
+  }
 };
 
 App._navigate = async function (name) {
   if (!App.views[name]) return;
   // Role guard: cashiers cannot open admin views.
-  if (App.views[name].title && ['Products & Inventory', 'Users & Roles', 'Reports', 'Settings'].includes(App.views[name].title) && App.current.user.role !== 'admin') {
+  if (App.views[name].title && ['Products & Inventory', 'Users & Roles', 'Reports & Stock', 'Settings'].includes(App.views[name].title) && App.current.user.role !== 'admin') {
     App.ui.toast('Administrator access required', 'err'); return;
   }
   App.current.view = name;
@@ -109,12 +349,23 @@ App._navigate = async function (name) {
   document.getElementById('viewTitle').textContent = App.views[name].title;
   view.innerHTML = '<div class="empty-state"><span class="spinner"></span> Loading…</div>';
   try { await App.views[name].render(view); }
-  catch (e) { view.innerHTML = `<div class="empty-state">Error: ${App.ui.esc(e.message)}</div>`; }
+  catch (e) {
+    if (e.code === 'SESSION_EXPIRED') {
+      App.ui.toast('Session expired — please log in again', 'err');
+      document.getElementById('logoutBtn').click();
+      return;
+    }
+    view.innerHTML = `<div class="empty-state">Error: ${App.ui.esc(e.message)}</div>`;
+  }
 };
 
 App._clock = function () {
   const el = document.getElementById('clock');
-  if (el) el.textContent = new Date().toLocaleTimeString('en-PH', { hour12: false });
+  if (!el) return;
+  const now = new Date();
+  const time = now.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'Asia/Manila' });
+  const date = now.toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: '2-digit', year: 'numeric', timeZone: 'Asia/Manila' });
+  el.innerHTML = `<span class="clk-time">${time}</span> <span class="clk-date">${date}</span>`;
 };
 
 App._net = async function () {
@@ -123,6 +374,32 @@ App._net = async function () {
   let online = false;
   try { online = await App.pos.telegram.isOnline(); } catch {}
   el.textContent = online ? '● Online' : '● Offline-ready';
+};
+
+// ---- Theme (dark / light) ---------------------------------------------
+App._applyTheme = function (theme) {
+  const isDark = theme === 'dark';
+  document.documentElement.classList.toggle('theme-dark', isDark);
+  const btn = document.getElementById('themeToggle');
+  if (btn) {
+    btn.textContent = isDark ? '☀' : '☾';
+    btn.title = isDark ? 'Switch to light mode' : 'Switch to dark mode';
+  }
+};
+
+App._toggleTheme = function () {
+  const next = document.documentElement.classList.contains('theme-dark') ? 'light' : 'dark';
+  localStorage.setItem('yankent-theme', next);
+  App._applyTheme(next);
+};
+
+App._applyStoredTheme = function () {
+  let theme = localStorage.getItem('yankent-theme');
+  if (!theme) {
+    const prefersDark = typeof matchMedia !== 'undefined' && matchMedia('(prefers-color-scheme: dark)').matches;
+    theme = prefersDark ? 'dark' : 'light';
+  }
+  App._applyTheme(theme);
 };
 
 App._loginNet = async function () {
@@ -314,6 +591,8 @@ App._showDownloadProgress = function (r) {
     });
     const root = m.el;
     let done = false;
+    let stallTimer = null;
+    let lastPct = -1;
     const setPct = (pct) => {
       const p = Math.max(0, Math.min(100, pct));
       const bar = root.querySelector('#dlBar');
@@ -322,9 +601,21 @@ App._showDownloadProgress = function (r) {
       if (pc) pc.textContent = Math.round(p) + '%';
     };
 
+    const armStallWatchdog = () => {
+      clearTimeout(stallTimer);
+      // If no progress event arrives within 20s, the download was silently
+      // refused (e.g. a downgrade) or the network is blocked. Surface it.
+      stallTimer = setTimeout(() => {
+        if (done) return;
+        if (lastPct < 0) onError('Download did not start — this version may be older than the one you are running, or the network is blocking GitHub.');
+      }, 20000);
+    };
+
     const onProgress = (p) => {
       if (done) return;
+      armStallWatchdog();
       const pct = (p && typeof p.percent === 'number') ? p.percent : 0;
+      if (pct !== lastPct) lastPct = pct;
       setPct(pct);
       const stat = root.querySelector('#dlStat');
       const sub = root.querySelector('#dlSub');
@@ -336,6 +627,7 @@ App._showDownloadProgress = function (r) {
     };
     const onDownloaded = () => {
       done = true;
+      clearTimeout(stallTimer);
       setPct(100);
       const stat = root.querySelector('#dlStat');
       const sub = root.querySelector('#dlSub');
@@ -351,12 +643,28 @@ App._showDownloadProgress = function (r) {
     const onError = (msg) => {
       if (done) return;
       done = true;
+      clearTimeout(stallTimer);
       const sub = root.querySelector('#dlSub');
       if (sub) { sub.textContent = 'Error: ' + (msg || 'download failed'); sub.style.color = 'var(--danger)'; }
+      const isDowngrade = !App._isNewer(to, from);
+      const hint = isDowngrade
+        ? `You are running v${App.ui.esc(from)}, which is newer than the available v${App.ui.esc(to)}. Auto-update cannot downgrade. To install v${App.ui.esc(to)}, run its setup.exe manually.`
+        : 'Check your internet connection and try again. If GitHub is blocked on your network, download the installer directly from the release page.';
       m.el.querySelector('.modal-f').innerHTML = `<button class="btn btn-primary" data-a="close">Close</button>`;
       m.el.querySelector('[data-a="close"]').onclick = () => { m.close(); resolve(); };
       App.ui.toast('Update download failed: ' + (msg || 'error'), 'err');
+      // Show a clear hint in the body
+      const stat = root.querySelector('#dlStat');
+      if (stat) { stat.textContent = isDowngrade ? 'Downgrade not allowed' : 'Download stalled'; stat.style.color = 'var(--danger)'; }
+      const sub2 = root.querySelector('#dlSub');
+      if (sub2) sub2.innerHTML = App.ui.esc(hint);
     };
+
+    // Defensive: never attempt a downgrade through the auto-updater.
+    if (!App._isNewer(to, from)) {
+      onError('This version is older than the one you are running.');
+      return;
+    }
 
     App.pos.update.onDownloadProgress(onProgress);
     App.pos.update.onDownloaded(onDownloaded);
@@ -364,23 +672,44 @@ App._showDownloadProgress = function (r) {
     m.el.querySelector('[data-a="hide"]').onclick = () => { m.close(); /* download continues; listeners remain */ };
 
     // Kick off the download now that listeners are attached.
+    armStallWatchdog();
     App.pos.update.download().catch((e) => onError(e.message));
   });
 };
 
 // ---- Login success animation ------------------------------------------
-App._showLoginSuccess = function () {
+App._showLoginSuccess = function (user) {
   return new Promise((resolve) => {
+    const name = user && user.full_name ? user.full_name : 'Cashier';
+    const role = user && user.role === 'admin' ? 'Administrator' : 'Cashier';
     const overlay = document.createElement('div');
     overlay.className = 'login-success-overlay';
-    overlay.innerHTML = '<div class="check"></div>';
+    overlay.innerHTML = `
+      <div class="login-success-card">
+        <div class="login-success-burst" aria-hidden="true"></div>
+        <div class="login-success-ring" aria-hidden="true">
+          <svg class="login-success-check" viewBox="0 0 52 52">
+            <circle class="login-success-fill" cx="26" cy="26" r="24"></circle>
+            <circle class="login-success-circle" cx="26" cy="26" r="24"></circle>
+            <path class="login-success-path" d="M14.5 27.2l7.4 7.4L37.8 18.5"></path>
+          </svg>
+        </div>
+        <p class="login-success-title">Welcome back</p>
+        <p class="login-success-name">${App.ui.esc(name)}</p>
+        <span class="login-success-role">${App.ui.esc(role)}</span>
+        <p class="login-success-sub">Opening register…</p>
+      </div>`;
     document.body.appendChild(overlay);
     requestAnimationFrame(() => overlay.classList.add('show'));
+
+    const reducedMotion = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const holdMs = reducedMotion ? 400 : 1400;
+    const leaveMs = reducedMotion ? 150 : 450;
+
     setTimeout(() => {
-      overlay.style.transition = 'opacity .3s';
-      overlay.style.opacity = '0';
-      setTimeout(() => { overlay.remove(); resolve(); }, 300);
-    }, 700);
+      overlay.classList.add('leaving');
+      setTimeout(() => { overlay.remove(); resolve(); }, leaveMs);
+    }, holdMs);
   });
 };
 

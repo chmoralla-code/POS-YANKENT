@@ -13,13 +13,13 @@
 const SCHEMA_VERSION = 1;
 const TABLES = [
   'users', 'categories', 'products', 'product_units', 'customers',
-  'sales', 'sale_items', 'stock_movements', 'settings',
+  'sales', 'sale_items', 'refunds', 'stock_movements', 'settings',
 ];
 // Tables that use AUTOINCREMENT (and therefore have a sqlite_sequence row).
 const SEQ_TABLES = TABLES.filter((t) => t !== 'settings');
 // Wipe order: children first so FK-off still keeps things tidy.
 const WIPE_ORDER = [
-  'sale_items', 'stock_movements', 'sales', 'product_units',
+  'sale_items', 'stock_movements', 'refunds', 'sales', 'product_units',
   'products', 'customers', 'categories', 'users', 'settings',
 ];
 

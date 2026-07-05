@@ -17,7 +17,14 @@ function buildReceipt(db, saleId) {
      FROM sale_items WHERE sale_id=? ORDER BY id`
   ).all(saleId);
 
-  const symbol = db.prepare("SELECT value FROM settings WHERE key='currency_symbol'").get()?.value || 'PHP';
+  // Sanitize the currency symbol for the printer: the peso sign (U+20B1)
+  // is 1 char in JS but expands to "PHP " (4 chars) when the ESC/POS
+  // encoder emits it (and renders as a blank box on Windows drivers that
+  // don't support it).  Expanding here makes formatMoney's output length
+  // match what the printer actually renders, so padLine's width math is
+  // exact and lines don't overflow/wrap.
+  const rawSymbol = db.prepare("SELECT value FROM settings WHERE key='currency_symbol'").get()?.value || 'PHP';
+  const symbol = String(rawSymbol).replace(/\u20b1/g, 'PHP ');
   const s = (k, d) => {
     const r = db.prepare('SELECT value FROM settings WHERE key=?').get(k);
     return r ? r.value : d;
@@ -53,6 +60,7 @@ function buildReceipt(db, saleId) {
     reference: sale.reference || '',
     footer: s('receipt_footer', 'Thank you!'),
     symbol,
+    vatRate: Number(s('vat_rate', '12')) || 0,
   };
 }
 
@@ -62,7 +70,7 @@ function buildReceipt(db, saleId) {
  */
 function fmtLine(receipt, name, qty, unit, unitPrice, amount, width) {
   const sym = receipt.symbol;
-  const left = `${formatQty(qty)} ${unit} ${truncate(name, Math.max(8, width - 24))}`;
+  const left = `${formatQty(qty)} ${unit} ${truncate(name, Math.max(8, width - 22))}`;
   const right = formatMoney(amount, sym);
   return padLine(left, right, width);
 }
@@ -74,12 +82,63 @@ function formatQty(q) {
 
 function truncate(s, n) {
   s = String(s);
-  return s.length > n ? s.slice(0, n - 1) + '…' : s;
+  n = Math.max(0, Math.floor(n));
+  if (s.length <= n) return s;
+  // Use ASCII "..." (3 chars) rather than Unicode ellipsis U+2026 (1 char).
+  // The ESC/POS encoder expands U+2026 to "..." when writing to the
+  // thermal printer, and Windows print drivers render U+2026 as a blank
+  // box — so a 1-char ellipsis in JS becomes 3 chars (or an unprintable
+  // glyph) at the printer.  Emitting ASCII "..." directly keeps the JS
+  // string length equal to the rendered width, so padLine/row math holds.
+  if (n <= 3) return s.slice(0, n);
+  return s.slice(0, n - 3) + '...';
 }
 
 function padLine(left, right, width) {
+  left = String(left);
+  right = String(right);
+  // Safety net: if left + right can't fit on one line with at least one
+  // space between them, shrink left (truncating with "..." so the cut is
+  // visible) so right stays intact on the same line.  This catches any
+  // residual expansion from user-supplied text (store name, customer,
+  // project) that still contains wide characters after upstream
+  // sanitization.
+  if (left.length + right.length >= width) {
+    const maxLeft = Math.max(0, width - right.length - 1);
+    if (maxLeft < left.length) {
+      left = maxLeft <= 3 ? left.slice(0, maxLeft) : left.slice(0, maxLeft - 3) + '...';
+    }
+  }
   const space = Math.max(1, width - left.length - right.length);
   return left + ' '.repeat(space) + right;
+}
+
+function wrapLine(text, width) {
+  // Word-wrap a long string into lines of at most `width` chars.
+  // Used for user-supplied free text (store name, address, footer) that
+  // can exceed the paper width — centerLine would otherwise emit a single
+  // line longer than the paper and the printer would wrap it mid-word.
+  text = String(text);
+  if (text.length <= width) return [text];
+  const words = text.split(/\s+/);
+  const lines = [];
+  let cur = '';
+  for (const w of words) {
+    if (!w) continue;
+    if (cur.length === 0) {
+      cur = w;
+    } else if (cur.length + 1 + w.length <= width) {
+      cur += ' ' + w;
+    } else {
+      lines.push(cur);
+      cur = w;
+    }
+  }
+  if (cur) lines.push(cur);
+  // Guard against a single word longer than width (hard-split it).
+  return lines.flatMap((l) =>
+    l.length <= width ? [l] : Array.from({ length: Math.ceil(l.length / width) }, (_, i) => l.slice(i * width, (i + 1) * width))
+  );
 }
 
 function centerLine(text, width) {
@@ -96,8 +155,14 @@ function receiptPlainText(receipt, width = 32) {
   const sym = receipt.symbol;
   const lines = [];
   const sep = '-'.repeat(width);
-  lines.push(centerLine(receipt.storeName, width));
-  if (receipt.address) lines.push(centerLine(receipt.address, width));
+  // Leading blank lines give the printer paper some feed before the store
+  // name prints — useful when the previous receipt's cut left the paper
+  // pulled back slightly inside the mechanism.
+  lines.push('');
+  lines.push('');
+  lines.push('');
+  for (const l of wrapLine(receipt.storeName, width)) lines.push(centerLine(l, width));
+  if (receipt.address) for (const l of wrapLine(receipt.address, width)) lines.push(centerLine(l, width));
   if (receipt.tin) lines.push(centerLine(`TIN: ${receipt.tin}`, width));
   if (receipt.phone) lines.push(centerLine(receipt.phone, width));
   lines.push(sep);
@@ -116,14 +181,27 @@ function receiptPlainText(receipt, width = 32) {
   if (receipt.discount) lines.push(padLine('Discount', '-' + formatMoney(receipt.discount, sym), width));
   lines.push(sep);
   lines.push(padLine('Subtotal', formatMoney(receipt.subtotal, sym), width));
-  lines.push(padLine('VAT 12%', formatMoney(receipt.vat, sym), width));
+  if (receipt.vatRate > 0) lines.push(padLine(`VAT ${receipt.vatRate}%`, '+' + formatMoney(receipt.vat, sym), width));
   lines.push(padLine('TOTAL', formatMoney(receipt.total, sym), width));
   if (receipt.paymentMethod === 'cash') {
     lines.push(padLine('Cash', formatMoney(receipt.tendered, sym), width));
     lines.push(padLine('Change', formatMoney(receipt.change, sym), width));
   }
   lines.push(sep);
-  for (const l of String(receipt.footer).split('\n')) lines.push(centerLine(l, width));
+  for (const l of String(receipt.footer).split('\n')) {
+    for (const wl of wrapLine(l, width)) lines.push(centerLine(wl, width));
+  }
+  // Trailing blank lines so the footer text clears the cutter — without
+  // this the last line is still inside the printer and hard to tear off.
+  // 8 lines ≈ enough paper feed for the auto-cutter to push the footer
+  // past the tear bar on POS-58 printers.
+  lines.push('');
+  lines.push('');
+  lines.push('');
+  lines.push('');
+  lines.push('');
+  lines.push('');
+  lines.push('');
   lines.push('');
   return lines.join('\n');
 }

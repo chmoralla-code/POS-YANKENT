@@ -3,10 +3,11 @@
 /**
  * Money & VAT calculation utilities (pure, unit-tested).
  *
- * YANKENT POS uses VAT-INCLUSIVE pricing (Philippines, 12%): the displayed
- * item price already includes VAT. The "total" charged to the customer is the
- * sum of line amounts (+ delivery, − discount). Net subtotal and VAT are
- * derived: subtotal = total / (1 + vatRate/100), vat = total − subtotal.
+ * YANKENT POS uses VAT-EXCLUSIVE pricing: the item price is the NET price
+ * (no VAT).  VAT is ADDED on top of the subtotal at checkout.
+ *   subtotal = gross − discount + deliveryFee   (net amounts)
+ *   vat      = subtotal × vatRate / 100
+ *   total    = subtotal + vat                   (what the customer pays)
  */
 
 function round2(n) {
@@ -28,9 +29,11 @@ function computeTotals(items, opts = {}) {
     return s + line;
   }, 0);
 
-  const total = Math.max(0, round2(gross + deliveryFee - discount));
-  const subtotal = round2(total / (1 + vatRate / 100));
-  const vat = round2(total - subtotal);
+  // Net subtotal = item gross − discount + delivery fee.  VAT is added on
+  // top of this net amount to produce the total the customer pays.
+  const subtotal = round2(Math.max(0, gross + deliveryFee - discount));
+  const vat = round2(subtotal * vatRate / 100);
+  const total = round2(subtotal + vat);
 
   return { gross: round2(gross), discount: round2(discount), deliveryFee: round2(deliveryFee), subtotal, vat, total };
 }

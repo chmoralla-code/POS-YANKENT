@@ -45,7 +45,7 @@ App.ui = {
     t.innerHTML = html.trim();
     return t.content.firstElementChild;
   },
-  modal({ title, bodyHtml, footerHtml = '', wide = false }) {
+  modal({ title, bodyHtml, footerHtml = '', wide = false, closeOnOverlay = true }) {
     const root = document.getElementById('modal-root');
     const wrap = App.ui.el(`<div class="modal-overlay"><div class="modal" style="${wide ? 'width:680px' : ''}">
       <div class="modal-h"><span>${App.ui.esc(title)}</span><span class="x">×</span></div>
@@ -53,21 +53,31 @@ App.ui = {
       ${footerHtml ? `<div class="modal-f">${footerHtml}</div>` : ''}
     </div></div>`);
     root.appendChild(wrap);
-    const close = () => wrap.remove();
+    let onClose = null;
+    const close = () => { if (onClose) onClose(); wrap.remove(); };
     wrap.querySelector('.x').onclick = close;
-    wrap.addEventListener('click', (e) => { if (e.target === wrap) close(); });
-    return { el: wrap, close, body: wrap.querySelector('.modal-b') };
+    // Only close on overlay (outside) click when explicitly allowed — form
+    // modals like Edit Product / Adjust Stock opt out so an accidental
+    // click outside doesn't discard unsaved edits.
+    if (closeOnOverlay) wrap.addEventListener('click', (e) => { if (e.target === wrap) close(); });
+    return { el: wrap, close, body: wrap.querySelector('.modal-b'), set onClose(fn) { onClose = fn; } };
   },
   confirm(message, opts = {}) {
     return new Promise((resolve) => {
+      let settled = false;
+      const done = (v) => { if (!settled) { settled = true; m.close(); resolve(v); } };
+      const yesText = opts.okText || (opts.danger ? 'Delete' : 'OK');
+      const noText = opts.cancelText || 'Cancel';
       const m = App.ui.modal({
         title: opts.title || 'Please confirm',
         bodyHtml: `<p style="margin:0">${App.ui.esc(message)}</p>`,
-        footerHtml: `<button class="btn btn-ghost" data-a="no">Cancel</button>
-          <button class="btn ${opts.danger ? 'btn-danger' : 'btn-primary'}" data-a="yes">${opts.danger ? 'Delete' : 'OK'}</button>`,
+        footerHtml: `<button class="btn btn-ghost" data-a="no">${App.ui.esc(noText)}</button>
+          <button class="btn ${opts.danger ? 'btn-danger' : 'btn-primary'}" data-a="yes">${App.ui.esc(yesText)}</button>`,
       });
-      m.el.querySelector('[data-a="yes"]').onclick = () => { m.close(); resolve(true); };
-      m.el.querySelector('[data-a="no"]').onclick = () => { m.close(); resolve(false); };
+      m.el.querySelector('[data-a="yes"]').onclick = () => done(true);
+      m.el.querySelector('[data-a="no"]').onclick = () => done(false);
+      // If the user dismisses via X or outside click, treat as Cancel.
+      m.onClose = () => done(false);
     });
   },
   debounce(fn, ms = 250) {
@@ -75,8 +85,16 @@ App.ui = {
     return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
   },
   fmtDate(d) {
-    const dt = new Date(d);
+    if (!d) return '—';
+    const s = String(d);
+    const dt = s.includes('T') || s.endsWith('Z') || /[+-]\d{2}:?\d{2}$/.test(s)
+      ? new Date(s)
+      : new Date(s.replace(' ', 'T'));
     return dt.toLocaleString('en-PH', { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
   },
-  todayISO() { return new Date().toISOString().slice(0, 10); },
+  todayISO() {
+    const n = new Date();
+    const pad = (v) => String(v).padStart(2, '0');
+    return `${n.getFullYear()}-${pad(n.getMonth() + 1)}-${pad(n.getDate())}`;
+  },
 };

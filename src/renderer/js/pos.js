@@ -7,7 +7,7 @@ App.cart = App.cart || [];
 App.views.pos = {
   title: 'Point of Sale',
   cache: { products: [], categories: [], customers: [] },
-  state: { tab: 'products', cat: 'all', q: '', customer: null, pay: 'cash', zoom: parseFloat(localStorage.getItem('posZoom') || '1'), discountOn: false },
+  state: { tab: 'products', cat: 'all', q: '', customer: null, pay: 'cash', discountOn: false, chipsOpen: false },
 
   async render(view) {
     this.viewEl = view;
@@ -20,40 +20,27 @@ App.views.pos = {
     ]);
     this.cache = { products, categories, customers };
     view.innerHTML = `
-      <div class="pos-analytics" id="posAnalytics"></div>
       <div class="pos-grid">
         <div class="pos-left">
           <div class="panel pos-catalog">
             <div class="search-row">
               <input id="posSearch" placeholder="Search SKU / item name…" autocomplete="off">
-              <button class="btn btn-ghost btn-sm" id="posClear">Clear</button>
-              <div class="zoom-ctrl">
-                <button class="btn btn-ghost btn-sm" id="posZoomOut" title="Smaller text">A−</button>
-                <span class="zoom-val" id="posZoomVal">100%</span>
-                <button class="btn btn-ghost btn-sm" id="posZoomIn" title="Bigger text">A+</button>
-              </div>
             </div>
-            <div class="tabs">
-              <div class="tab active" data-tab="products">Products</div>
-              <div class="tab" data-tab="services">Services</div>
+            <div class="tabs" id="posTabs">
+              <div class="tab active" data-tab="products">Products <span class="tab-count" id="posCountProducts">0</span></div>
+              <div class="tab" data-tab="services">Services <span class="tab-count" id="posCountServices">0</span></div>
             </div>
-            <div class="chips" id="posChips"></div>
+            <div class="chips-wrap" id="posChipsWrap" hidden>
+              <button class="chips-toggle" id="posChipsToggle" type="button" aria-expanded="false">
+                <span class="chips-toggle-arrow">▸</span><span>Categories</span>
+              </button>
+              <div class="chips" id="posChips" hidden></div>
+            </div>
             <div class="prod-grid" id="posGrid"></div>
           </div>
         </div>
         <div class="pos-right">
           <div class="panel">
-            <div class="printer-bar" id="posPrinterBar">
-              <span class="printer-status" id="posPrinterStatus"><span class="dot off"></span> Printer not connected</span>
-              <button class="btn btn-ghost btn-sm" id="posPrinterConnect">Connect Bluetooth</button>
-            </div>
-            <div class="cust-box">
-              <label class="fl">Customer</label>
-              <div class="row">
-                <select id="posCust" class="fill"></select>
-              </div>
-              <div class="credit-info hidden" id="posCredit"></div>
-            </div>
             <div class="panel-h">Current Sale <small><span id="posCount">0</span> lines</small></div>
             <div class="cart" id="posCart"></div>
             <div class="totals" id="posTotals"></div>
@@ -74,46 +61,21 @@ App.views.pos = {
       </div>`;
 
     this._wire();
-    this._applyZoom();
-    this._renderCust();
     this._renderChips();
     this._renderGrid();
     this._renderCart();
-    this._renderAnalytics();
-    this._renderPrinterStatus();
-  },
-
-  _applyZoom() {
-    const catalog = this.viewEl.querySelector('.pos-catalog');
-    if (catalog) catalog.style.zoom = this.state.zoom;
-    const val = this.viewEl.querySelector('#posZoomVal');
-    if (val) val.textContent = Math.round(this.state.zoom * 100) + '%';
-  },
-  _setZoom(delta) {
-    const z = Math.min(1.8, Math.max(0.8, +(this.state.zoom + delta).toFixed(2)));
-    this.state.zoom = z;
-    localStorage.setItem('posZoom', String(z));
-    this._applyZoom();
   },
 
   _wire() {
     const v = this.viewEl;
     const debounced = App.ui.debounce(() => this._renderGrid(), 200);
     v.querySelector('#posSearch').addEventListener('input', (e) => { this.state.q = e.target.value; debounced(); });
-    v.querySelector('#posClear').onclick = () => { this.state.q = ''; v.querySelector('#posSearch').value = ''; this._renderGrid(); };
-    v.querySelector('#posZoomIn').onclick = () => this._setZoom(0.1);
-    v.querySelector('#posZoomOut').onclick = () => this._setZoom(-0.1);
-    // Ctrl + scroll to zoom the catalog
-    v.querySelector('.pos-catalog').addEventListener('wheel', (e) => {
-      if (!e.ctrlKey) return;
-      e.preventDefault();
-      this._setZoom(e.deltaY < 0 ? 0.1 : -0.1);
-    }, { passive: false });
     v.querySelectorAll('.tab').forEach((t) => t.onclick = () => {
       v.querySelectorAll('.tab').forEach((x) => x.classList.remove('active'));
       t.classList.add('active'); this.state.tab = t.dataset.tab; this._renderChips(); this._renderGrid();
     });
-    v.querySelector('#posCust').onchange = (e) => this._selectCustomer(+e.target.value);
+    const toggle = v.querySelector('#posChipsToggle');
+    if (toggle) toggle.onclick = () => { this.state.chipsOpen = !this.state.chipsOpen; this._renderChips(); };
     v.querySelectorAll('#posPay button').forEach((b) => b.onclick = () => this._setPay(b.dataset.pay));
     v.querySelector('#posVoid').onclick = () => this._void();
     v.querySelector('#posDiscount').onclick = () => {
@@ -134,88 +96,27 @@ App.views.pos = {
     v.querySelector('#posSearch').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') { e.preventDefault(); const first = v.querySelector('#posGrid .prod-card'); if (first) first.click(); }
     });
-    // Bluetooth printer pairing (cashier-accessible)
-    const connectBtn = v.querySelector('#posPrinterConnect');
-    if (connectBtn) connectBtn.onclick = () => this._connectPrinter();
-  },
-
-  async _connectPrinter() {
-    const v = this.viewEl;
-    const btn = v.querySelector('#posPrinterConnect');
-    if (!App.printer.available()) { App.ui.toast('Web Bluetooth not available on this device', 'err'); return; }
-    if (App.printer.isConnected()) { App.printer.disconnect(); this._renderPrinterStatus(); App.ui.toast('Printer disconnected'); return; }
-    btn.disabled = true; btn.textContent = 'Connecting…';
-    try {
-      const name = await App.printer.pair();
-      App.ui.toast('Connected to ' + name + ' ✓', 'ok');
-    } catch (e) { App.ui.toast(e.message, 'err'); }
-    finally { btn.disabled = false; this._renderPrinterStatus(); }
-  },
-
-  _renderPrinterStatus() {
-    const v = this.viewEl;
-    if (!v) return;
-    const statusEl = v.querySelector('#posPrinterStatus');
-    const btn = v.querySelector('#posPrinterConnect');
-    if (!statusEl || !btn) return;
-    if (!App.printer.available()) { statusEl.innerHTML = '<span class="dot off"></span> Bluetooth unsupported'; btn.disabled = true; btn.textContent = 'Connect Bluetooth'; return; }
-    if (App.printer.isConnected()) {
-      const name = App.printer._deviceName || 'Bluetooth Printer';
-      statusEl.innerHTML = `<span class="dot on"></span> ${App.ui.esc(name)}`;
-      btn.textContent = 'Disconnect';
-      btn.classList.remove('btn-ghost'); btn.classList.add('btn-primary');
-    } else {
-      statusEl.innerHTML = '<span class="dot off"></span> Printer not connected';
-      btn.textContent = 'Connect Bluetooth';
-      btn.classList.remove('btn-primary'); btn.classList.add('btn-ghost');
-    }
   },
 
   async _renderAnalytics() {
     const el = this.viewEl.querySelector('#posAnalytics');
     if (!el) return;
-    try {
-      const [summary, analytics] = await Promise.all([
-        App.pos.reports.summary(),
-        App.pos.reports.analytics(),
-      ]);
-      const a = analytics || {};
-      const todayTx = (summary.today && summary.today.tx) || 0;
-      const todayTotal = (summary.today && summary.today.total) || 0;
-      const avg = a.today && a.today.tx > 0 ? a.avgTx : 0;
-      const items = Math.round(a.itemsSold || 0);
-      el.innerHTML = `
-        <div class="pa-stat"><div class="k">Today's Sales</div><div class="v">${App.ui.money(todayTotal)}</div></div>
-        <div class="pa-stat"><div class="k">Transactions</div><div class="v">${todayTx}</div></div>
-        <div class="pa-stat"><div class="k">Items Sold</div><div class="v">${items}</div></div>
-        <div class="pa-stat"><div class="k">Avg. Transaction</div><div class="v">${App.ui.money(avg)}</div></div>`;
-    } catch { el.innerHTML = '<div class="pa-stat muted">Analytics unavailable</div>'; }
-  },
-
-  _renderCust() {
-    const sel = this.viewEl.querySelector('#posCust');
-    const opts = ['<option value="0">Walk-in Customer</option>']
-      .concat(this.cache.customers.filter((c) => c.id !== 1).map((c) =>
-        `<option value="${c.id}">${App.ui.esc(c.name)}${c.type === 'contractor' ? ' (Contractor)' : ''}</option>`));
-    sel.innerHTML = opts.join('');
-  },
-
-  _selectCustomer(id) {
-    this.state.customer = id ? this.cache.customers.find((c) => c.id === id) : null;
-    const box = this.viewEl.querySelector('#posCredit');
-    if (this.state.customer && this.state.customer.type === 'contractor') {
-      const c = this.state.customer;
-      const avail = c.credit_limit - c.credit_used;
-      box.classList.remove('hidden');
-      box.innerHTML = `<div><b>Contractor account</b> — limit ${App.ui.money(c.credit_limit)}</div>
-        <div class="muted">Used ${App.ui.money(c.credit_used)} · Available ${App.ui.money(avail)}</div>`;
-    } else box.classList.add('hidden');
-    if (this.state.pay === 'account' && !(this.state.customer && this.state.customer.type === 'contractor')) this._setPay('cash');
   },
 
   _renderChips() {
+    const wrap = this.viewEl.querySelector('#posChipsWrap');
+    const toggle = this.viewEl.querySelector('#posChipsToggle');
     const el = this.viewEl.querySelector('#posChips');
-    if (this.state.tab === 'services') { el.innerHTML = ''; return; }
+    if (!wrap || !el) return;
+    // Services tab: hide the whole categories panel.
+    if (this.state.tab === 'services') { wrap.hidden = true; el.innerHTML = ''; return; }
+    wrap.hidden = false;
+    // Reflect open/closed state on toggle + chips container.
+    const open = !!this.state.chipsOpen;
+    toggle.setAttribute('aria-expanded', String(open));
+    toggle.querySelector('.chips-toggle-arrow').textContent = open ? '▾' : '▸';
+    el.hidden = !open;
+    if (!open) return;
     const cats = this.cache.categories;
     const all = `<div class="chip ${this.state.cat === 'all' ? 'active' : ''}" data-cat="all">All</div>`;
     el.innerHTML = all + cats.map((c) => {
@@ -228,6 +129,14 @@ App.views.pos = {
 
   _renderGrid() {
     const el = this.viewEl.querySelector('#posGrid');
+    // Update tab counts (total products / total services in cache).
+    const all = this.cache.products || [];
+    const prodCount = all.filter((p) => !p.is_service).length;
+    const svcCount = all.filter((p) => p.is_service).length;
+    const pc = this.viewEl.querySelector('#posCountProducts');
+    const sc = this.viewEl.querySelector('#posCountServices');
+    if (pc) pc.textContent = prodCount;
+    if (sc) sc.textContent = svcCount;
     const q = this.state.q.toLowerCase().trim();
     let list = this.cache.products;
     if (this.state.tab === 'products') list = list.filter((p) => !p.is_service);
@@ -264,11 +173,26 @@ App.views.pos = {
     const p = this.cache.products.find((x) => x.id === id);
     if (!p) return;
     if (p.is_service) {
-      const q = prompt(`Quantity for ${p.name} (${(p.units[0] || {}).unit || p.base_unit})?`, '1');
-      if (!q) return;
-      const n = parseFloat(q); if (!n || n <= 0) { App.ui.toast('Invalid quantity', 'err'); return; }
-      const u = p.units[0] || { unit: p.base_unit, factor: 1, price: p.price };
-      App.cart.push({ productId: p.id, sku: p.sku, name: p.name, unit: u.unit, factor: u.factor, unitPrice: u.price, qty: n, isService: true, lineType: 'service', units: p.units, base_unit: p.base_unit });
+      // Use a styled modal instead of the blocking native prompt() — the
+      // native prompt is theme-inconsistent and can be disabled by sandbox
+      // configs, which would silently break adding services to the cart.
+      const m = App.ui.modal({
+        title: 'Quantity — ' + p.name, closeOnOverlay: false,
+        bodyHtml: `<div class="field"><label class="fl">Quantity (${(p.units[0] || {}).unit || p.base_unit})</label><input id="svcQty" type="number" step="0.01" value="1" autofocus></div>`,
+        footerHtml: `<button class="btn btn-ghost" data-a="cancel">Cancel</button><button class="btn btn-primary" data-a="ok">Add to cart</button>`,
+      });
+      m.el.querySelector('[data-a="cancel"]').onclick = () => m.close();
+      const input = m.el.querySelector('#svcQty');
+      input.focus(); input.select();
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') m.el.querySelector('[data-a="ok"]').click(); });
+      m.el.querySelector('[data-a="ok"]').onclick = () => {
+        const n = parseFloat(input.value);
+        if (!n || n <= 0) { App.ui.toast('Invalid quantity', 'err'); return; }
+        const u = p.units[0] || { unit: p.base_unit, factor: 1, price: p.price };
+        App.cart.push({ productId: p.id, sku: p.sku, name: p.name, unit: u.unit, factor: u.factor, unitPrice: u.price, qty: n, isService: true, lineType: 'service', units: p.units, base_unit: p.base_unit });
+        m.close();
+        this._renderCart();
+      };
     } else {
       if (p.stock <= 0) { App.ui.toast(p.name + ' is out of stock', 'err'); return; }
       const ex = App.cart.find((i) => i.productId === id && !i.isService);
@@ -355,10 +279,14 @@ App.views.pos = {
     const mat = App.cart.filter((i) => !i.isService).reduce((s, i) => s + i.qty * i.unitPrice, 0);
     const svc = App.cart.filter((i) => i.isService).reduce((s, i) => s + i.qty * i.unitPrice, 0);
     const gross = mat + svc;
+    const vatRate = parseFloat((App.settingsCache || {}).vat_rate) || 12;
     const discPct = this.state.discountOn ? (parseFloat((App.settingsCache || {}).discount_percent) || 0) : 0;
     const discAmt = gross * discPct / 100;
-    const total = Math.max(0, gross - discAmt);
-    const vat = total - total / 1.12;
+    // VAT-exclusive: subtotal is the net (items − discount), VAT is added on
+    // top, total = subtotal + VAT.  Item prices do NOT include VAT.
+    const subtotal = Math.max(0, gross - discAmt);
+    const vat = subtotal * vatRate / 100;
+    const total = subtotal + vat;
     let discLine = '';
     if (discPct > 0) {
       discLine = `<div class="r"><span class="l">Discount (${discPct}% off)</span><span>−${App.ui.money(discAmt)}</span></div>`;
@@ -366,8 +294,9 @@ App.views.pos = {
     this.viewEl.querySelector('#posTotals').innerHTML = `
       <div class="r"><span class="l">Materials</span><span>${App.ui.money(mat)}</span></div>
       <div class="r"><span class="l">Services</span><span>${App.ui.money(svc)}</span></div>
-      <div class="r"><span class="l">VAT 12% (incl.)</span><span>${App.ui.money(vat)}</span></div>
+      <div class="r"><span class="l">Subtotal (net)</span><span>${App.ui.money(subtotal)}</span></div>
       ${discLine}
+      <div class="r"><span class="l">VAT ${vatRate}%</span><span>+${App.ui.money(vat)}</span></div>
       <div class="r g"><span>TOTAL</span><span>${App.ui.money(total)}</span></div>`;
     this.viewEl.querySelector('#posCount').textContent = App.cart.length;
     this.viewEl.querySelector('#posCharge').textContent = 'Charge ' + App.ui.money(total);
@@ -389,8 +318,11 @@ App.views.pos = {
   _checkout() {
     if (!App.cart.length) { App.ui.toast('Cart is empty', 'err'); return; }
     const gross = App.cart.reduce((s, i) => s + i.qty * i.unitPrice, 0);
+    const vatRate = parseFloat((App.settingsCache || {}).vat_rate) || 12;
     const discPct = this.state.discountOn ? (parseFloat((App.settingsCache || {}).discount_percent) || 0) : 0;
-    const total = Math.max(0, gross - gross * discPct / 100);
+    // VAT-exclusive: subtotal = net (items − discount), total = subtotal + VAT
+    const subtotal = Math.max(0, gross - gross * discPct / 100);
+    const total = subtotal + subtotal * vatRate / 100;
     const pay = this.state.pay;
     const cust = this.state.customer;
     let cashHtml = '', refHtml = '';
@@ -398,14 +330,19 @@ App.views.pos = {
     if (pay === 'card' || pay === 'ewallet') refHtml = `<div class="field"><label class="fl">Reference No.</label><input id="payRef" placeholder="Transaction ref (optional)"></div>`;
     const custName = cust ? cust.name : 'Walk-in Customer';
     const m = App.ui.modal({
-      title: 'Complete Payment', wide: false,
-      bodyHtml: `<div class="field"><label class="fl">Amount Due</label><input value="${App.ui.money(total)}" readonly></div>
+      title: 'Complete Payment', wide: false, closeOnOverlay: false,
+      bodyHtml: `<div class="field"><label class="fl">Amount Due (incl. VAT ${vatRate}%)</label><input value="${App.ui.money(total)}" readonly></div>
         <div class="row gap" style="margin-bottom:10px"><span class="badge ${pay}">${pay.toUpperCase()}</span><span class="muted">${App.ui.esc(custName)}</span></div>
         ${cashHtml}${refHtml}`,
       footerHtml: `<button class="btn btn-ghost" data-a="cancel">Cancel</button><button class="btn btn-primary" data-a="ok">Confirm &amp; Print</button>`,
     });
     m.el.querySelector('[data-a="cancel"]').onclick = () => m.close();
-    m.el.querySelector('[data-a="ok"]').onclick = () => { m.close(); this._confirm(total, pay, cust); };
+    m.el.querySelector('[data-a="ok"]').onclick = (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true; btn.textContent = 'Processing…'; btn.classList.add('is-printing');
+      m.close();
+      this._confirm(total, pay, cust);
+    };
     if (pay === 'cash') {
       const cash = m.el.querySelector('#payCash');
       const upd = () => {
@@ -435,46 +372,113 @@ App.views.pos = {
       reference: '',
     };
     try {
+      // Create a PENDING sale — stock is NOT deducted yet.  The sale is
+      // only committed (stock deducted) when the cashier clicks PRINT on
+      // the receipt modal.  Closing the modal without printing voids it.
       const res = await App.pos.sales.create(payload);
-      App.ui.toast(`Sale ${res.txnId} completed ✓`, 'ok');
-      // refresh cached product stock + customer credit
-      this.cache.products = await App.pos.products.list({ includeServices: true });
-      this.cache.customers = await App.pos.customers.list();
-      App.cart = [];
-      this.state.customer = null;
-      this.state.discountOn = false;
-      const dBtn = this.viewEl.querySelector('#posDiscount');
-      if (dBtn) { dBtn.classList.remove('btn-primary'); dBtn.classList.add('btn-ghost'); dBtn.textContent = 'Discount'; }
-      this.viewEl.querySelector('#posCust').value = '0';
-      this.viewEl.querySelector('#posCredit').classList.add('hidden');
-      this._setPay('cash');
-      this._renderChips(); this._renderGrid(); this._renderCart();
-      this._renderAnalytics();
-      // receipt + auto-print
+      App.ui.toast(`Sale ${res.txnId} — click PRINT to complete`, 'ok');
       await this._showReceipt(res.txnId, res.receipt);
-      await App.printer.autoPrint(res.txnId);
     } catch (e) {
       App.ui.toast(e.message, 'err');
     }
+  },
+
+  _resetCartState() {
+    App.cart = [];
+    this.state.customer = null;
+    this.state.discountOn = false;
+    const dBtn = this.viewEl.querySelector('#posDiscount');
+    if (dBtn) { dBtn.classList.remove('btn-primary'); dBtn.classList.add('btn-ghost'); dBtn.textContent = 'Discount'; }
+    this._setPay('cash');
+    this._renderChips(); this._renderGrid(); this._renderCart();
   },
 
   async _showReceipt(txnId, receipt) {
     const text = receipt ? null : (await App.pos.printer.encodeReceipt(txnId)).text;
     const body = (receipt && receipt.items) ? this._receiptHtml(receipt) : `<pre class="receipt">${App.ui.esc(text)}</pre>`;
     const m = App.ui.modal({
-      title: 'Receipt · ' + txnId, wide: true,
+      title: 'Receipt · ' + txnId, wide: true, closeOnOverlay: false,
       bodyHtml: body,
-      footerHtml: `<button class="btn btn-ghost" data-a="reprint">Reprint (Bluetooth)</button>
-        <button class="btn btn-ghost" data-a="sysprint">Print (system)</button>
-        <button class="btn btn-primary" data-a="close">Close</button>`,
+      footerHtml: `<button class="btn btn-primary" data-a="print">PRINT</button>`,
     });
-    m.el.querySelector('[data-a="close"]').onclick = () => m.close();
-    m.el.querySelector('[data-a="reprint"]').onclick = async () => {
-      try { if (!App.printer.isConnected()) { await App.printer.pair(); } await App.printer.printReceipt(txnId); App.ui.toast('Reprinted ✓', 'ok'); }
-      catch (e) { App.ui.toast('Reprint failed: ' + e.message, 'err'); }
+    // Track whether the sale was committed via PRINT so the close handler
+    // knows whether to void it.
+    let committed = false;
+
+    // PRINT: commit the sale (deduct stock + mark completed), print the
+    // receipt, then close the modal and clear the cart for the next sale.
+    m.el.querySelector('[data-a="print"]').onclick = async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true; btn.textContent = 'Printing…'; btn.classList.add('is-printing');
+      try {
+        // 1. Commit the pending sale → deducts stock, writes movements,
+        //    updates contractor credit, sets status='completed'.
+        await App.pos.sales.commit(txnId);
+        // Mark committed IMMEDIATELY so that if printing fails, closing
+        // the modal won't try to void an already-completed sale (which
+        // would throw a swallowed error and show a false "voided" toast,
+        // tempting the cashier to re-charge → double deduction).
+        committed = true;
+        // 2. Print the receipt — Bluetooth if connected, else system printer.
+        if (App.printer.isConnected()) {
+          await App.printer.printReceipt(txnId);
+        } else {
+          await App.printer.printReceiptFallback(txnId);
+        }
+        App.ui.toast('Sale completed ✓', 'ok');
+        // 3. Refresh cached product stock (now that stock is deducted).
+        this.cache.products = await App.pos.products.list({ includeServices: true });
+        this.cache.customers = await App.pos.customers.list();
+        // 4. Close modal + reset cart for the next sale.
+        m.close();
+        this._resetCartState();
+      } catch (err) {
+        // If commit succeeded but print failed, the sale is already
+        // completed — offer a reprint rather than leaving the cashier
+        // stuck on a disabled PRINT button.
+        if (committed) {
+          App.ui.toast('Sale completed but printing failed — click PRINT again to reprint', 'err');
+          btn.textContent = 'REPRINT'; btn.classList.remove('is-printing');
+          // On a successful reprint, close + reset cart.
+          btn.onclick = async (ev2) => {
+            btn.disabled = true; btn.textContent = 'Printing…'; btn.classList.add('is-printing');
+            try {
+              if (App.printer.isConnected()) await App.printer.printReceipt(txnId);
+              else await App.printer.printReceiptFallback(txnId);
+              App.ui.toast('Reprinted ✓', 'ok');
+              m.close(); this._resetCartState();
+            } catch (e2) {
+              App.ui.toast('Reprint failed: ' + e2.message, 'err');
+              btn.disabled = false; btn.textContent = 'REPRINT'; btn.classList.remove('is-printing');
+            }
+          };
+        } else {
+          App.ui.toast(err.message, 'err');
+        }
+        btn.disabled = false;
+        if (!committed) { btn.textContent = 'PRINT'; btn.classList.remove('is-printing'); }
+      }
     };
-    m.el.querySelector('[data-a="sysprint"]').onclick = async () => {
-      try { await App.printer.printReceiptFallback(txnId); } catch (e) { App.ui.toast(e.message, 'err'); }
+
+    // Close (× or overlay) without PRINT → void the pending sale so it
+    // doesn't linger in the database.  The cart stays populated so the
+    // cashier can adjust and retry, but the discount/customer/pay-method
+    // state are reset so a retry doesn't silently reuse stale selections.
+    m.onClose = async () => {
+      if (committed) return; // sale was committed via PRINT — nothing to void
+      try {
+        await App.pos.sales.void(txnId);
+        // Reset sale-specific state (keep cart items for retry).
+        this.state.discountOn = false;
+        this.state.customer = null;
+        this._setPay('cash');
+        const dBtn = this.viewEl.querySelector('#posDiscount');
+        if (dBtn) { dBtn.classList.remove('btn-primary'); dBtn.classList.add('btn-ghost'); dBtn.textContent = 'Discount'; }
+        this._renderCart();
+        App.ui.toast('Sale voided (not printed) — cart kept so you can retry', 'err');
+      } catch (e) {
+        // Sale may already be voided/committed — ignore.
+      }
     };
   },
 
@@ -492,8 +496,10 @@ App.views.pos = {
       <hr style="border:none;border-top:1px dashed #ccc;margin:8px 0">
       ${lines}
       <hr style="border:none;border-top:1px dashed #ccc;margin:8px 0">
-      <div class="r"><span>Subtotal</span><span>${App.ui.money(r.subtotal)}</span></div>
-      <div class="r"><span>VAT 12%</span><span>${App.ui.money(r.vat)}</span></div>
+      <div class="r"><span>Subtotal (net)</span><span>${App.ui.money(r.subtotal)}</span></div>
+      ${r.discount > 0 ? `<div class="r"><span>Discount</span><span>−${App.ui.money(r.discount)}</span></div>` : ''}
+      ${r.deliveryFee > 0 ? `<div class="r"><span>Delivery</span><span>${App.ui.money(r.deliveryFee)}</span></div>` : ''}
+      ${r.vat > 0 || (r.vatRate ?? 12) > 0 ? `<div class="r"><span>VAT ${r.vatRate ?? 12}%</span><span>+${App.ui.money(r.vat)}</span></div>` : ''}
       <div class="r" style="font-weight:800;font-size:14px;margin-top:4px"><span>TOTAL</span><span>${App.ui.money(r.total)}</span></div>
       ${r.paymentMethod === 'cash' ? `<div class="r"><span>Cash</span><span>${App.ui.money(r.tendered)}</span></div><div class="r"><span>Change</span><span>${App.ui.money(r.change)}</span></div>` : ''}
       <hr style="border:none;border-top:1px dashed #ccc;margin:8px 0">
@@ -504,7 +510,7 @@ App.views.pos = {
   // Step 1: enter transaction ID from the receipt
   _startRefund() {
     const m = App.ui.modal({
-      title: 'Process Refund',
+      title: 'Process Refund', closeOnOverlay: false,
       bodyHtml: `<div class="hint" style="margin-bottom:10px">Enter the transaction ID from the customer's receipt (e.g. YK-000042).</div>
         <div class="field"><label class="fl">Transaction ID</label><input id="rfTxn" placeholder="YK-000042" autofocus></div>`,
       footerHtml: `<button class="btn btn-ghost" data-a="cancel">Cancel</button><button class="btn btn-primary" data-a="lookup">Look Up</button>`,
@@ -522,51 +528,41 @@ App.views.pos = {
     };
   },
 
-  // Step 2: show the sale details + ask for admin PIN
+  // Step 2: show the sale details + process refund (no admin approval needed)
   _showRefundSale(sale) {
     const itemsHtml = sale.items.map((i) => `<tr><td>${App.ui.esc(i.name)}</td><td class="right">${App.ui.qty(i.qty)} ${App.ui.esc(i.unit)}</td><td class="right">${App.ui.money(i.amount)}</td></tr>`).join('');
     const m = App.ui.modal({
-      title: 'Refund — ' + sale.txn_id, wide: true,
+      title: 'Refund — ' + sale.txn_id, wide: true, closeOnOverlay: false,
       bodyHtml: `<div class="hint" style="margin-bottom:8px">
           <b>Date:</b> ${App.ui.esc(sale.datetime)} · <b>Cashier:</b> ${App.ui.esc(sale.cashier_name)} · <b>Pay:</b> ${App.ui.esc(sale.payment_method.toUpperCase())} · <b>Customer:</b> ${App.ui.esc(sale.customer_name)}
         </div>
         <table class="tbl"><thead><tr><th>Item</th><th class="right">Qty</th><th class="right">Amount</th></tr></thead><tbody>${itemsHtml}</tbody></table>
         <div class="totals" style="border:none;padding:8px 0"><div class="r g"><span>TOTAL REFUND</span><span>${App.ui.money(sale.total)}</span></div></div>
-        <div class="field"><label class="fl">Reason (optional)</label><input id="rfReason" placeholder="Customer return / wrong item / damaged"></div>
-        <div class="sec-title">Admin approval required</div>
-        <div class="field"><label class="fl">Admin PIN (password)</label>
-          <div class="pw-field"><input id="rfAdminPin" type="password"><button type="button" class="pw-toggle" data-tgt="rfAdminPin">👁</button></div>
-        </div>
-        <div class="hint">Only an admin can approve refunds. The cashier cannot refund alone.</div>`,
-      footerHtml: `<button class="btn btn-ghost" data-a="cancel">Cancel</button><button class="btn btn-danger" data-a="refund">Approve &amp; Process Refund</button>`,
-    });
-    m.el.querySelectorAll('.pw-toggle').forEach((b) => {
-      b.onclick = () => { const inp = m.el.querySelector('#' + b.dataset.tgt); const show = inp.type === 'password'; inp.type = show ? 'text' : 'password'; b.textContent = show ? '🙈' : '👁'; };
+        <div class="field"><label class="fl">Reason (optional)</label><input id="rfReason" placeholder="Customer return / wrong item / damaged"></div>`,
+      footerHtml: `<button class="btn btn-ghost" data-a="cancel">Cancel</button><button class="btn btn-danger" data-a="refund">Process Refund</button>`,
     });
     m.el.querySelector('[data-a="cancel"]').onclick = () => m.close();
     m.el.querySelector('[data-a="refund"]').onclick = async () => {
-      const pin = m.el.querySelector('#rfAdminPin').value;
-      if (!pin) { App.ui.toast('Enter admin PIN', 'err'); return; }
       const btn = m.el.querySelector('[data-a="refund"]'); btn.disabled = true; btn.textContent = 'Processing…';
       try {
-        // Verify admin PIN
-        const adminRes = await App.pos.refunds.verifyAdmin(pin);
-        if (!adminRes.ok) { App.ui.toast('Invalid admin PIN', 'err'); btn.disabled = false; btn.textContent = 'Approve & Process Refund'; return; }
-        // Process the refund
         const reason = m.el.querySelector('#rfReason').value.trim();
-        const result = await App.pos.refunds.process({ txnId: sale.txn_id, adminName: adminRes.admin.name, adminId: adminRes.admin.id, reason });
+        const result = await App.pos.refunds.process({ txnId: sale.txn_id, adminName: (App.current.user && App.current.user.full_name) || sale.cashier_name || '—', adminId: App.current.user ? App.current.user.id : null, reason });
         m.close();
         // Show refund receipt
-        this._showRefundReceipt(sale, result, reason, adminRes.admin.name);
+        this._showRefundReceipt(sale, result, reason, (App.current.user && App.current.user.full_name) || sale.cashier_name || '—');
         // Refresh stock
         this.cache.products = await App.pos.products.list({ includeServices: true });
         this._renderGrid();
-      } catch (e) { App.ui.toast(e.message, 'err'); btn.disabled = false; btn.textContent = 'Approve & Process Refund'; }
+      } catch (e) { App.ui.toast(e.message, 'err'); btn.disabled = false; btn.textContent = 'Process Refund'; }
     };
   },
 
   // Step 3: show the refund receipt confirmation
   _showRefundReceipt(sale, result, reason, adminName) {
+    // Capture the cashier name up front — the idle timeout may fire
+    // between the refund completing and this modal rendering, which
+    // nulls App.current.user and would throw on .full_name access.
+    const cashierName = (App.current && App.current.user && App.current.user.full_name) || sale.cashier_name || '—';
     const m = App.ui.modal({
       title: 'Refund Processed ✓', wide: true,
       bodyHtml: `<div class="receipt"><div class="store">YANKENT POS</div>
@@ -575,7 +571,7 @@ App.views.pos = {
         <div class="r"><span>Refund ID</span><span>${App.ui.esc(result.refundTxnId)}</span></div>
         <div class="r"><span>Original Txn</span><span>${App.ui.esc(sale.txn_id)}</span></div>
         <div class="r"><span>Date</span><span>${new Date().toLocaleString()}</span></div>
-        <div class="r"><span>Cashier</span><span>${App.ui.esc(App.current.user.full_name)}</span></div>
+        <div class="r"><span>Cashier</span><span>${App.ui.esc(cashierName)}</span></div>
         <div class="r"><span>Approved by</span><span>${App.ui.esc(adminName)}</span></div>
         <div class="r"><span>Customer</span><span>${App.ui.esc(sale.customer_name)}</span></div>
         <div class="r"><span>Pay</span><span>${App.ui.esc(sale.payment_method.toUpperCase())}</span></div>
@@ -589,7 +585,7 @@ App.views.pos = {
     });
     m.el.querySelector('[data-a="close"]').onclick = () => m.close();
     m.el.querySelector('[data-a="print"]').onclick = async () => {
-      const text = `YANKENT POS\nREFUND RECEIPT\n${result.refundTxnId}\nOriginal: ${sale.txn_id}\n${new Date().toLocaleString()}\nCashier: ${App.current.user.full_name}\nAdmin: ${adminName}\nCustomer: ${sale.customer_name}\nPay: ${sale.payment_method.toUpperCase()}\n${reason ? 'Reason: ' + reason : ''}\n\nREFUND TOTAL: ${App.ui.money(result.total)}\nItems returned to stock.`;
+      const text = `YANKENT POS\nREFUND RECEIPT\n${result.refundTxnId}\nOriginal: ${sale.txn_id}\n${new Date().toLocaleString()}\nCashier: ${cashierName}\nAdmin: ${adminName}\nCustomer: ${sale.customer_name}\nPay: ${sale.payment_method.toUpperCase()}\n${reason ? 'Reason: ' + reason : ''}\n\nREFUND TOTAL: ${App.ui.money(result.total)}\nItems returned to stock.`;
       try { await App.printer.printTextFallback(text); } catch (e) { App.ui.toast(e.message, 'err'); }
     };
     App.ui.toast(`Refund ${result.refundTxnId} processed — ${App.ui.money(result.total)} returned, items restocked`, 'ok');
