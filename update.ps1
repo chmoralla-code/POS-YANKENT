@@ -75,10 +75,18 @@ $pkg = $pkg -replace '"version"\s*:\s*"\d+\.\d+\.\d+"', "`"version`": `"$newVers
 $utf8NoBom = New-Object System.Text.UTF8Encoding $false
 [System.IO.File]::WriteAllText($pkgPath, $pkg, $utf8NoBom)
 git add package.json
-git commit -m "Bump version to $newVersion"
-if ($LASTEXITCODE -ne 0) { Fail "git commit of version bump failed." }
-git push origin main
-if ($LASTEXITCODE -ne 0) { Fail "git push of version bump failed." }
+# Only commit the version bump if package.json actually changed.
+# Re-running "update.ps1 -Version 2.0.0" when the version is already 2.0.0
+# should not fail here.
+$bumpPending = @(git status --porcelain -- package.json)
+if ($bumpPending.Count -gt 0) {
+  git commit -m "Bump version to $newVersion"
+  if ($LASTEXITCODE -ne 0) { Fail "git commit of version bump failed." }
+  git push origin main
+  if ($LASTEXITCODE -ne 0) { Fail "git push of version bump failed." }
+} else {
+  Write-Host "(version already $newVersion - nothing to bump)" -ForegroundColor Yellow
+}
 Write-Host "Version: $newVersion" -ForegroundColor Green
 
 if ($SkipBuild) {
