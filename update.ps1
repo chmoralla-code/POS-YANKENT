@@ -101,8 +101,30 @@ Write-Host "Build OK. 3 files present." -ForegroundColor Green
 
 # ---- [5] Publish GitHub Release ---------------------------------------
 Step 5 "Publish release v$newVersion"
-gh release create "v$newVersion" --repo $repo --title $newVersion --notes $Message $exe $blockmap $yml
+
+# Delete an existing release with the same tag (if any) so re-publishing
+# the same version works. The old release + its tag are removed with
+# --cleanup-tag so the new release can be created fresh.
+$existing = gh release view "v$newVersion" --repo $repo 2>$null
+if ($LASTEXITCODE -eq 0) {
+  Write-Host "Existing release v$newVersion found - deleting + re-creating." -ForegroundColor Yellow
+  gh release delete "v$newVersion" --repo $repo --yes --cleanup-tag
+  if ($LASTEXITCODE -ne 0) { Fail "Could not delete existing release v$newVersion." }
+}
+
+# Create the release as a draft first (fast - no asset upload yet).
+gh release create "v$newVersion" --repo $repo --title $newVersion --notes $Message --draft
 if ($LASTEXITCODE -ne 0) { Fail "gh release create failed." }
+
+# Upload assets separately with --clobber so retrying the same command
+# replaces existing assets rather than failing. This is also more reliable
+# for the ~100MB installer (no inline upload that can time out).
+gh release upload "v$newVersion" --repo $repo $exe $blockmap $yml --clobber
+if ($LASTEXITCODE -ne 0) { Fail "gh release upload failed." }
+
+# Publish the release (switch from draft to live).
+gh release edit "v$newVersion" --repo $repo --draft=false
+if ($LASTEXITCODE -ne 0) { Fail "Could not publish release v$newVersion." }
 
 # ---- [6] Verify -------------------------------------------------------
 Step 6 "Verify release"
