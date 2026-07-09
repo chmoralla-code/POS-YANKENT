@@ -143,6 +143,7 @@ contextBridge.exposeInMainWorld('pos', {
     encodeReceipt: (txn) => call('pos:printer:encodeReceipt', txn),
     testPrint: () => call('pos:printer:testPrint'),
     printHtml: (html) => call('pos:printer:printHtml', html),
+    printReceiptRaw: (txn) => call('pos:printer:printReceiptRaw', txn),
     installDriver: () => call('pos:printer:installDriver'),
     checkStatus: () => { const r = ipcRenderer.invoke('pos:printer:checkStatus'); return r.then((x) => x.ok ? x.data : { driverAvailable: false, installedPrinters: [], printerConnected: false }); },
     setupFromLogin: () => { const r = ipcRenderer.invoke('pos:printer:setupFromLogin'); return r.then((x) => x.ok ? x.data : (() => { throw new Error(x.error || 'Setup failed'); })()); },

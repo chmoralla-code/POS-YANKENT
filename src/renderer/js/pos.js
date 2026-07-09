@@ -394,15 +394,12 @@ App.views.pos = {
   },
 
   /** Print a receipt, auto-reconnecting once if the printer dropped.
-   *  Handles the common power-cycle case: after a laptop is turned off
-   *  and on again, the cached GATT characteristic is dead.  ensureConnected
-   *  retries the Bluetooth link a few times (the adapter needs a moment to
-   *  re-enumerate after wake) and automatically falls back to the Windows
-   *  system printer when Bluetooth re-pairing fails — so a sale prints
-   *  instead of throwing "Printer not connected". */
+   *  Handles the common power-cycle case: after a laptop is turned off and
+   *  on again, the cached GATT characteristic is dead.  printReceipt already
+   *  retries Bluetooth and falls back to the named Windows printer (POS-58)
+   *  via the winspool RAW path — the same path the startup auto test-print
+   *  uses.  This wrapper adds one extra retry on a mid-write GATT failure. */
   async _printWithRetry(txnId) {
-    // First attempt — ensureConnected already retries Bluetooth internally
-    // and falls back to the system printer when configured.
     try {
       await App.printer.printReceipt(txnId);
       return;
@@ -413,13 +410,15 @@ App.views.pos = {
         const reconnected = await App.printer.reconnectWithRetry();
         if (reconnected) { await App.printer.printReceipt(txnId); return; }
       }
-      // Final fallback: the Windows system printer (any paired thermal).
-      const s = App.settingsCache || {};
-      if (s.printer_type === 'system') {
-        await App.printer.printReceiptFallback(txnId);
+      // Final fallback: send directly to the named Windows printer (POS-58)
+      // via winspool RAW — works for USB thermal printers regardless of
+      // printer_type setting.
+      try {
+        await App.pos.printer.printReceiptRaw(txnId);
         return;
+      } catch (e2) {
+        throw e2;
       }
-      throw e;
     }
   },
 

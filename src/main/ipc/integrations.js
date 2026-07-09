@@ -161,6 +161,36 @@ function register(ipcMain, ctx) {
     return { bytesBase64: bytes.toString('base64'), width };
   });
 
+  // ---- Print a receipt directly to the named Windows thermal printer ------
+  // This is the primary sale-receipt path for USB thermal printers (e.g. the
+  // POS-58 connected over USB, not Bluetooth).  It encodes the receipt to
+  // ESC/POS bytes in the main process and sends them in RAW mode to the
+  // Windows printer named in settings (default "POS-58") via winspool — the
+  // same proven path the startup auto test-print uses.  No Bluetooth/GATT
+  // involvement, so it works regardless of printer_type.  Falls back to the
+  // Windows default printer if the named one isn't found.
+  guard(ipcMain, 'pos:printer:printReceiptRaw', { auth: true }, async (_c, txnId) => {
+    const sale = db.prepare('SELECT id FROM sales WHERE txn_id=?').get(txnId);
+    if (!sale) throw new Error('Sale not found: ' + txnId);
+    const receipt = buildReceipt(db, sale.id);
+    const width = Number(ctx.getSetting(db, 'receipt_width') || 32);
+    const bytes = encodeReceipt(receipt, width);
+    const printerName = ctx.getSetting(db, 'startup_test_printer') || 'POS-58';
+    const tmp = path.join(os.tmpdir(), `yankent-receipt-${Date.now()}.bin`);
+    try {
+      fs.writeFileSync(tmp, bytes);
+      // Try the named printer first; if it's not installed, fall back to the
+      // Windows default printer so the receipt still prints.
+      const installed = await listWindowsPrinters();
+      const found = installed.find((p) => p.toLowerCase() === printerName.toLowerCase());
+      const res = await sendRawFileToPrinter(tmp, found || null);
+      if (!res.ok) throw new Error(res.error || ('Failed to print to ' + (found || printerName)));
+      return { ok: true, printer: res.printer || (found || printerName) };
+    } finally {
+      try { fs.unlinkSync(tmp); } catch {}
+    }
+  });
+
   // Print raw text directly to the Windows default thermal printer.
   // Uses the RawPrinterHelper .NET API to send text in RAW mode so the
   // printer driver receives exact monospaced 32-char lines without any

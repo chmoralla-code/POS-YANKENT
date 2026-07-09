@@ -118,25 +118,25 @@ App.printer = {
   /** Ensure a printer is ready before a sale prints.
    *
    *  Called before every print attempt.  If the Bluetooth characteristic
-   *  is live, returns { via: 'bluetooth' }.  If it's dead (the common case
-   *  after a power cycle), tries reconnectWithRetry a few times.  If that
-   *  fails, falls back to the system printer when configured — so a sale
-   *  after a laptop reboot still prints via the Windows-paired printer
-   *  instead of failing outright.  Returns { via: 'bluetooth' } or
-   *  { via: 'system' } or throws if no printer path is available. */
+   *  is live, returns { via: 'bluetooth' }.  If it's dead, tries
+   *  reconnectWithRetry a few times.  If Bluetooth fails, falls back to the
+   *  named Windows thermal printer (default "POS-58") via the winspool RAW
+   *  path — the same path the startup auto test-print uses, so sale receipts
+   *  print to the USB POS-58 even when printer_type is "bluetooth" and no
+   *  Bluetooth device is paired.  Returns { via: 'bluetooth' } or
+   *  { via: 'windows' }. */
   async ensureConnected() {
     if (this._characteristic) return { via: 'bluetooth' };
     const s = App.settingsCache || {};
-    // Try Bluetooth first (if the user has a paired device name).
-    if (s.printer_device_name) {
+    // Try Bluetooth first (only if the user actually paired a device).
+    if (s.printer_device_name && this.available()) {
       const ok = await this.reconnectWithRetry();
       if (ok) return { via: 'bluetooth' };
     }
-    // Fall back to the system printer if configured.
-    if (s.printer_type === 'system') return { via: 'system' };
-    // Bluetooth was configured but unavailable after retry, and no system
-    // printer fallback is set.  Throw a clear, actionable error.
-    throw new Error('Printer not connected — pair it again in Settings, or set Printer type to System printer.');
+    // Fall back to the named Windows thermal printer (POS-58) via RAW winspool.
+    // This works for USB thermal printers regardless of printer_type — it's
+    // the same path the working startup auto test-print uses.
+    return { via: 'windows' };
   },
 
   _decodeB64(b64) {
@@ -171,20 +171,29 @@ App.printer = {
   },
 
   /** Print a receipt by transaction id (auto-print + reprint use this).
-   *  Uses ensureConnected so a print right after a power cycle retries
-   *  the Bluetooth link and falls back to the system printer. */
+   *  Uses ensureConnected so a print right after a power cycle retries the
+   *  Bluetooth link, then falls back to the named Windows printer (POS-58). */
   async printReceipt(txnId) {
     const { via } = await this.ensureConnected();
+    if (via === 'windows') {
+      // Send ESC/POS bytes directly to the named Windows printer via RAW
+      // winspool — the proven path that the startup auto test-print uses.
+      const res = await App.pos.printer.printReceiptRaw(txnId);
+      return res;
+    }
     const res = await App.pos.printer.encodeReceipt(txnId);
     if (!res || !res.bytesBase64) throw new Error('Receipt not found');
-    if (via === 'system') { await this.printTextFallback(res.text); return; }
     await this._writeBytes(this._decodeB64(res.bytesBase64));
   },
 
   async testPrint() {
     const { via } = await this.ensureConnected();
-    const { bytesBase64, text } = await App.pos.printer.testPrint();
-    if (via === 'system') { await this.printTextFallback(text); return; }
+    if (via === 'windows') {
+      // Use the startup test-print path (sends to the named Windows printer).
+      const r = await App.pos.printer.startupTest();
+      return r;
+    }
+    const { bytesBase64 } = await App.pos.printer.testPrint();
     await this._writeBytes(this._decodeB64(bytesBase64));
   },
 
@@ -203,25 +212,21 @@ App.printer = {
   },
 
   async printReceiptFallback(txnId) {
-    const res = await App.pos.printer.encodeReceipt(txnId);
-    if (!res) throw new Error('Receipt not found');
-    await this.printTextFallback(res.text);
+    // Send ESC/POS bytes directly to the named Windows printer (POS-58)
+    // via the winspool RAW path — same as the startup auto test-print.
+    await App.pos.printer.printReceiptRaw(txnId);
   },
 
   /** Called after a completed sale; respects the auto-print setting. */
   async autoPrint(txnId) {
     const s = App.settingsCache || {};
     if (s.printer_auto_print !== '1') return { skipped: true };
-    // ensureConnected retries the Bluetooth link after a power cycle
-    // and falls back to the system printer when configured.
+    // ensureConnected retries Bluetooth, then falls back to the named
+    // Windows thermal printer (POS-58) — the proven path the startup
+    // auto test-print uses, so sale receipts print to a USB POS-58.
     try {
-      const { via } = await this.ensureConnected();
-      if (via === 'system') {
-        await this.printReceiptFallback(txnId);
-        return { printed: true, via: 'system' };
-      }
       await this.printReceipt(txnId);
-      return { printed: true, via: 'bluetooth' };
+      return { printed: true };
     } catch (e) {
       App.ui.toast('Auto-print failed: ' + e.message + ' — open the receipt to print manually', 'err');
       return { error: e.message };
