@@ -150,7 +150,8 @@ App.views.pos = {
         const low = p.stock <= (p.low || 10);
         const out = p.stock <= 0;
         const col = App.catColor(p.category);
-        return `<div class="prod-card ${out ? 'out-of-stock' : ''}" data-id="${p.id}" style="border-left:4px solid ${col}" title="${App.ui.esc(p.name)}">
+        const cls = out ? 'out-of-stock' : 'in-stock';
+        return `<div class="prod-card ${cls}" data-id="${p.id}" style="border-left:4px solid ${col}" title="${App.ui.esc(p.name)}">
           <div class="nm">${App.ui.esc(p.name)}</div>
           <div class="pr">${App.ui.money(def.price)} <small>/${App.ui.esc(def.unit)}</small></div>
           <div class="stk ${out ? 'low' : low ? 'low' : ''}">${out ? 'OUT OF STOCK' : 'Stock: ' + App.ui.qty(p.stock) + ' ' + App.ui.esc(p.base_unit)}${(!out && p.units && p.units.length > 1) ? ' · ' + p.units.length + ' units' : ''}</div>

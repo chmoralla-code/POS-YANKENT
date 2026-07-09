@@ -877,11 +877,17 @@ table.tbl tr:hover td { background: #fafbfc; }
 .prod-card .pr small { font-weight: 400; font-size: 11px; color: var(--muted); }
 .prod-card .stk { display: block; font-size: 11px; color: var(--muted); line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .prod-card .stk.low { color: var(--danger); font-weight: 700; }
-/* Out-of-stock: keep the card fully visible (no dimming) so the name,
-   price, and unit stay readable.  The red "OUT OF STOCK" label is the
-   only indicator.  Clicking is blocked (can't sell what you don't have). */
-.prod-card.out-of-stock { pointer-events: none; }
+/* Out-of-stock: blur the card so it's visually de-emphasized and the
+   cashier's eye is drawn to available products.  Clicking is still
+   blocked (can't sell what you don't have).  The red "OUT OF STOCK"
+   label stays readable over the blur. */
+.prod-card.out-of-stock { pointer-events: none; filter: blur(2.5px) grayscale(0.7); opacity: 0.55; }
 .prod-card.out-of-stock .stk { color: var(--danger); font-weight: 700; }
+/* In-stock: highlight with a subtle accent so available products stand
+   out.  A faint left-edge tint + a soft glow on hover draws attention. */
+.prod-card.in-stock { border-color: var(--line-2, var(--line)); }
+.prod-card.in-stock .stk { color: var(--ok, #1a7f37); font-weight: 600; }
+.prod-card.in-stock:hover { box-shadow: 0 0 0 2px var(--ok, #1a7f37), var(--shadow); }
 .prod-actions { display: flex; gap: 4px; margin-top: 6px; }
 .prod-actions .btn { padding: 4px 8px; font-size: 11px; }
 .svc-card { background: #f6f7f9; border: 1px dashed #cfd2d7; }
