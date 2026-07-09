@@ -28,6 +28,9 @@ App.views.settings = {
     const printerPreview = App.printer.isConnected()
       ? `● Connected: ${App.settingsCache.printer_device_name || 'printer'}`
       : `Type: ${this.s.printer_type || 'bluetooth'} · ${App.printer.available() ? 'ready' : 'Bluetooth unavailable'}`;
+    const startupTestPreview = this.s.startup_test_print !== '0'
+      ? `Startup test: ON → ${this.s.startup_test_printer || 'POS-58'}`
+      : 'Startup test: OFF';
     const tgPreview = online
       ? `● Online · Chat ID ${this.s.telegram_chat_id || '—'}`
       : `● Offline · ${this.s.telegram_token ? 'token set' : 'not configured'}`;
@@ -73,7 +76,7 @@ App.views.settings = {
             <div class="collapse-arrow">▸</div>
             <div class="collapse-info">
               <div class="collapse-title">Thermal Printer (ESC/POS)</div>
-              <div class="collapse-preview muted">${printerPreview}</div>
+              <div class="collapse-preview muted">${printerPreview} · ${startupTestPreview}</div>
             </div>
           </div>
           <div class="collapse-b">
@@ -91,6 +94,16 @@ App.views.settings = {
               <option value="none" ${this.s.printer_type === 'none' ? 'selected' : ''}>None</option>
             </select></div>
             <label class="row gap-sm"><input type="checkbox" id="sAuto" ${this.s.printer_auto_print === '1' ? 'checked' : ''}> Auto-print receipt after every sale</label>
+
+            <div class="sec-title" style="margin-top:10px">Startup auto test-print</div>
+            <div class="hint">When the POS first opens after the laptop is powered on, it sends a test print to the Windows printer below so the cashier knows the printer is ready before the first sale. Fires once per boot — restarting the app does not re-print.</div>
+            <label class="row gap-sm"><input type="checkbox" id="sStartupTest" ${this.s.startup_test_print !== '0' ? 'checked' : ''}> Auto test-print on startup (after laptop power-on)</label>
+            <div class="field"><label class="fl">Windows printer name</label><select id="sStartupPrinter"></select></div>
+            <div class="row gap" style="margin:6px 0">
+              <button class="btn btn-ghost btn-sm" id="sStartupTestNow">Test Startup Print Now</button>
+              <button class="btn btn-ghost btn-sm" id="sRefreshPrinters">Refresh printer list</button>
+            </div>
+
             <div class="sec-title" style="margin-top:10px">Advanced (BLE service / characteristic UUIDs)</div>
             <div class="row gap wrap">
               <div style="flex:1">${this._row('Service UUID', 'printer_service_uuid', this.s.printer_service_uuid)}</div>
@@ -204,7 +217,22 @@ App.views.settings = {
       App.settingsCache = await App.pos.settings.getAll(); App.currencySymbol = App.settingsCache.currency_symbol || '₱';
     };
     v.querySelector('#sSaveStore').onclick = async () => { await save(['store_name','store_address','store_tin','store_phone','vat_rate','currency_symbol','receipt_width','discount_percent','receipt_footer','session_idle_timeout']); App.ui.toast('Store info saved ✓', 'ok'); this._updatePreview('store'); };
-    v.querySelector('#sSavePrinter').onclick = async () => { await save(['printer_service_uuid','printer_char_uuid','printer_type']); const c = v.querySelector('#sAuto').checked ? '1' : '0'; await App.pos.settings.set('printer_auto_print', c); App.settingsCache.printer_auto_print = c; App.ui.toast('Printer settings saved ✓', 'ok'); this._updatePreview('printer'); };
+    v.querySelector('#sSavePrinter').onclick = async () => {
+      await save(['printer_service_uuid','printer_char_uuid','printer_type']);
+      const c = v.querySelector('#sAuto').checked ? '1' : '0';
+      await App.pos.settings.set('printer_auto_print', c);
+      App.settingsCache.printer_auto_print = c;
+      // Startup test-print settings
+      const st = v.querySelector('#sStartupTest').checked ? '1' : '0';
+      await App.pos.settings.set('startup_test_print', st);
+      App.settingsCache.startup_test_print = st;
+      const printerSel = v.querySelector('#sStartupPrinter');
+      if (printerSel) {
+        await App.pos.settings.set('startup_test_printer', printerSel.value);
+        App.settingsCache.startup_test_printer = printerSel.value;
+      }
+      App.ui.toast('Printer settings saved ✓', 'ok'); this._updatePreview('printer');
+    };
     v.querySelector('#sSaveTg').onclick = async () => { await save(['telegram_token','telegram_chat_id']); App.ui.toast('Telegram settings saved ✓', 'ok'); this._updatePreview('telegram'); };
     v.querySelector('#sSaveAutoStart').onclick = async () => {
       try {
@@ -227,6 +255,50 @@ App.views.settings = {
         if (r.launched) App.ui.toast('Driver installer launched — follow the Windows prompts ✓', 'ok');
         else App.ui.toast(r.error || 'Installer not found', 'err');
       } catch (e) { App.ui.toast(e.message, 'err'); }
+    };
+
+    // ---- Startup auto test-print controls ----
+    const loadPrinterList = async () => {
+      const sel = v.querySelector('#sStartupPrinter');
+      if (!sel) return;
+      sel.innerHTML = '<option>Loading…</option>';
+      try {
+        const printers = await App.pos.printer.listWindowsPrinters();
+        const saved = (this.s.startup_test_printer || 'POS-58');
+        if (!printers.length) {
+          sel.innerHTML = `<option value="${saved}">${App.ui.esc(saved)} (not detected)</option>`;
+          return;
+        }
+        // Prefer an exact/near match to the saved name; otherwise list all.
+        sel.innerHTML = printers.map((p) =>
+          `<option value="${App.ui.esc(p)}" ${p.toLowerCase() === saved.toLowerCase() ? 'selected' : ''}>${App.ui.esc(p)}</option>`
+        ).join('');
+        // If the saved name isn't in the list, prepend it so it's visible.
+        if (!printers.some((p) => p.toLowerCase() === saved.toLowerCase())) {
+          sel.innerHTML = `<option value="${App.ui.esc(saved)}" selected>${App.ui.esc(saved)} (not detected)</option>` + sel.innerHTML;
+        }
+      } catch {
+        sel.innerHTML = `<option value="${App.ui.esc(this.s.startup_test_printer || 'POS-58')}">${App.ui.esc(this.s.startup_test_printer || 'POS-58')}</option>`;
+      }
+    };
+    loadPrinterList();
+    v.querySelector('#sRefreshPrinters').onclick = async () => { await loadPrinterList(); App.ui.toast('Printer list refreshed', 'ok'); };
+    v.querySelector('#sStartupTestNow').onclick = async () => {
+      const btn = v.querySelector('#sStartupTestNow');
+      btn.disabled = true; btn.textContent = 'Printing…';
+      try {
+        // Save the selected printer first so the test uses the right one.
+        const sel = v.querySelector('#sStartupPrinter');
+        if (sel && sel.value) {
+          await App.pos.settings.set('startup_test_printer', sel.value);
+          this.s.startup_test_printer = sel.value;
+          App.settingsCache.startup_test_printer = sel.value;
+        }
+        const res = await App.pos.printer.startupTest();
+        if (res && res.ok) App.ui.toast('Test print sent to "' + res.printer + '" ✓', 'ok');
+        else App.ui.toast((res && res.error) || 'Test print failed', 'err');
+      } catch (e) { App.ui.toast(e.message, 'err'); }
+      finally { btn.disabled = false; btn.textContent = 'Test Startup Print Now'; }
     };
     v.querySelector('#sTgTest').onclick = async () => { try { const r = await App.pos.telegram.test(); r.ok ? App.ui.toast('Test message sent ✓', 'ok') : App.ui.toast(r.error || 'Failed', 'err'); } catch (e) { App.ui.toast(e.message, 'err'); } };
     v.querySelector('#sTgReport').onclick = async () => { try { const r = await App.pos.telegram.sendReport(); r.ok ? App.ui.toast('Report sent ✓', 'ok') : App.ui.toast(r.error || 'Failed', 'err'); } catch (e) { App.ui.toast(e.message, 'err'); } };
@@ -274,9 +346,11 @@ App.views.settings = {
       previewEl.textContent = `${this.s.store_name || 'YANKENT POS'} · ${this.s.vat_rate || 12}% VAT`;
     } else if (key === 'printer') {
       const conn = App.printer.isConnected();
+      const stOn = this.s.startup_test_print !== '0';
+      const stPrn = this.s.startup_test_printer || 'POS-58';
       previewEl.textContent = conn
-        ? `● Connected: ${this.s.printer_device_name || 'printer'}`
-        : `Type: ${this.s.printer_type || 'bluetooth'} · ${App.printer.available() ? 'ready' : 'Bluetooth unavailable'}`;
+        ? `● Connected: ${this.s.printer_device_name || 'printer'} · Startup test: ${stOn ? 'ON → ' + stPrn : 'OFF'}`
+        : `Type: ${this.s.printer_type || 'bluetooth'} · ${App.printer.available() ? 'ready' : 'Bluetooth unavailable'} · Startup test: ${stOn ? 'ON → ' + stPrn : 'OFF'}`;
     } else if (key === 'telegram') {
       try {
         const online = await App.pos.telegram.isOnline();

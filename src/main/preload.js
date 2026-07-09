@@ -146,6 +146,10 @@ contextBridge.exposeInMainWorld('pos', {
     installDriver: () => call('pos:printer:installDriver'),
     checkStatus: () => { const r = ipcRenderer.invoke('pos:printer:checkStatus'); return r.then((x) => x.ok ? x.data : { driverAvailable: false, installedPrinters: [], printerConnected: false }); },
     setupFromLogin: () => { const r = ipcRenderer.invoke('pos:printer:setupFromLogin'); return r.then((x) => x.ok ? x.data : (() => { throw new Error(x.error || 'Setup failed'); })()); },
+    // List installed Windows printer names (for the startup-test dropdown).
+    listWindowsPrinters: () => { const r = ipcRenderer.invoke('pos:printer:listWindowsPrinters'); return r.then((x) => x.ok ? x.data : []); },
+    // Manually trigger the startup test print to the configured Windows printer.
+    startupTest: () => { const r = ipcRenderer.invoke('pos:printer:startupTest'); return r.then((x) => x.ok ? x.data : (() => { throw new Error(x.error || 'Test print failed'); })()); },
   },
 
   // ---- Telegram ----
@@ -181,6 +185,12 @@ contextBridge.exposeInMainWorld('pos', {
     get: () => { const r = ipcRenderer.invoke('pos:autostart:get'); return r.then((x) => x.ok ? x.data : { enabled: false }); },
     set: (enabled) => { const r = ipcRenderer.invoke('pos:autostart:set', enabled); return r.then((x) => x.ok ? x.data : { enabled: false }); },
   },
+
+  // ---- Power events (wake/resume after sleep or power cycle) ----
+  // Fires when the laptop wakes from sleep, hibernation, or is powered
+  // back on after being off.  The renderer uses this to proactively
+  // reconnect the thermal printer before the next sale fails to print.
+  onPowerResume: (cb) => ipcRenderer.on('pos:power:resume', (_e, reason) => cb(reason)),
 
   // ---- External links (system browser) ---------------------------------
   async openExternal(url) {

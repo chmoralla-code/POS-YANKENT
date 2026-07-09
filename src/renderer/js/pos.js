@@ -150,7 +150,7 @@ App.views.pos = {
         const low = p.stock <= (p.low || 10);
         const out = p.stock <= 0;
         const col = App.catColor(p.category);
-        return `<div class="prod-card ${out ? 'out-of-stock' : ''}" data-id="${p.id}" style="border-left:4px solid ${col}">
+        return `<div class="prod-card ${out ? 'out-of-stock' : ''}" data-id="${p.id}" style="border-left:4px solid ${col}" title="${App.ui.esc(p.name)}">
           <div class="nm">${App.ui.esc(p.name)}</div>
           <div class="pr">${App.ui.money(def.price)} <small>/${App.ui.esc(def.unit)}</small></div>
           <div class="stk ${out ? 'low' : low ? 'low' : ''}">${out ? 'OUT OF STOCK' : 'Stock: ' + App.ui.qty(p.stock) + ' ' + App.ui.esc(p.base_unit)}${(!out && p.units && p.units.length > 1) ? ' · ' + p.units.length + ' units' : ''}</div>
@@ -159,7 +159,7 @@ App.views.pos = {
     } else {
       el.innerHTML = list.map((p) => {
         const def = (p.units && p.units[0]) || { unit: p.base_unit, price: p.price };
-        return `<div class="prod-card svc-card" data-id="${p.id}">
+        return `<div class="prod-card svc-card" data-id="${p.id}" title="${App.ui.esc(p.name)}">
           <div class="nm">${App.ui.esc(p.name)}</div>
           <div class="pr">${App.ui.money(def.price)} <small>/${App.ui.esc(def.unit)}</small></div>
           <div class="stk">Service</div>
@@ -393,6 +393,36 @@ App.views.pos = {
     this._renderChips(); this._renderGrid(); this._renderCart();
   },
 
+  /** Print a receipt, auto-reconnecting once if the printer dropped.
+   *  Handles the common power-cycle case: after a laptop is turned off
+   *  and on again, the cached GATT characteristic is dead.  ensureConnected
+   *  retries the Bluetooth link a few times (the adapter needs a moment to
+   *  re-enumerate after wake) and automatically falls back to the Windows
+   *  system printer when Bluetooth re-pairing fails — so a sale prints
+   *  instead of throwing "Printer not connected". */
+  async _printWithRetry(txnId) {
+    // First attempt — ensureConnected already retries Bluetooth internally
+    // and falls back to the system printer when configured.
+    try {
+      await App.printer.printReceipt(txnId);
+      return;
+    } catch (e) {
+      // If the Bluetooth write threw after the characteristic died mid-print,
+      // one more reconnect-with-retry + retry can recover it.
+      if (/not connected|disconnect|network|gatt/i.test(e.message || '')) {
+        const reconnected = await App.printer.reconnectWithRetry();
+        if (reconnected) { await App.printer.printReceipt(txnId); return; }
+      }
+      // Final fallback: the Windows system printer (any paired thermal).
+      const s = App.settingsCache || {};
+      if (s.printer_type === 'system') {
+        await App.printer.printReceiptFallback(txnId);
+        return;
+      }
+      throw e;
+    }
+  },
+
   async _showReceipt(txnId, receipt) {
     const text = receipt ? null : (await App.pos.printer.encodeReceipt(txnId)).text;
     const body = (receipt && receipt.items) ? this._receiptHtml(receipt) : `<pre class="receipt">${App.ui.esc(text)}</pre>`;
@@ -420,11 +450,9 @@ App.views.pos = {
         // tempting the cashier to re-charge → double deduction).
         committed = true;
         // 2. Print the receipt — Bluetooth if connected, else system printer.
-        if (App.printer.isConnected()) {
-          await App.printer.printReceipt(txnId);
-        } else {
-          await App.printer.printReceiptFallback(txnId);
-        }
+        //    _printWithRetry auto-reconnects once if the printer dropped
+        //    (e.g. USB cable was unplugged and re-plugged).
+        await this._printWithRetry(txnId);
         App.ui.toast('Sale completed ✓', 'ok');
         // 3. Refresh cached product stock (now that stock is deducted).
         this.cache.products = await App.pos.products.list({ includeServices: true });
@@ -443,8 +471,7 @@ App.views.pos = {
           btn.onclick = async (ev2) => {
             btn.disabled = true; btn.textContent = 'Printing…'; btn.classList.add('is-printing');
             try {
-              if (App.printer.isConnected()) await App.printer.printReceipt(txnId);
-              else await App.printer.printReceiptFallback(txnId);
+              await this._printWithRetry(txnId);
               App.ui.toast('Reprinted ✓', 'ok');
               m.close(); this._resetCartState();
             } catch (e2) {

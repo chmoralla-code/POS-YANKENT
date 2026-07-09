@@ -134,8 +134,8 @@ function encodeReceipt(receipt, width = 32) {
   const { formatMoney } = require('./money');
 
   // Leading paper feed so the store name isn't printed right at the paper
-  // edge — helps when the previous cut left the roll pulled back slightly.
-  e.feed(3);
+  // edge — one line is enough; more wastes paper.
+  e.feed(1);
   e.center(receipt.storeName || 'YANKENT POS');
   if (receipt.address) e.center(receipt.address);
   if (receipt.tin) e.center('TIN: ' + receipt.tin);
@@ -171,9 +171,10 @@ function encodeReceipt(receipt, width = 32) {
   // they stay within the paper width instead of overflowing mid-word.
   for (const l of String(receipt.footer).split('\n')) e.center(l);
   // Feed enough paper so the footer text clears the cutter — POS-58
-  // mechanisms need ~8 lines of feed past the print head before the
-  // auto-cutter can sever the paper cleanly.
-  e.feed(8);
+  // mechanisms need a few lines of feed past the print head before the
+  // auto-cutter can sever the paper cleanly.  4 lines is enough for
+  // the tear bar without wasting too much paper.
+  e.feed(4);
   e.cut();
   return e.toBuffer();
 }

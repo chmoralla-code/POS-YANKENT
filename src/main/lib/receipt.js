@@ -155,11 +155,8 @@ function receiptPlainText(receipt, width = 32) {
   const sym = receipt.symbol;
   const lines = [];
   const sep = '-'.repeat(width);
-  // Leading blank lines give the printer paper some feed before the store
-  // name prints — useful when the previous receipt's cut left the paper
-  // pulled back slightly inside the mechanism.
-  lines.push('');
-  lines.push('');
+  // Leading blank line gives the printer paper a little feed before the
+  // store name prints — one line is enough; more wastes paper.
   lines.push('');
   for (const l of wrapLine(receipt.storeName, width)) lines.push(centerLine(l, width));
   if (receipt.address) for (const l of wrapLine(receipt.address, width)) lines.push(centerLine(l, width));
@@ -193,12 +190,8 @@ function receiptPlainText(receipt, width = 32) {
   }
   // Trailing blank lines so the footer text clears the cutter — without
   // this the last line is still inside the printer and hard to tear off.
-  // 8 lines ≈ enough paper feed for the auto-cutter to push the footer
-  // past the tear bar on POS-58 printers.
-  lines.push('');
-  lines.push('');
-  lines.push('');
-  lines.push('');
+  // 4 lines ≈ enough paper feed for the auto-cutter to push the footer
+  // past the tear bar on POS-58 printers without wasting paper.
   lines.push('');
   lines.push('');
   lines.push('');

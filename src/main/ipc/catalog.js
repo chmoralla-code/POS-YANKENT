@@ -272,10 +272,14 @@ function register(ipcMain, ctx) {
 
       let imported = 0, skipped = 0;
       const newCats = new Set();
+      const seenNorm = new Set();
       for (const it of items) {
         const name = String(it.name || '').trim();
         if (!name) { skipped++; continue; }
         if (findByName.get(name)) { skipped++; continue; }
+        const norm = name.toLowerCase().replace(/\s+/g, ' ').replace(/[^a-z0-9]/g, '').trim();
+        if (seenNorm.has(norm)) { skipped++; continue; }
+        seenNorm.add(norm);
         const catName = String(it.category || 'Uncategorized').trim();
         const catId = getCatId(catName);
         newCats.add(catName);

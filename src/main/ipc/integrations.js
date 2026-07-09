@@ -9,6 +9,139 @@ const { encodeReceipt, testPrint } = require('../lib/escpos');
 const { checkOnline, sendMessage, sendDocument, buildReportMessage } = require('../lib/telegram');
 const { exportAll, importAll } = require('../backup');
 
+// ---- Windows printer helpers (winspool RAW mode via PowerShell) ---------
+// These run a PowerShell snippet that P/Invokes winspool.drv to send bytes
+// directly to a printer spooler in RAW mode, bypassing GDI/font substitution
+// so a thermal POS-58 receives exact monospaced 32-char text.  Used by both
+// the receipt system-print fallback and the startup auto test-print.
+
+/**
+ * Send the contents of a file to a Windows printer in RAW mode.
+ * @param {string} filePath - absolute path to a file whose bytes will be sent
+ * @param {string|null} printerName - printer name; null/undefined = Windows default printer
+ * @returns {Promise<{ok:boolean, error?:string, printer?:string}>}
+ */
+function sendRawFileToPrinter(filePath, printerName) {
+  return new Promise((resolve) => {
+    const escTmp = filePath.replace(/\\/g, '\\\\');
+    // If no printer name given, fall back to the Windows default printer.
+    const printerExpr = printerName
+      ? "'" + String(printerName).replace(/'/g, "''") + "'"
+      : '(Get-CimInstance -ClassName Win32_Printer -Filter "Default=true").Name';
+    const psScript = [
+      'Add-Type -MemberDefinition @"',
+      '[DllImport("winspool.drv", CharSet = CharSet.Auto)]',
+      'public static extern bool OpenPrinter(string p, out IntPtr h, IntPtr pd);',
+      '[DllImport("winspool.drv", CharSet = CharSet.Auto)]',
+      'public static extern bool ClosePrinter(IntPtr h);',
+      '[DllImport("winspool.drv", CharSet = CharSet.Auto)]',
+      'public static extern bool StartDocPrinter(IntPtr h, int l, ref DI di);',
+      '[DllImport("winspool.drv", CharSet = CharSet.Auto)]',
+      'public static extern bool EndDocPrinter(IntPtr h);',
+      '[DllImport("winspool.drv", CharSet = CharSet.Auto)]',
+      'public static extern bool StartPagePrinter(IntPtr h);',
+      '[DllImport("winspool.drv", CharSet = CharSet.Auto)]',
+      'public static extern bool EndPagePrinter(IntPtr h);',
+      '[DllImport("winspool.drv", CharSet = CharSet.Auto)]',
+      'public static extern bool WritePrinter(IntPtr h, byte[] b, int c, out int w);',
+      '[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]',
+      'public struct DI { public string n; public string o; public string t; }',
+      '"@ -Name PU -Namespace W',
+      '$prn = ' + printerExpr,
+      'if (-not $prn) { Write-Output "ERR:no_printer"; exit 2 }',
+      '[IntPtr]$h = 0',
+      '$di = New-Object W.PU+DI',
+      '$di.n = "YANKENT Receipt"',
+      '$di.t = "RAW"',
+      '$opened = [W.PU]::OpenPrinter($prn, [ref]$h, [IntPtr]::Zero)',
+      'if (-not $opened) { Write-Output "ERR:open_failed:" + $prn; exit 3 }',
+      '[void][W.PU]::StartDocPrinter($h, 1, [ref]$di)',
+      '[void][W.PU]::StartPagePrinter($h)',
+      '$bytes = [System.IO.File]::ReadAllBytes("' + escTmp + '")',
+      '$w = 0',
+      '[void][W.PU]::WritePrinter($h, $bytes, $bytes.Length, [ref]$w)',
+      '[void][W.PU]::EndPagePrinter($h)',
+      '[void][W.PU]::EndDocPrinter($h)',
+      '[void][W.PU]::ClosePrinter($h)',
+      'Write-Output "OK:" + $prn',
+    ].join('\n');
+    let stdout = '';
+    const child = spawn('powershell', ['-NoProfile', '-Command', psScript], {
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    child.stdout.on('data', (d) => { stdout += d.toString(); });
+    const done = (code) => {
+      const out = stdout.trim();
+      if (out.startsWith('OK:')) resolve({ ok: true, printer: out.slice(3) });
+      else if (out.startsWith('ERR:')) resolve({ ok: false, error: out.slice(4), printer: printerName });
+      else resolve({ ok: false, error: 'powershell exit ' + code });
+    };
+    child.on('error', () => resolve({ ok: false, error: 'spawn failed' }));
+    child.on('exit', done);
+    // Safety timeout so a hung spooler never blocks the event loop.
+    setTimeout(() => { try { child.kill(); } catch {} resolve({ ok: false, error: 'timeout' }); }, 15000);
+  });
+}
+
+/**
+ * List installed Windows printer names.
+ * @returns {Promise<string[]>}
+ */
+function listWindowsPrinters() {
+  return new Promise((resolve) => {
+    let out = '';
+    const child = spawn('powershell', ['-NoProfile', '-Command',
+      'Get-Printer | Select-Object -ExpandProperty Name'], {
+      windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    child.stdout.on('data', (d) => { out += d.toString(); });
+    child.on('error', () => resolve([]));
+    child.on('exit', () => {
+      resolve(out.split('\n').map((s) => s.trim()).filter(Boolean));
+    });
+    setTimeout(() => { try { child.kill(); } catch {} resolve([]); }, 5000);
+  });
+}
+
+/**
+ * Send a startup test print to a named Windows thermal printer.
+ * Builds a short ESC/POS test-print buffer (or plain text), writes it to a
+ * temp file, and sends it in RAW mode via winspool.  Returns whether the
+ * printer was found and the spooler accepted the job.
+ * @param {object} ctx - the app context (getSetting, db)
+ * @returns {Promise<{ok:boolean, error?:string, printer?:string, skipped?:boolean}>}
+ */
+async function sendStartupTestPrint(ctx) {
+  const printerName = ctx.getSetting(ctx.db, 'startup_test_printer') || 'POS-58';
+  const width = Number(ctx.getSetting(ctx.db, 'receipt_width') || 32);
+  // Verify the configured printer is actually installed — avoid a confusing
+  // silent failure when the printer name was typed wrong or the OS renamed it.
+  const installed = await listWindowsPrinters();
+  const found = installed.find((p) => p.toLowerCase() === printerName.toLowerCase());
+  if (!found) {
+    return { ok: false, skipped: true, error: 'Printer "' + printerName + '" not found in Windows. Installed: ' + (installed.join(', ') || '(none)') };
+  }
+  // Build the test-print bytes (ESC/POS init + a few lines + cut) and write
+  // them to a temp file.  We send the RAW ESC/POS bytes, not plain text, so
+  // the POS-58 renders the store name centered and performs a clean cut.
+  const { testPrint } = require('../lib/escpos');
+  const bytes = testPrint(width);
+  const tmp = path.join(os.tmpdir(), `yankent-startup-test-${Date.now()}.bin`);
+  try {
+    fs.writeFileSync(tmp, bytes);
+    const res = await sendRawFileToPrinter(tmp, found);
+    return { ...res, printer: found };
+  } catch (e) {
+    return { ok: false, error: e.message, printer: found };
+  } finally {
+    try { fs.unlinkSync(tmp); } catch {}
+  }
+}
+
+// Exported so main.js can call it on startup (no IPC round-trip needed).
+// (The final module.exports line at the bottom of this file includes these.)
+
 function register(ipcMain, ctx) {
   const { db, guard } = ctx;
 
@@ -67,49 +200,7 @@ function register(ipcMain, ctx) {
     const tmp = path.join(os.tmpdir(), `yankent-receipt-${Date.now()}.txt`);
     try {
       fs.writeFileSync(tmp, text, 'utf8');
-      const escTmp = tmp.replace(/\\/g, '\\\\');
-      const psScript = [
-        'Add-Type -MemberDefinition @"',
-        '[DllImport("winspool.drv", CharSet = CharSet.Auto)]',
-        'public static extern bool OpenPrinter(string p, out IntPtr h, IntPtr pd);',
-        '[DllImport("winspool.drv", CharSet = CharSet.Auto)]',
-        'public static extern bool ClosePrinter(IntPtr h);',
-        '[DllImport("winspool.drv", CharSet = CharSet.Auto)]',
-        'public static extern bool StartDocPrinter(IntPtr h, int l, ref DI di);',
-        '[DllImport("winspool.drv", CharSet = CharSet.Auto)]',
-        'public static extern bool EndDocPrinter(IntPtr h);',
-        '[DllImport("winspool.drv", CharSet = CharSet.Auto)]',
-        'public static extern bool StartPagePrinter(IntPtr h);',
-        '[DllImport("winspool.drv", CharSet = CharSet.Auto)]',
-        'public static extern bool EndPagePrinter(IntPtr h);',
-        '[DllImport("winspool.drv", CharSet = CharSet.Auto)]',
-        'public static extern bool WritePrinter(IntPtr h, byte[] b, int c, out int w);',
-        '[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]',
-        'public struct DI { public string n; public string o; public string t; }',
-        '"@ -Name PU -Namespace W',
-        '$prn = (Get-CimInstance -ClassName Win32_Printer -Filter "Default=true").Name',
-        '[IntPtr]$h = 0',
-        '$di = New-Object W.PU+DI',
-        '$di.n = "YANKENT Receipt"',
-        '$di.t = "RAW"',
-        '[void][W.PU]::OpenPrinter($prn, [ref]$h, [IntPtr]::Zero)',
-        '[void][W.PU]::StartDocPrinter($h, 1, [ref]$di)',
-        '[void][W.PU]::StartPagePrinter($h)',
-        '$bytes = [System.IO.File]::ReadAllBytes("' + escTmp + '")',
-        '$w = 0',
-        '[void][W.PU]::WritePrinter($h, $bytes, $bytes.Length, [ref]$w)',
-        '[void][W.PU]::EndPagePrinter($h)',
-        '[void][W.PU]::EndDocPrinter($h)',
-        '[void][W.PU]::ClosePrinter($h)',
-      ].join('\n');
-      await new Promise((resolve) => {
-        const child = spawn('powershell', [
-          '-NoProfile', '-Command', psScript
-        ], { windowsHide: true, stdio: 'ignore' });
-        child.on('error', () => resolve());
-        child.on('exit', () => resolve());
-        setTimeout(() => resolve(), 15000);
-      });
+      await sendRawFileToPrinter(tmp, null);
     } catch {
     } finally {
       try { fs.unlinkSync(tmp); } catch {}
@@ -182,6 +273,30 @@ function register(ipcMain, ctx) {
       };
     } catch (e) {
       return { ok: true, data: { driverAvailable: false, installedPrinters: [], printerConnected: false } };
+    }
+  });
+
+  // ---- List installed Windows printers (for the Settings dropdown) -------
+  // Public (no login) so the startup-test config can be set before login.
+  ipcMain.handle('pos:printer:listWindowsPrinters', async () => {
+    try {
+      const printers = await listWindowsPrinters();
+      return { ok: true, data: printers };
+    } catch (e) {
+      return { ok: true, data: [] };
+    }
+  });
+
+  // ---- Startup test print (manual trigger from Settings) -----------------
+  // Sends a test print to the configured Windows printer (default "POS-58")
+  // in RAW mode.  Used by the Settings page "Test startup print" button so
+  // the admin can verify the auto-test works before relying on it.
+  ipcMain.handle('pos:printer:startupTest', async () => {
+    try {
+      const res = await sendStartupTestPrint(ctx);
+      return { ok: !!res.ok, data: res, error: res.ok ? null : (res.error || 'Failed') };
+    } catch (e) {
+      return { ok: false, error: e.message };
     }
   });
 
@@ -322,4 +437,4 @@ function register(ipcMain, ctx) {
   });
 }
 
-module.exports = { register };
+module.exports = { register, _sendStartupTestPrint: sendStartupTestPrint, _listWindowsPrinters: listWindowsPrinters, _sendRawFileToPrinter: sendRawFileToPrinter };

@@ -242,13 +242,66 @@ document.addEventListener('DOMContentLoaded', async () => {
   App._applyStoredTheme();
 
   App._clock();
-  setInterval(() => App._clock(), 1000);
+  // Self-adjusting clock: aligns the next tick to the wall-clock second
+  // boundary so the clock doesn't drift visibly, and skips ticks when the
+  // window is hidden (no repaint needed while minimized). This keeps the
+  // 1Hz Intl.toLocaleTimeString call off the main thread when idle.
+  const clockTick = () => {
+    if (!document.hidden) App._clock();
+    App._clockTimer = setTimeout(clockTick, 1000 - (Date.now() % 1000));
+  };
+  App._clockTimer = setTimeout(clockTick, 1000 - (Date.now() % 1000));
   App._net();
-  setInterval(() => App._net(), 15000);
+  App._intervals = {
+    net: setInterval(() => App._net(), 15000),
+    loginNet: setInterval(() => App._loginNet(), 15000),
+  };
   App._loginNet();
-  setInterval(() => App._loginNet(), 15000);
   App._loginVersion();
+
+  // When the window is hidden (minimized / alt-tabbed), pause all the
+  // background pollers so an unattended register doesn't burn CPU/GPU
+  // re-rendering an invisible UI. They resume on visibilitychange.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      if (App._clockTimer) { clearTimeout(App._clockTimer); App._clockTimer = null; }
+    } else if (!App._clockTimer) {
+      App._clock();
+      App._clockTimer = setTimeout(clockTick, 1000 - (Date.now() % 1000));
+    }
+  });
+
+  // ---- Power resume / wake — reconnect the printer proactively ----------
+  // After a laptop sleep, hibernate, or power-off → power-on cycle, the
+  // Bluetooth GATT characteristic held in App.printer is stale: writes
+  // throw even though the printer is physically on.  The main process
+  // sends a 'pos:power:resume' event (from Electron's powerMonitor) a
+  // few seconds after wake — long enough for the BLE/USB adapter to
+  // re-enumerate.  Here we drop the dead handle and kick off a
+  // background reconnect so the NEXT sale prints without the cashier
+  // having to re-pair or see a "Printer not connected" toast mid-sale.
+  if (window.pos && window.pos.onPowerResume) {
+    window.pos.onPowerResume((_reason) => { App._handlePowerResume(); });
+  }
 });
+
+/** Reconnect the thermal printer after a wake/power-cycle.
+ *  Runs in the background (no modal) so it doesn't interrupt the cashier.
+ *  Shows a toast only if reconnection fails, nudging them to re-pair. */
+App._handlePowerResume = async function () {
+  // Drop any stale handle first — a dead GATT characteristic will keep
+  // reporting isConnected()=true but throw on every write.
+  App.printer._characteristic = null;
+  const s = App.settingsCache || {};
+  if (!s.printer_device_name) return; // nothing to reconnect (system printer has no GATT state)
+  const ok = await App.printer.reconnectWithRetry();
+  if (ok) {
+    App.ui.toast('Printer reconnected after wake ✓', 'ok');
+  } else if (s.printer_type !== 'system') {
+    // Only warn when there's no system-printer fallback to save the next sale.
+    App.ui.toast('Printer lost after wake — re-pair in Settings, or set Printer type to System printer', 'err');
+  }
+};
 
 App._start = async function () {
   // Load settings (currency symbol, printer config, etc.)
@@ -257,6 +310,21 @@ App._start = async function () {
     App.settingsCache = s;
     App.currencySymbol = s.currency_symbol || '₱';
   } catch { App.settingsCache = {}; }
+
+  // ---- Proactive printer reconnect on login -----------------------------
+  // On a fresh boot (laptop was powered off then on), the POS auto-starts
+  // and the cashier logs in — but the Bluetooth GATT link from the previous
+  // session is gone.  Kick off a background reconnect here (with retries)
+  // so the first sale of the day prints without a "not connected" error.
+  // No modal — just a toast if it can't reconnect and there's no fallback.
+  if (App.settingsCache && App.settingsCache.printer_device_name) {
+    App.printer.reconnectWithRetry().then((ok) => {
+      if (ok) App.ui.toast('Printer connected ✓', 'ok');
+      else if (App.settingsCache.printer_type !== 'system') {
+        App.ui.toast('Printer not connected — pair in Settings or set Printer type to System printer', 'err');
+      }
+    }).catch(() => {});
+  }
 
   const u = App.current.user;
   document.getElementById('navUser').textContent = u.full_name;
@@ -276,9 +344,14 @@ App._start = async function () {
   // configured in Settings), the app auto-logs out so an unattended POS
   // can't be used by someone else.
   if (!App._idleChecker) {
-    // Reset the idle timer on any user activity so the heartbeat carries
-    // a fresh "last activity" timestamp.
-    const resetActivity = () => { App._lastActivity = Date.now(); };
+    // Reset the idle timer on any user activity. mousemove is throttled to
+    // at most one write per 2s (the value is only read every 30s anyway),
+    // so a busy mouse no longer fires a JS callback hundreds of times/sec.
+    let lastActivityWrite = 0;
+    const resetActivity = () => {
+      const now = Date.now();
+      if (now - lastActivityWrite > 2000) { lastActivityWrite = now; App._lastActivity = now; }
+    };
     ['mousemove', 'keydown', 'click', 'touchstart', 'wheel'].forEach((ev) =>
       document.addEventListener(ev, resetActivity, { passive: true })
     );
@@ -288,6 +361,7 @@ App._start = async function () {
       // Only check when the app is visible (not on the login screen).
       const appEl = document.getElementById('app');
       if (!appEl || appEl.classList.contains('hidden')) return;
+      if (document.hidden) return; // tab/window minimized — don't burn CPU on heartbeat
       try {
         const res = await App.pos.heartbeat();
         if (res && res.alive === false) {
@@ -359,18 +433,40 @@ App._navigate = async function (name) {
   }
 };
 
+// Persistent clock nodes — rebuilt once, updated via textContent so the
+// per-second tick never forces a full innerHTML teardown/re-layout (the
+// Intl formatting is still done, but DOM mutation is minimal and avoids
+// triggering style/layout on sibling nodes).
+App._clockNodes = null;
 App._clock = function () {
   const el = document.getElementById('clock');
   if (!el) return;
   const now = new Date();
   const time = now.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'Asia/Manila' });
+  if (!App._clockNodes) {
+    // Build the structure once.
+    const t = document.createElement('span'); t.className = 'clk-time';
+    const d = document.createElement('span'); d.className = 'clk-date';
+    el.textContent = '';
+    el.appendChild(t); el.appendChild(document.createTextNode(' ')); el.appendChild(d);
+    App._clockNodes = { t, d };
+    App._clockDate = '';
+  }
+  // Only mutate the time node every tick.
+  if (App._clockNodes.t.textContent !== time) App._clockNodes.t.textContent = time;
+  // Date changes at most once per day — avoid touching the DOM otherwise.
   const date = now.toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: '2-digit', year: 'numeric', timeZone: 'Asia/Manila' });
-  el.innerHTML = `<span class="clk-time">${time}</span> <span class="clk-date">${date}</span>`;
+  if (App._clockDate !== date) { App._clockDate = date; App._clockNodes.d.textContent = date; }
 };
 
 App._net = async function () {
   const el = document.getElementById('netStatus');
   if (!el) return;
+  if (document.hidden) return; // window minimized — no repaint needed
+  // Skip the IPC round-trip when the app shell (topbar) is hidden on the
+  // login screen — the pill isn't visible, so no need to ping Telegram.
+  const appEl = document.getElementById('app');
+  if (appEl && appEl.classList.contains('hidden')) return;
   let online = false;
   try { online = await App.pos.telegram.isOnline(); } catch {}
   el.textContent = online ? '● Online' : '● Offline-ready';
@@ -405,6 +501,11 @@ App._applyStoredTheme = function () {
 App._loginNet = async function () {
   const el = document.getElementById('loginStatus');
   if (!el) return;
+  if (document.hidden) return; // window minimized — skip the IPC ping
+  // Skip when the login screen is hidden (user is already in the app) —
+  // the animated "checking" state isn't visible and we avoid the IPC ping.
+  const loginEl = document.getElementById('login');
+  if (loginEl && loginEl.classList.contains('hidden')) return;
   const checking = '<span class="dot checking"></span><span class="chk-txt">Checking connection<span class="chk-ellipsis"></span></span>';
   // Show the animated "checking" state while the reachability ping is in flight.
   el.innerHTML = checking;

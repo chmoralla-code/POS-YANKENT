@@ -70,20 +70,6 @@
     ]
   },
   {
-    "name": "LF Paint Brush 2\"",
-    "category": "Paint & Tools",
-    "baseUnit": "pc",
-    "stock": 0,
-    "price": 0,
-    "units": [
-      {
-        "unit": "pc",
-        "factor": 1,
-        "price": 0
-      }
-    ]
-  },
-  {
     "name": "LF Paint Brush 3 1/2\"",
     "category": "Paint & Tools",
     "baseUnit": "pc",
@@ -2478,20 +2464,6 @@
     ]
   },
   {
-    "name": "Marine Plywood 1/2 10mm",
-    "category": "Lumber & Boards",
-    "baseUnit": "shts",
-    "stock": 0,
-    "price": 0,
-    "units": [
-      {
-        "unit": "shts",
-        "factor": 1,
-        "price": 0
-      }
-    ]
-  },
-  {
     "name": "Def. Bar 10mm G-33 (2764)",
     "category": "G.I. & Steel",
     "baseUnit": "pcs",
@@ -2520,34 +2492,6 @@
     ]
   },
   {
-    "name": "Atlanta PVC Clean Out 4",
-    "category": "Plumbing",
-    "baseUnit": "pcs",
-    "stock": 0,
-    "price": 0,
-    "units": [
-      {
-        "unit": "pcs",
-        "factor": 1,
-        "price": 0
-      }
-    ]
-  },
-  {
-    "name": "RBI - PIPE 32 x 3 x 1.5mm",
-    "category": "Plumbing",
-    "baseUnit": "pcs",
-    "stock": 0,
-    "price": 0,
-    "units": [
-      {
-        "unit": "pcs",
-        "factor": 1,
-        "price": 0
-      }
-    ]
-  },
-  {
     "name": "Valuesil Brand Silicone - Clear",
     "category": "Adhesives & Sealants",
     "baseUnit": "tube",
@@ -2556,48 +2500,6 @@
     "units": [
       {
         "unit": "tube",
-        "factor": 1,
-        "price": 0
-      }
-    ]
-  },
-  {
-    "name": "C - purlins 2x3 1.2mm",
-    "category": "G.I. & Steel",
-    "baseUnit": "pcs",
-    "stock": 0,
-    "price": 0,
-    "units": [
-      {
-        "unit": "pcs",
-        "factor": 1,
-        "price": 0
-      }
-    ]
-  },
-  {
-    "name": "Angle Bar 1/8 x 1 2.0mm w/logo",
-    "category": "G.I. & Steel",
-    "baseUnit": "pcs",
-    "stock": 0,
-    "price": 0,
-    "units": [
-      {
-        "unit": "pcs",
-        "factor": 1,
-        "price": 0
-      }
-    ]
-  },
-  {
-    "name": "Mahuhay Portland - Pozzolan - CP7",
-    "category": "Cement & Aggregates",
-    "baseUnit": "bags",
-    "stock": 0,
-    "price": 0,
-    "units": [
-      {
-        "unit": "bags",
         "factor": 1,
         "price": 0
       }
@@ -2689,20 +2591,6 @@
   },
   {
     "name": "rerolled Steel bar 7mm 2-Ok",
-    "category": "Steel Bars",
-    "baseUnit": "pcs",
-    "stock": 0,
-    "price": 0,
-    "units": [
-      {
-        "unit": "pcs",
-        "factor": 1,
-        "price": 0
-      }
-    ]
-  },
-  {
-    "name": "Def-bar 16mm G-33",
     "category": "Steel Bars",
     "baseUnit": "pcs",
     "stock": 0,
@@ -3178,20 +3066,6 @@
     ]
   },
   {
-    "name": "G.I. elbow 1/2",
-    "category": "Plumbing",
-    "baseUnit": "pcs",
-    "stock": 0,
-    "price": 0,
-    "units": [
-      {
-        "unit": "pcs",
-        "factor": 1,
-        "price": 0
-      }
-    ]
-  },
-  {
     "name": "Tombo Teflon 1/2",
     "category": "Adhesives & Sealants",
     "baseUnit": "pcs",
@@ -3424,6 +3298,9148 @@
     "units": [
       {
         "unit": "pcs",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Durarib 1070 GI Beige UGC 0.40 x 1.220 AN",
+    "category": "G.I. & Steel",
+    "baseUnit": "linear meter",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "linear meter",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Durarib 1070 GI Gray Charcoal 0.40 x 1.220 AN",
+    "category": "G.I. & Steel",
+    "baseUnit": "linear meter",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "linear meter",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Durarib 1070 GI Brown UGC 0.40 x 1.220 AN / 5.60m",
+    "category": "G.I. & Steel",
+    "baseUnit": "5.60m",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "5.60m",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Durarib 1070 GI Brown UGC 0.40 x 1.220 AN / 4.00m",
+    "category": "G.I. & Steel",
+    "baseUnit": "4.00m",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "4.00m",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Spandrel MS GI Cream Oakwood 0.40 x 0.229 AN / 6.60m",
+    "category": "G.I. & Steel",
+    "baseUnit": "6.60m",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "6.60m",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Spandrel MS Perf GI Cream Oakwood 0.40 x 0.229 AN",
+    "category": "G.I. & Steel",
+    "baseUnit": "6.60m",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "6.60m",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Plain Sheets GI Cream Oakwood 0.40 x 1.220 AN / 2.44m",
+    "category": "G.I. & Steel",
+    "baseUnit": "sheet",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "sheet",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Plain Sheets GI White UGC 0.40 x 1.220 AN / 2.44m",
+    "category": "G.I. & Steel",
+    "baseUnit": "sheet",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "sheet",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Welding Handle",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Pozzolan Cement",
+    "category": "Cement & Aggregates",
+    "baseUnit": "bag",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "bag",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Hollow Blocks",
+    "category": "Cement & Aggregates",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Plywood 1/4",
+    "category": "Lumber & Boards",
+    "baseUnit": "sheet",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "sheet",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Hardiflex 3/16",
+    "category": "Lumber & Boards",
+    "baseUnit": "sheet",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "sheet",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Common Nails #2",
+    "category": "Fasteners",
+    "baseUnit": "kg",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "kg",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Durarib 1070 GI Brown UGC 0.40 x 1.220 AN / 6.25m",
+    "category": "G.I. & Steel",
+    "baseUnit": "6.25m",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "6.25m",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Durarib 1070 GI Brown UGC 0.40 x 1.220 AN / 4.30m",
+    "category": "G.I. & Steel",
+    "baseUnit": "4.30m",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "4.30m",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Durarib 1070 GI Brown UGC 0.40 x 1.220 AN / 4.80m",
+    "category": "G.I. & Steel",
+    "baseUnit": "4.80m",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "4.80m",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Durarib 1070 GI Brown UGC 0.40 x 1.220 AN / 7.80m",
+    "category": "G.I. & Steel",
+    "baseUnit": "7.80m",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "7.80m",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Durarib 1070 GI Brown UGC 0.40 x 1.220 AN / 9.90m",
+    "category": "G.I. & Steel",
+    "baseUnit": "9.90m",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "9.90m",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Durarib 1070 GI Blue UGC 0.40 x 1.220 AN / 4.30m",
+    "category": "G.I. & Steel",
+    "baseUnit": "4.30m",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "4.30m",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Durarib 1070 GI Blue UGC 0.40 x 1.220 AN / 3.40m",
+    "category": "G.I. & Steel",
+    "baseUnit": "3.40m",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "3.40m",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Durarib 1070 GI Beige UGC 0.40 x 1.220 AN / 3.00m",
+    "category": "G.I. & Steel",
+    "baseUnit": "3.00m",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "3.00m",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Durarib 1070 GI Gray Charcoal 0.40 x 1.220 AN / 3.70m",
+    "category": "G.I. & Steel",
+    "baseUnit": "3.70m",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "3.70m",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Durarib 1070 GI Gray Charcoal 0.40 x 1.220 AN / 2.44m",
+    "category": "G.I. & Steel",
+    "baseUnit": "2.44m",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "2.44m",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Durarib 1070 GI Gray Charcoal 0.40 x 1.220 AN / 3.66m",
+    "category": "G.I. & Steel",
+    "baseUnit": "3.66m",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "3.66m",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Plain Sheets GI Blue UGC 0.40 x 1.220 AN / 2.44m",
+    "category": "G.I. & Steel",
+    "baseUnit": "sheet",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "sheet",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Plain Sheets GI Brown UGC 0.40 x 1.220 AN / 2.44m",
+    "category": "G.I. & Steel",
+    "baseUnit": "sheet",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "sheet",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Durarib 1070 GI Green UGC 0.40 x 1.220 AN / 6.80m",
+    "category": "G.I. & Steel",
+    "baseUnit": "6.80m",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "6.80m",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Durarib 1070 GI Green UGC 0.40 x 1.220 AN / 6.00m",
+    "category": "G.I. & Steel",
+    "baseUnit": "6.00m",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "6.00m",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Corrugated 1100 GI White UGC 0.50 x 1.220 AN / 9.60m",
+    "category": "G.I. & Steel",
+    "baseUnit": "9.60m",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "9.60m",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Corrugated 1100 GI White UGC 0.50 x 1.220 AN / 8.00m",
+    "category": "G.I. & Steel",
+    "baseUnit": "8.00m",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "8.00m",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Plain Sheets GI Green UGC 0.40 x 1.220 AN / 2.44m",
+    "category": "G.I. & Steel",
+    "baseUnit": "sheet",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "sheet",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Plain Sheets GI Gray UGC 0.40 x 1.220 AN / 2.44m",
+    "category": "G.I. & Steel",
+    "baseUnit": "sheet",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "sheet",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "MORTASEAL Waterproofing SGray",
+    "category": "Adhesives & Sealants",
+    "baseUnit": "bag",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "bag",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "EZBOND Tile Adhesive 25kg",
+    "category": "Adhesives & Sealants",
+    "baseUnit": "25kg bag",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "25kg bag",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "RAINBOW Tile Grout White 2kgs",
+    "category": "Adhesives & Sealants",
+    "baseUnit": "2kg pack",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "2kg pack",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Durarib 1070 GI Gray Charcoal 0.40 x 1.220 AN / 5.20m",
+    "category": "G.I. & Steel",
+    "baseUnit": "5.20m",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "5.20m",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Durarib 1070 GI Gray Charcoal 0.40 x 1.220 AN / 6.00m",
+    "category": "G.I. & Steel",
+    "baseUnit": "6.00m",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "6.00m",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Durarib 1070 GI Gray Charcoal 0.40 x 1.220 AN / 7.50m",
+    "category": "G.I. & Steel",
+    "baseUnit": "7.50m",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "7.50m",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Durarib 1070 GI Gray Charcoal 0.40 x 1.220 AN / 8.15m",
+    "category": "G.I. & Steel",
+    "baseUnit": "8.15m",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "8.15m",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Durarib 1070 GI Gray Charcoal 0.40 x 1.220 AN / 0.80m",
+    "category": "G.I. & Steel",
+    "baseUnit": "0.80m",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "0.80m",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Durarib 1070 GI Gray Charcoal 0.40 x 1.220 AN / 5.00m",
+    "category": "G.I. & Steel",
+    "baseUnit": "5.00m",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "5.00m",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Durarib 1070 GI Green UGC 0.40 x 1.220 AN / 4.00m",
+    "category": "G.I. & Steel",
+    "baseUnit": "4.00m",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "4.00m",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Durarib 1070 GI Brown UGC 0.40 x 1.220 AN / 3.60m",
+    "category": "G.I. & Steel",
+    "baseUnit": "3.60m",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "3.60m",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Durarib 1070 GI Brown UGC 0.40 x 1.220 AN / 5.20m",
+    "category": "G.I. & Steel",
+    "baseUnit": "5.20m",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "5.20m",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Durarib 1070 GI Brown UGC 0.40 x 1.220 AN / 7.50m",
+    "category": "G.I. & Steel",
+    "baseUnit": "7.50m",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "7.50m",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Plain Sheets GI Gray Charcoal 0.40 x 1.220 AN / 2.44m",
+    "category": "G.I. & Steel",
+    "baseUnit": "sheet",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "sheet",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Plano two gang outlet Set- Dark Wood",
+    "category": "Electrical",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Plano two gang switch Set- Dark Wood",
+    "category": "Electrical",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Plano one gang switch Set- Dark Gray",
+    "category": "Electrical",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Plano two gang switch Set- Dark Gray",
+    "category": "Electrical",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU 3 Gang Universal Convenience Outlet",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU 4 Gang Universal Convenience Outlet",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Royu PVC Electrical Tape Black-8m",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Square Box GA18",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Royu Square Box with Cover and Screw",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU 3 Gang Extension Cords, BLACK, 5M",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU WD 1-Gang Outlet",
+    "category": "Electrical",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU WD 2-Gang Outlet",
+    "category": "Electrical",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU WD 3-Gang Outlet",
+    "category": "Electrical",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU 2 + 1 Gang Flat Pin Outlet",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU 3 + 1 Gang Flat Pin Outlet",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Swing Type Adapter",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU WD 1-Gang Switch",
+    "category": "Electrical",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU WD 1-Gang 3-Way Switch",
+    "category": "Electrical",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU WD 2-Gang Switch",
+    "category": "Electrical",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU WD 3-Gang Switch",
+    "category": "Electrical",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU WD Duplex Outlet",
+    "category": "Electrical",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU Ordinary Utility Box Orange",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU Surface Utility Box White",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Royu PVC Electrical Tape Black-4m",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Royu PVC Electrical Tape Black-16m",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Firefly LED Bulb 5W DL E27",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Firefly LED Bulb 7W DL E27",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Firefly LED Bulb 9W DL E27",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Firefly LED Bulb 11W DL E27",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Firefly LED Bulb 13W DL E27",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Firefly LED Bulb 15W DL E27",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Firefly LED Bulb 18W DL E27",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Firefly LED Bulb 20W DL E27",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Eco-Lum LED Bulb 5W DL E27",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Eco-Lum LED Bulb 7W DL E27",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Eco-Lum LED Bulb 9W DL E27",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Eco-Lum LED Bulb 11W DL E27",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Eco-Lum LED Bulb 13W DL E27",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Eco-Lum LED Bulb 15W DL E27",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Eco-Lum LED Bulb 18W DL E27",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Eco-Lum LED Bulb 20W DL E27",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Receptacle White E27 2 1/4\"",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Receptacle White E27 4 1/4\"",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Cylindrical Knob set Round Design SS-Entrance",
+    "category": "Miscellaneous",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Tubular Knob set Round Design SS-Entrance",
+    "category": "Miscellaneous",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Laminated padlock, brass cylinder 40mm",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Stainless steel hinge 3.0x3.0x2.5mm, 201 stainless, 2 Ball Bearing",
+    "category": "Fasteners",
+    "baseUnit": "pair",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pair",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "HERKS Chipboard Screw 6x38",
+    "category": "Fasteners",
+    "baseUnit": "box",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "box",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "HERKS Wood Screw MM",
+    "category": "Fasteners",
+    "baseUnit": "box",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "box",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "1.25mm2 AWG Flat cord BLACK 150M",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "1.25mm2 AWG Flat cord WHITE 150M",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "2.0mm2 AWG Flat cord BLACK 150M",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "2.0mm2 AWG Flat cord WHITE 150M",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "2.0mm2 AWG THHN Stranded Wire (Black/White/Red/Blue/Yellow/Green) 150M",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "3.5mm2 AWG THHN Stranded Wire (Black/White/Red/Blue/Yellow/Green) 150M",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "5.5mm2 AWG THHN Stranded Wire (Black/White/Red/Blue/Yellow/Green) 150M",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "8.0mm2 AWG THHN Stranded Wire (Black/White/Red/Blue/Yellow/Green) 100M",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "14.0mm2 AWG THHN Stranded Wire (Black/White/Red/Blue/Yellow/Green) 100M",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Mason Drill Bit 3/16",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Mason Drill Bit 1/4",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Mason Drill Bit 5/32",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Sahara Waterproof Cement",
+    "category": "Cement & Aggregates",
+    "baseUnit": "ctn",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "ctn",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Seiko Electrode Holder 300",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Seiko Electrode Holder 500",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Dormer Drill Bit U.S. 1/4",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Standard Loosepin 3-1/2x3-1/2",
+    "category": "Fasteners",
+    "baseUnit": "pair",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pair",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Plumb Bob China 250G",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Plumb Bob China 300G",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Dog Chain w/ Collar Small",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Dog Chain w/ Collar Medium",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Dog Chain w/ Collar Large",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Shelf Bracket China 4x5",
+    "category": "G.I. & Steel",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Shelf Bracket China 5x6",
+    "category": "G.I. & Steel",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Shelf Bracket China 6x8",
+    "category": "G.I. & Steel",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Shelf Bracket China 8x10",
+    "category": "G.I. & Steel",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Shelf Bracket China 10x12",
+    "category": "G.I. & Steel",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "El Toro Cement Trowel 6\"",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "El Toro Cement Trowel 7\"",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "BNY Concealed Hinges Hydra",
+    "category": "Fasteners",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Shoe Tacks China 1/2",
+    "category": "Fasteners",
+    "baseUnit": "box",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "box",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Shoe Tacks China 5/8",
+    "category": "Fasteners",
+    "baseUnit": "box",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "box",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Shoe Tacks China 3/4",
+    "category": "Fasteners",
+    "baseUnit": "box",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "box",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Woken Hedge Shear 22\"",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Wokin TCT Saw Blade 185 MMx2",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "No More Nails PPBG100G x 30",
+    "category": "Adhesives & Sealants",
+    "baseUnit": "case",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "case",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "No More Nails PPBG30G x 30",
+    "category": "Adhesives & Sealants",
+    "baseUnit": "case",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "case",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Honda Oil OF",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Honda Oil 1L",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Adhesive green house",
+    "category": "Adhesives & Sealants",
+    "baseUnit": "bag",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "bag",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Alumi screen 3ft",
+    "category": "G.I. & Steel",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Alumi screen 4ft",
+    "category": "G.I. & Steel",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Arm electrical Tape 16m",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Arm electrical Tape 4m",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Armstrong cutting disc",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Armstrong nail 1 1/2\"",
+    "category": "Fasteners",
+    "baseUnit": "box",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "box",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Armstrong nail 1\"",
+    "category": "Fasteners",
+    "baseUnit": "box",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "box",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Armstrong pvc faucet",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Armstrong Ting nail 1 1/2\"",
+    "category": "Fasteners",
+    "baseUnit": "box",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "box",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Armstrong Ting nail 1\"",
+    "category": "Fasteners",
+    "baseUnit": "box",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "box",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Barbed wire big",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Barbed wire small",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Barrel bolt 2\"",
+    "category": "Fasteners",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Barrel bolt 3\"",
+    "category": "Fasteners",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Barrel bolt 4\"",
+    "category": "Fasteners",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Battery clamp",
+    "category": "Electrical",
+    "baseUnit": "pair",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pair",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Black screw metal 1 1/2\"",
+    "category": "Fasteners",
+    "baseUnit": "box",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "box",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Black screw metal 1 1/2\" (500p)",
+    "category": "Fasteners",
+    "baseUnit": "box",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "box",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Blade",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Blind rivet 1/8\" x 1/2\"",
+    "category": "Fasteners",
+    "baseUnit": "box",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "box",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Blind rivet 1/8\" x 3/4\"",
+    "category": "Fasteners",
+    "baseUnit": "box",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "box",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Blind rivet 3/16\" x 3/4\"",
+    "category": "Fasteners",
+    "baseUnit": "box",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "box",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Blind rivet 5/32\" x 1/2\"",
+    "category": "Fasteners",
+    "baseUnit": "box",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "box",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Bowl big",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Bowl big white",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Bowl small",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Bowl white",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Buffing stone gray",
+    "category": "Adhesives & Sealants",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Buffing stone red",
+    "category": "Adhesives & Sealants",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Cable tie 3 x 200",
+    "category": "Electrical",
+    "baseUnit": "pack",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pack",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Cable tie 3 x 300",
+    "category": "Electrical",
+    "baseUnit": "pack",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pack",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Cable tie 4 x 400",
+    "category": "Electrical",
+    "baseUnit": "pack",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pack",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Concrete nail",
+    "category": "Fasteners",
+    "baseUnit": "ctn",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "ctn",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Concrete nail 1 1/2\" Armstrong",
+    "category": "Fasteners",
+    "baseUnit": "kls",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "kls",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Concrete nail 4\"",
+    "category": "Fasteners",
+    "baseUnit": "ctn",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "ctn",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Coupling 1/2\"",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Cup hook white 1 1/4\"",
+    "category": "Fasteners",
+    "baseUnit": "pack",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pack",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Cup hook white 7/8\"",
+    "category": "Fasteners",
+    "baseUnit": "pack",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pack",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Cut-off blade 14\"",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CW Nail 2 1/2\"",
+    "category": "Fasteners",
+    "baseUnit": "ctn",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "ctn",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CW Nail 2\"",
+    "category": "Fasteners",
+    "baseUnit": "ctn",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "ctn",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CW Nail 3\"",
+    "category": "Fasteners",
+    "baseUnit": "ctn",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "ctn",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CW Nail 4\"",
+    "category": "Fasteners",
+    "baseUnit": "ctn",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "ctn",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Cyclone wire #2 x 4ft",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Cyclone wire 2 x 5ft",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Cyclone wire 2 x 6ft",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Cylindrical hinge 1\"",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Cylindrical hinge 3/4\"",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Cylindrical hinge 5/8\"",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Cylindrical hinge 80x16",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Dog chain 4.5",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Door jamb 2x4",
+    "category": "Miscellaneous",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Door jamb 2x6x90",
+    "category": "Miscellaneous",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Door wood 70",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Door wood 80",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Door wood 90",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Duplex wire #16",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Dyna bolt 5/16\"",
+    "category": "Fasteners",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ELQ door lock",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Finishing nail 2\"",
+    "category": "Fasteners",
+    "baseUnit": "ctn",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "ctn",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Floor mat baga",
+    "category": "Paint & Tools",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Floor mat baga (27m)",
+    "category": "Paint & Tools",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Floor mat Foam",
+    "category": "Paint & Tools",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Foam insulation 10mm (single)",
+    "category": "Miscellaneous",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Foam insulation 3mm (double)",
+    "category": "Miscellaneous",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Fuji rod #12",
+    "category": "Adhesives & Sealants",
+    "baseUnit": "ctn",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "ctn",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Fuji rod #12 (20kl)",
+    "category": "Adhesives & Sealants",
+    "baseUnit": "ctn",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "ctn",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Garden hose 1/2\"",
+    "category": "Paint & Tools",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "GI faucet w/ lock",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "GI nipple 1/2\"x2\"",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "GI nipple 1/2\"x4\"",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "GI plug 1/2\"",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "GI screen #16 1/2\" x 4ft",
+    "category": "G.I. & Steel",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "GI screen 1\" x 4 (30m)",
+    "category": "G.I. & Steel",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "GI screen 1/2\" x 4 (90m)",
+    "category": "G.I. & Steel",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "GI screen 1/8\" x 4 (30m)",
+    "category": "G.I. & Steel",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "GI screen baga 1 x 4ft",
+    "category": "G.I. & Steel",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "GI screen green 1/2\" x 4",
+    "category": "G.I. & Steel",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Gloves rubber",
+    "category": "G.I. & Steel",
+    "baseUnit": "pair",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pair",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Golden dragon door lock #88",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Grinding wheel",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Hammer orange",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Hardi nail",
+    "category": "Fasteners",
+    "baseUnit": "ctn",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "ctn",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Hardi screw 3/4\"",
+    "category": "Fasteners",
+    "baseUnit": "box",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "box",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Hinge 2 1/2\"",
+    "category": "Miscellaneous",
+    "baseUnit": "pair",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pair",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Hinge 2\"",
+    "category": "Miscellaneous",
+    "baseUnit": "pair",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pair",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Hinge 3\"",
+    "category": "Miscellaneous",
+    "baseUnit": "pair",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pair",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Hinges 1 1/2\"",
+    "category": "Miscellaneous",
+    "baseUnit": "doz",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "doz",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Irwin diamond cutter",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Irwin Drill bit 11mm",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Irwin Drill bit 13mm",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Irwin Drill bit 4mm",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Irwin Drill bit 5mm",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Irwin Drill bit 6mm",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Irwin Drill bit 8mm",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Jackson holder 300A",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Kwikset",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Lavatory faucet",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Level bar 30cm",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Level bar 60cm",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Level bar 80cm",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Makita diamond cutter",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Neltex 100cc",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Neltex 200cc",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Neltex 400cc",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Nylon (general)",
+    "category": "Miscellaneous",
+    "baseUnit": "kls",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "kls",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Nylon 300",
+    "category": "Miscellaneous",
+    "baseUnit": "kls",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "kls",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Nylon 300mm",
+    "category": "Miscellaneous",
+    "baseUnit": "kls",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "kls",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Nylon small",
+    "category": "Miscellaneous",
+    "baseUnit": "kls",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "kls",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "P.E pipe sdr-9 1/2\" 300m",
+    "category": "Plumbing",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "P.E saddle clamp 2 x 1/2\"",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Packing tape",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Padlock 30mm L",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Padlock 40mm L",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Padlock 40mm S",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Padlock 50mm L",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "PDX wire #12 (75m)",
+    "category": "Electrical",
+    "baseUnit": "box",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "box",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "PE coupling 1/2\"",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "PE elbow 1/2\"",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "PE Tee 1/2\"",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Plug 1/2\"",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Putty knife 4\"",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "PVC door 190 x 4",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "PVC door 210 x 4",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "PVC door 3\"",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "PVC elbow 2x90",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "PVC hose coupling 1/2\"",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "PVC Pipe 2\"",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "PVC Pipe 3\"",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "PVC Pipe 4\"",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "PVC Y 4x4",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "SandFlex blade",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Screw bit",
+    "category": "Fasteners",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Screw driver 4\"",
+    "category": "Fasteners",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Sealant (red box)",
+    "category": "Adhesives & Sealants",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Sealant black red",
+    "category": "Adhesives & Sealants",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Sealant clear blue",
+    "category": "Adhesives & Sealants",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Sealant white blue",
+    "category": "Adhesives & Sealants",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Shelf bracket 10x12",
+    "category": "Miscellaneous",
+    "baseUnit": "box",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "box",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Shelf bracket 12x14",
+    "category": "Miscellaneous",
+    "baseUnit": "box",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "box",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Shelf bracket 5x6",
+    "category": "Miscellaneous",
+    "baseUnit": "box",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "box",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Shelf bracket 6x8",
+    "category": "Miscellaneous",
+    "baseUnit": "box",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "box",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Shovel metal",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Shovel wood",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Shuta THHN wire #12",
+    "category": "Electrical",
+    "baseUnit": "box",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "box",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Shuta THHN wire #14",
+    "category": "Electrical",
+    "baseUnit": "box",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "box",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Silicone sealant (blue box)",
+    "category": "Adhesives & Sealants",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Silicone sealant (red box)",
+    "category": "Adhesives & Sealants",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Sink #823 R",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Solignum Liter",
+    "category": "Adhesives & Sealants",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "St. Elbow 1/2\"",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Stanley hinge 3x3",
+    "category": "Miscellaneous",
+    "baseUnit": "pair",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pair",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Stanley hinge 4x4",
+    "category": "Miscellaneous",
+    "baseUnit": "pair",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pair",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Staple wire #1",
+    "category": "Fasteners",
+    "baseUnit": "ctn",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "ctn",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Tailin cutting disc",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Teflon 1/2\"",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Tex screw adaptor",
+    "category": "Fasteners",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Tex screw metal 2 1/2\"",
+    "category": "Fasteners",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Tex screw metal 2\" (3000pcs)",
+    "category": "Fasteners",
+    "baseUnit": "ctn",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "ctn",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Tex screw wood 2 1/2\"",
+    "category": "Fasteners",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Tex screw wood 2\"",
+    "category": "Fasteners",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Tie wire #16",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Tie wire #16 (30k)",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Tombo teflon 1\"",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Trapal",
+    "category": "Paint & Tools",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Trapal (100m)",
+    "category": "Paint & Tools",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Twine 1kg",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Twine 300g",
+    "category": "Paint & Tools",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Vulca seal 1/4",
+    "category": "Adhesives & Sealants",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Welding rod 3/32\"",
+    "category": "Adhesives & Sealants",
+    "baseUnit": "ctn",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "ctn",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Wellhope pvc faucet",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Mabuhay Pozzolan Cement",
+    "category": "Cement & Aggregates",
+    "baseUnit": "sack",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "sack",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "APO Portland Cement Type 1",
+    "category": "Cement & Aggregates",
+    "baseUnit": "sack",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "sack",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "APO Premium Cement",
+    "category": "Cement & Aggregates",
+    "baseUnit": "sack",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "sack",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Cement Hay",
+    "category": "Cement & Aggregates",
+    "baseUnit": "bag",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "bag",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "11kg Prycegas LPG",
+    "category": "Miscellaneous",
+    "baseUnit": "cylinder",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "cylinder",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Nature's Spring Water 500ml",
+    "category": "Miscellaneous",
+    "baseUnit": "bottle",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "bottle",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Nature's Spring Water 1 Liter",
+    "category": "Miscellaneous",
+    "baseUnit": "bottle",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "bottle",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Wood Gypsum Screw",
+    "category": "Fasteners",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Gypsum Screw 1\"",
+    "category": "Fasteners",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Atlanta Elbow 2x90",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "GI Rect. Tube 1 x 1/2 Premium",
+    "category": "G.I. & Steel",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "APO Portland Tube 2.0mm",
+    "category": "G.I. & Steel",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Channel Bar 2x16 Gold",
+    "category": "Steel Bars",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Mason Line",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Thinner",
+    "category": "Adhesives & Sealants",
+    "baseUnit": "gal",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "gal",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Steel Nails 10mm",
+    "category": "Fasteners",
+    "baseUnit": "kls",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "kls",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Steel Matting 4x8 9.5mm",
+    "category": "G.I. & Steel",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "10mm Deformed Bar",
+    "category": "Steel Bars",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "9mm Deformed Bar",
+    "category": "Steel Bars",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Yale",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Annealed Thimble",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Pioneer Marine Epoxy",
+    "category": "Adhesives & Sealants",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Thalo Blue (paint)",
+    "category": "Paint",
+    "baseUnit": "bottle",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "bottle",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Thalo Green (paint)",
+    "category": "Paint",
+    "baseUnit": "bottle",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "bottle",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Venetian Red (paint)",
+    "category": "Paint",
+    "baseUnit": "bottle",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "bottle",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Bisagra Small",
+    "category": "Fasteners",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Sanitary Elbow 2\" x 90",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Sanitary Elbow 3\" x 90",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Sanitary Elbow 4\" x 90",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Sanitary Elbow 2\" x 45",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Sanitary Elbow 3\" x 45",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Sanitary Elbow 4\" x 45",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Sanitary Pipe 2\" S-600",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Sanitary Pipe 3\" S-600",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Sanitary Pipe 4\" S-600",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Sanitary Pipe 4\" S-1000",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Electrical Conduit Pipe Thickwall 20mm",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Electrical Conduit Pipe Thickwall 32mm",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Electrical Conduit Pipe Thinwall 20mm",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Potable Water Pipe PNS65 20mm",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Poly Flexible Corr. Pipe 20mm 100MTR",
+    "category": "Plumbing",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Flex Connector 1/2\" 20mm",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Pipe Clamp 1/2\"",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Junction Box (RJBN)",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Junction Box Cover (RJBC)",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "P-Trap w/ Rubber Seal 2\"",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "P-Trap w/ Rubber Seal 4\"",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "TEE 3x3",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "TEE 4x4",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Tee Reducer 4x2",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Clean Out w/ O-ring 4\"",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Wye 4x2",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Steel Tape 3mtr",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Steel Tape 5mtr",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Putty Knife w/out Handle 4\"",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU 4+1 Gang Flat Pin Outlet",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU 3 Gang Flat Pin Outlet",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU Junction Box Orange W/O Cover",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU PVC Plate Cover",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU Regular 10A",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU Snap Switch",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU Universal Adapter",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU Safety Breaker 15A",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU Safety Breaker 20A",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU Safety Breaker 30A",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU Safety Breaker 40A",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU Safety Breaker 60A",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU Mini Circuit Breaker 20A",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU Mini Circuit Breaker 30A",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU Mini Circuit Breaker 40A",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU 4-Gang Extension Cord Black",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU 3 Universal Convenience Outlet",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU WH 3 Gang Switch LED",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Nano 1-Gang Switch Set Dark Gray",
+    "category": "Electrical",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Nano 2-Gang Switch Set Dark Gray",
+    "category": "Electrical",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Nano 3-Gang Switch Set Dark Gray",
+    "category": "Electrical",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Piano 2-Gang Switch Set Dark Wood",
+    "category": "Electrical",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Piano 1-Gang Switch Set Dark Wood",
+    "category": "Electrical",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Piano 3-Gang Switch Set Dark Wood",
+    "category": "Electrical",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Nano 2-Gang Outlet Set Dark Gray",
+    "category": "Electrical",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Piano 3-Gang Outlet Set Gray",
+    "category": "Electrical",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "3.5mm2 #12 AWG THHN Stranded Red 150M",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "3.5mm2 #12 AWG THHN Stranded Black 150M",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "2.0mm2 #14 AWG THHN Stranded Black 150M",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "2.0mm2 #14 AWG THHN Stranded Red 150M",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "5.5mm2 #10 AWG THHN Stranded Black 150M",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "5.5mm2 #10 AWG THHN Stranded White 150M",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "8.0mm2 8/7 THHN Stranded Black 100M",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "2.0mm2 #12 ROYU Solid White 75M",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "0.75mm2 Flat Cord BLACK",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Firefly LED Bulb 3W DL E27",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Firefly LED Bulb 3W WW E27",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Firefly LED Bulb 5W WW E27",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Firefly LED Bulb 7W WW E27",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Firefly LED Bulb 9W WW E27",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "FF Basic LED Bulb 20W DL E27",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Ecolum LED Bulb 3W DL E27",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "PVC Sanitary Coupling 4\"",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "PVC Water 90 Elbow 32mm",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "PVC Sanitary Wye 4x4",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "SS-EN Cylindrical Knob Round Design",
+    "category": "Miscellaneous",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "SS-Entrance Knob Set Round Design",
+    "category": "Miscellaneous",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Soft-Closing Hydraulic Concealed Hinges",
+    "category": "Miscellaneous",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Drawer Guide Soft Closing BLK 45mm 14\"",
+    "category": "Miscellaneous",
+    "baseUnit": "pair",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pair",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Drawer Guide Soft Closing BLK 45mm 16\"",
+    "category": "Miscellaneous",
+    "baseUnit": "pair",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pair",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART Screwdriver Chrome Vanadium 12pcs",
+    "category": "Paint & Tools",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART Cement w/ Rubber",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART Eye-Way Screw 6pcs",
+    "category": "Fasteners",
+    "baseUnit": "pack",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pack",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART 75mm Cement w/ Rubber",
+    "category": "Paint & Tools",
+    "baseUnit": "pack",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pack",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART Measuring Tape 7.5m",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART Measuring Tape 3m",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART Heavy Duty 3-Way Staple Gun 4-14mm",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART Staples 11.2x8x1.2mm",
+    "category": "Fasteners",
+    "baseUnit": "box",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "box",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART HSS Twist Drill Bit 5/32",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART HSS Twist Drill Bit 1/8",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART Sand Paper Water Proofing",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART Paint Brush Blue Handle 1\"",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART Paint Brush Blue Handle 1.5\"",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART Paint Brush Blue Handle 2\"",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART Aviation Snips C-RV Left/Right",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART Compact Hand Riveter",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART Diagonal Cutting Plier 7\"",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART Combination Pliers 175mm",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART Utility Cutter",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART Magnetic Nut Setters 8mm",
+    "category": "Fasteners",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART Steel Tex Screw 200pcs",
+    "category": "Fasteners",
+    "baseUnit": "box",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "box",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "BULL 2P Circuit Breaker 16A",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "BULL 2P Circuit Breaker 20A",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "BULL Heavy-Duty Plug",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "BULL Black Electrical Tape 17mm",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "BULL GONEO 1-Gang 1-Way Switch Set White",
+    "category": "Electrical",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "BULL 3-Outlet Power Connector 3m",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "BULL 5-Outlet Power Connector 3m",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "BULL Extension Cord 5M",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "BULL Lampe Holder",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA Panel Box 13-Module w/ Busbar",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA Panel Box 18-Module w/ Busbar",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA Barrel Jolly Stainless w/ Hasps 4\"",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA Cable Tie",
+    "category": "Electrical",
+    "baseUnit": "pack",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pack",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA Lockset Polish Brass",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA Lockset Antique Brass",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA Stainless Steel Drawer Slide",
+    "category": "Miscellaneous",
+    "baseUnit": "pair",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pair",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA Loose Pin Hinges 3\"",
+    "category": "Fasteners",
+    "baseUnit": "pair",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pair",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA Hydraulic Concealed Hinges",
+    "category": "Fasteners",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA Shower Valve Blister Pack",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA Bidet Shower White",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA Solid Kitchen Faucet Lever Handle",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA Gooseneck Kitchen Faucet Metal Handle",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA Flexible Hose Stainless 1/2\"x1/2\"",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Marine Plywood 1/4 x 5mm",
+    "category": "Lumber & Boards",
+    "baseUnit": "sheet",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "sheet",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Mabuhay Premium Cement",
+    "category": "Cement & Aggregates",
+    "baseUnit": "sack",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "sack",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "11kg LPG Refill",
+    "category": "Miscellaneous",
+    "baseUnit": "cylinder",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "cylinder",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "P-GAS 11kg LPG",
+    "category": "Miscellaneous",
+    "baseUnit": "cylinder",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "cylinder",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Pamo Gas 11kg",
+    "category": "Miscellaneous",
+    "baseUnit": "cylinder",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "cylinder",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Honda Oil 0.8L",
+    "category": "Miscellaneous",
+    "baseUnit": "bottle",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "bottle",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Delo Gold 1L",
+    "category": "Miscellaneous",
+    "baseUnit": "bottle",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "bottle",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Delo Gold 4L",
+    "category": "Miscellaneous",
+    "baseUnit": "container",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "container",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Prestone Brake Fluid 900mL",
+    "category": "Miscellaneous",
+    "baseUnit": "bottle",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "bottle",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Prestone Brake Fluid 500mL",
+    "category": "Miscellaneous",
+    "baseUnit": "bottle",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "bottle",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Prestone Brake Fluid 400mL",
+    "category": "Miscellaneous",
+    "baseUnit": "bottle",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "bottle",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Havoline Gold 1L",
+    "category": "Miscellaneous",
+    "baseUnit": "bottle",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "bottle",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Havoline Oil 0.8L",
+    "category": "Miscellaneous",
+    "baseUnit": "bottle",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "bottle",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "2T Oil Havoline",
+    "category": "Miscellaneous",
+    "baseUnit": "bottle",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "bottle",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "2T PB 24 x 1L",
+    "category": "Miscellaneous",
+    "baseUnit": "case",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "case",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "2T Powerburn 60 x 200mL",
+    "category": "Miscellaneous",
+    "baseUnit": "case",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "case",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "RC Cola 24 x 1L",
+    "category": "Miscellaneous",
+    "baseUnit": "case",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "case",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "US1 Big",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "US1 Small",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Gloves",
+    "category": "Miscellaneous",
+    "baseUnit": "pair",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pair",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Hydraulic Cylinder",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Ambut 32mm",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Brass Gate Valve 3\"",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Lumber 2x3x8",
+    "category": "Lumber & Boards",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Lumber 2x3x10",
+    "category": "Lumber & Boards",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Lumber 2x2x8",
+    "category": "Lumber & Boards",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART A0082 Ultra Thin Turbo Blade 105x1.2mm",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART A0100-1/4 HSS Twist Drill Bit 1/4",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART A0100-3/16 HSS Twist Drill Bit 3/16",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART A0100-3/8 HSS Twist Drill Bit 3/8",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART A0100-11/64 HSS Straight Shank Twist Drill Bit",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART A0188-1 High Carbon Steel Wood Chisel 1\"",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART A0188-1/2 High Carbon Steel Wood Chisel 1/2",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART A0188-3/4 High Carbon Steel Wood Chisel 3/4",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART A0892-18 Hand Saw 18\"",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART A0892-20 Hand Saw 20\"",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART A086-110x30T Tungsten Carbide Tipped Blade",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART C0010-12 Aluminum Level 12\"",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART C0010-16 Aluminum Level 16\"",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART C0010-20 Aluminum Level 20\"",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART C0021 Metal Body Hand Riveter LD 250mm",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART C0228 Hand Riveter",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART C0032-3.2x6\" Screwdriver #102 (+)3.2mmx6\"",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART C0032-5.0x4\" Screwdriver Chrome Vanadium",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART C0032-5.0x5\" Screwdriver Chrome Vanadium",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART C0032-6.0x5\" Screwdriver Chrome Vanadium",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART C0040-65 Philips Double End Bits Ph2 6.35x65mm",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART C0041-5 Two-Way Screw Drivers (-)(+) 5\"",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART C0026A Staples 4-8mm Euro-type Stapler",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART C0026 Staples 10.6x6x0.55mm",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART D0004-5 Measuring Tape 5m",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART E0009-3 Cap Brush Twisted Wire 3\"",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART E0025-1/2\"L Paint Brush (long) Blue Handle",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART E0025-3/4\"L Paint Brush (long) Blue Handle",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART E0025-2-1/2\"L Paint Brush (long) Blue",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART E0032-100 Sand Paper (water proofing)",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART E0032-120 Sand Paper (water proofing)",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART E0032-80 Sand Paper (water proofing)",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART F0043A-8X42 Magnetic Nut Setters 8mmxL65M",
+    "category": "Fasteners",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART F0043A-8X65 Magnetic Nut Setters 8mmxL65M",
+    "category": "Fasteners",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART G0001-12 Rubber Mallet 12oz",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART G0001-8 Rubber Mallet 8oz",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART G0002-30 Two Way Mallet 30mm",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART G0002-40 Two Way Mallet 40mm",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART A0097-1/2 Masonry Drill Bit 1/2",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART A0097-1/4 Masonry Drill Bit 1/4",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART A0097-3/16 Masonry Drill Bit 3/16",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART A0097-3/8 Masonry Drill Bit 3/8",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART A0097-5/16 Masonry Drill Bit 5/16",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART A0097-5/32 Masonry Drill Bit 5/32",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART A0118-05 Woodwork Drill Bit Set 5pcs",
+    "category": "Paint & Tools",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART CMT-5X60 Plastic Tox w/Screw",
+    "category": "Fasteners",
+    "baseUnit": "pack",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pack",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART CMT-6X30 Plastic Tox w/Screw",
+    "category": "Fasteners",
+    "baseUnit": "pack",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pack",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART CMT-6X60 Plastic Tox w/Screw",
+    "category": "Fasteners",
+    "baseUnit": "pack",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pack",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART CMT-8X40 Plastic Tox w/Screw",
+    "category": "Fasteners",
+    "baseUnit": "pack",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pack",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART CMT-10X60 Plastic Tox w/Screw",
+    "category": "Fasteners",
+    "baseUnit": "pack",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pack",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART C0019 Caulking Gun 225mm",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART A0083-4SS Cutting Wheel for Stainless 1.2x16mm",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART A0001 Utility Cutter 100x18x0.5mm",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART F0401-8x10 Double Box-End Wrench 8x10",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART A0168-1/2 High Carbon Steel Wood Chisel",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART A0168-3/4 High Carbon Steel Wood Chisel",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART A0085-110x30T Tungsten Carbide Tipped",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART A3105-8 Multi-Purpose Drill 8mm",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART A3105-10 Multi-Purpose Drill 10mm",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART A3105-12 Multi-Purpose Drill 12mm",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "CMART C0001 Caulking Gun 225mm",
+    "category": "Paint & Tools",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "EP E0212 Construction Pail 8Liters",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "BULL GNTP-10L4 Unbreakable Plug",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "BULL G34K211 GONEO 2 Gang 1 Way Switch Set",
+    "category": "Electrical",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "BULL G34Z102 GONEO 1 Gang 2 Prong Universal",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "BULL G34Z222 GONEO 2 Gang 2 Prong Universal",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "BULL G34Z322 GONEO 3 Gang 2 Prong Universal",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "BULL G34Z110 GONEO 1 Gang Aircon Tandem",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "BULL G34Z105 GONEO 3 Prong Universal Outlet",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "BULL GNTP-C5 4 Outlet Unbreakable Wireless Extension Board",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "BULL W0200 GONEO Wireless Extension 2gang",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "BULL W0300 GONEO Wireless Extension 3gang",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "BULL W0400 GONEO Wireless Extension 4gang",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "BULL GNTP-V1040-5M 4G Extension Cord 5M",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "BULL GNTP-1140 4G Extension Cord 1.8M",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "BULL MGTA01 Lamp Holder 2.25 4A",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "BULL MGTA03 Lamp Holder 4.25 4A",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "BULL MGTA04 Batten Holder 4A",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "BULL JA04-30 4-Outlet Power Connector 3m",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "BULL GN-ET17 Black Electrical Tape 5M 17mm",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "BULL GN-ET18 Black Electrical Tape 8M 18mm",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA RG-DC 4512 Stainless Steel Drawer Slide",
+    "category": "Miscellaneous",
+    "baseUnit": "pair",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pair",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA RG-D101-AB Deadbolt Single Cylinder Antique Brass",
+    "category": "Miscellaneous",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA RG-PB-30MM Brass Padlock 30MM",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA RG-PB-40MM Brass Padlock 40MM",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA RG-SL60 Safety Hasp Stainless 2-1/2\"",
+    "category": "Fasteners",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA RG-SL75 Safety Hasp Stainless 3\"",
+    "category": "Fasteners",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA RG-SL100 Safety Hasp Stainless 4\"",
+    "category": "Fasteners",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA RG-SL-3-1/2\"-SS Loose Pin Hinges 3-1/2x3-1/2",
+    "category": "Fasteners",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA RG-SL-4\"-SS Loose Pin Hinges 4x4 4x4x2.5mm",
+    "category": "Fasteners",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA RG-588-SS Lockset Stainless",
+    "category": "Miscellaneous",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA RG-9010W Bidet Shower Set White",
+    "category": "Plumbing",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA RG-4811 Gooseneck Kitchen Faucet Metal Handle",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA RG-4815 Solid Kitchen Faucet Lever Handle",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA RG-PC-20MM Colourful Plastic Cupboard Lock",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA RG-PC-25MM Colourful Plastic Cupboard Lock",
+    "category": "Miscellaneous",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA RCT10 Cable Tie 4.6*250mm Black",
+    "category": "Electrical",
+    "baseUnit": "pack",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pack",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA RCT10 Cable Tie 4.6*250mm White",
+    "category": "Electrical",
+    "baseUnit": "pack",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pack",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA RCT14 Cable Tie 7.6*350mm White",
+    "category": "Electrical",
+    "baseUnit": "pack",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pack",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA Cable Tie 4.6*200mm Black",
+    "category": "Electrical",
+    "baseUnit": "pack",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pack",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA Cable Tie 4.6*200mm White",
+    "category": "Electrical",
+    "baseUnit": "pack",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pack",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "REGINA Cable Tie 4.6*300mm White",
+    "category": "Electrical",
+    "baseUnit": "pack",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pack",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU Mini Circuit Breaker 15A",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU Mini Circuit Breaker 60A",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU Regular Rubber Plug",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU Heavy Duty 15A Plug",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU Regular 10A Plug",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU PVC Electrical Tape Black 6m",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU WH 1-Gang Outlet",
+    "category": "Electrical",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU WH 2-Gang Outlet",
+    "category": "Electrical",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU WD 1-Gang Switch with LED",
+    "category": "Electrical",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU WD 2-Gang Switch with LED",
+    "category": "Electrical",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU WD 3-Gang Switch with LED",
+    "category": "Electrical",
+    "baseUnit": "set",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "set",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU 4 Gang Extension Cord Black 10M",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU 3 Gang Extension Cord Black 10M",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "ROYU 3 Gang Extension Cord Black 5M",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Royu Square Box GA16",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "FF Basic LED Bulb 18W DL E27",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Ecolium LED Bulb 3W DL E27",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Ecolium LED Bulb 5W DL E27",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Ecolium LED Bulb 7W DL E27",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Ecolium LED Bulb 9W DL E27",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Ecolium LED Bulb 11W DL E27",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Ecolium LED Bulb 13W DL E27",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Ecolium LED Bulb 15W DL E27",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Ecolium LED Bulb 15W Daylight",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "PVC Pipe Elec Thickwall 20mm x 3m w/ Hub",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "PVC Pipe Elec Thickwall 25mm x 3m w/ Hub",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "PVC Sanitary 90 Elbow 2\"",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "PVC Sanitary 87.5 Tee 3x3\"",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "PVC Elec Short Elbow 20mm",
+    "category": "Electrical",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "PVC Sanitary Cleanout w/ Plug 3\"",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "PVC Sanitary 45 Elbow 2\"",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "PVC Sanitary Cleanout w/ Plug 2\"",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "PVC Water 90 Threaded Tee 2\"",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "PVC Water M Thread Adapter 20mm",
+    "category": "Plumbing",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "2.0mm2 #14 AWG THHN Stranded White 150M",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "1.25mm2 #16 AWG Flat cord BLACK 150M",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "8.0mm2 #8 AWG THHN Stranded RED 100M",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "8.0mm2 #8 AWG THHN Stranded Green 100M",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "0.75mm2 #18 AWG Flat Cord Black 150M",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "0.3mm2 #22 AWG Flat Cord Speaker 150M",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Royux Solid Wire 2.6mm #10 AWG White 75M",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Royux Solid Wire 1.6mm #14 AWG White 75M",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Flat Cord SPT2 Gauge #16 1.25mm 150M",
+    "category": "Electrical",
+    "baseUnit": "roll",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "roll",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Rectangular Tube 1.2MM x 2x3x6M",
+    "category": "Steel Bars",
+    "baseUnit": "length",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "length",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Square Tube 1.2MM x 2x3x6M",
+    "category": "Steel Bars",
+    "baseUnit": "length",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "length",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Square Tube 1.5MM x 2x2x6M",
+    "category": "Steel Bars",
+    "baseUnit": "length",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "length",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Rectangular Tube 1.2MM x 1x2x6M",
+    "category": "Steel Bars",
+    "baseUnit": "length",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "length",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Rectangular Tube 1.5MM x 1x2x6M",
+    "category": "Steel Bars",
+    "baseUnit": "length",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "length",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Square Tube 1.2MM x 1x1x6M",
+    "category": "Steel Bars",
+    "baseUnit": "length",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "length",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "C-Purlins 1.2MM x 2x4 x 6M",
+    "category": "Steel Bars",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "C-Channel 1.2MM x 38MM x 5.00M",
+    "category": "Steel Bars",
+    "baseUnit": "length",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "length",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Boysentatex Flat White 16L (Plastic)",
+    "category": "Paint",
+    "baseUnit": "pail",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pail",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Boysentatex Gloss White 16L (Plastic)",
+    "category": "Paint",
+    "baseUnit": "pail",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pail",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Prefix Skim Coat (20 KLS.)",
+    "category": "Paint",
+    "baseUnit": "bag",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "bag",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Island Skim Coat White (20KLS.)",
+    "category": "Paint",
+    "baseUnit": "bag",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "bag",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Smartboard 9MM x 4x8",
+    "category": "Lumber & Boards",
+    "baseUnit": "sheet",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "sheet",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "J-Furring 16MM x 50MM x 5M (DOUBLE)",
+    "category": "Lumber & Boards",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "S-Furring 19MM x 25MM x 5M",
+    "category": "Lumber & Boards",
+    "baseUnit": "pc",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pc",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Finishing Nails 1 (25KLS.)",
+    "category": "Fasteners",
+    "baseUnit": "ctn",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "ctn",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Finishing Nails 1-1/2 (25KLS.)",
+    "category": "Fasteners",
+    "baseUnit": "ctn",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "ctn",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Finishing Nails 2 (25KLS.)",
+    "category": "Fasteners",
+    "baseUnit": "ctn",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "ctn",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Umbrella Nails #2 (25 KLS)",
+    "category": "Fasteners",
+    "baseUnit": "ctn",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "ctn",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Common Wire Nails 1-1/2",
+    "category": "Fasteners",
+    "baseUnit": "ctn",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "ctn",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Common Wire Nails 3",
+    "category": "Fasteners",
+    "baseUnit": "ctn",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "ctn",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Common Wire Nails 4",
+    "category": "Fasteners",
+    "baseUnit": "ctn",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "ctn",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Common Wire Nails 5",
+    "category": "Fasteners",
+    "baseUnit": "ctn",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "ctn",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Concrete Nails 2 (25KLS.)",
+    "category": "Fasteners",
+    "baseUnit": "ctn",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "ctn",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Concrete Nails 3 (25KLS.)",
+    "category": "Fasteners",
+    "baseUnit": "ctn",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "ctn",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "name": "Concrete Nails 4 (25KLS.)",
+    "category": "Fasteners",
+    "baseUnit": "ctn",
+    "stock": 0,
+    "price": 0,
+    "units": [
+      {
+        "unit": "ctn",
         "factor": 1,
         "price": 0
       }

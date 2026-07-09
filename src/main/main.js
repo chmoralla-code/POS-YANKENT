@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, dialog, protocol, net, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, protocol, net, shell, powerMonitor } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -10,6 +10,7 @@ const { getSession, requireRole, logout } = require('./lib/auth');
 const { registerAll } = require('./ipc');
 const { initUpdater } = require('./updater');
 const { exportAll } = require('./backup');
+const os = require('os');
 
 const RENDERER_DIR = path.join(__dirname, '..', 'renderer');
 
@@ -44,6 +45,80 @@ function dbPath() {
   if (process.env.YANKENT_DB) return process.env.YANKENT_DB;
   if (app.isPackaged) return path.join(app.getPath('userData'), 'yankent.sqlite');
   return path.join(__dirname, '..', '..', 'data', 'yankent.sqlite');
+}
+
+// ---- Startup auto test-print (once per OS boot) -------------------------
+// When the POS first opens after the laptop is powered on, it automatically
+// sends a short ESC/POS test print to the Windows printer named in settings
+// (default "POS-58") via the winspool RAW API.  This confirms the printer is
+// online before the cashier's first sale — no login required, runs in the
+// background on the main process.
+//
+// "Once per boot" is enforced with a marker file in userData that stores the
+// OS boot time (os.uptime() captured at launch).  If the marker already
+// matches the current boot, we skip — so restarting the app during the same
+// session does NOT re-print.  A fresh power cycle produces a different boot
+// time, so the test fires on the next launch.
+function startupTestMarkerPath() {
+  return path.join(app.getPath('userData'), 'startup-test-marker.json');
+}
+
+function currentBootId() {
+  // os.uptime() is seconds since the OS booted.  Combining it with the
+  // process start time gives a stable per-boot identifier: two app launches
+  // in the same boot session see the same rounded uptime.
+  return Math.floor(os.uptime() / 60);
+}
+
+function shouldRunStartupTest() {
+  try {
+    const markerPath = startupTestMarkerPath();
+    if (fs.existsSync(markerPath)) {
+      const data = JSON.parse(fs.readFileSync(markerPath, 'utf8'));
+      if (data && data.bootId === currentBootId()) {
+        return false; // already printed during this boot session
+      }
+    }
+  } catch {}
+  return true;
+}
+
+function markStartupTestDone() {
+  try {
+    const markerPath = startupTestMarkerPath();
+    fs.writeFileSync(markerPath, JSON.stringify({ bootId: currentBootId(), at: Date.now() }), 'utf8');
+  } catch (e) {
+    console.error('[main] Could not write startup-test marker:', e.message);
+  }
+}
+
+// Fire the startup test print if enabled + not already done this boot.
+// Delayed a few seconds so the splash/login screen is up and the printer
+// spooler has settled after boot.
+async function maybeStartupTestPrint(ctx) {
+  try {
+    const enabled = getSetting(db, 'startup_test_print');
+    if (enabled === '0') return; // admin disabled it
+    if (!shouldRunStartupTest()) return; // already ran this boot
+    // Wait for the renderer window to be visible before printing.
+    await new Promise((r) => setTimeout(r, 5000));
+    if (isQuitting) return;
+    const { _sendStartupTestPrint } = require('./ipc/integrations');
+    const res = await _sendStartupTestPrint(ctx);
+    if (res && res.ok) {
+      console.log('[main] Startup test print sent to "' + res.printer + '".');
+    } else {
+      // Don't mark as done on failure so a retry on the next app launch is
+      // possible — unless the printer simply isn't installed (a permanent
+      // condition that would retry forever).
+      const skipped = res && res.skipped;
+      console.warn('[main] Startup test print ' + (skipped ? 'skipped' : 'failed') + ': ' + (res && res.error));
+      if (!skipped) return; // leave the marker unwritten so it retries
+    }
+    markStartupTestDone();
+  } catch (e) {
+    console.error('[main] Startup test print error:', e.message);
+  }
 }
 
 // ---- Auto-backup helpers (top-level so before-quit can access them) ----
@@ -276,6 +351,14 @@ if (!gotTheLock) {
   // ---- Auto-backup every 5 minutes ----------------------------------
   backupTimer = setInterval(doAutoBackup, BACKUP_INTERVAL_MS);
 
+  // ---- Startup auto test-print (once per OS boot) --------------------
+  // Sends a test print to the Windows "POS-58" printer the first time the
+  // POS opens after the laptop is powered on.  Skipped during smoke/e2e
+  // tests so it doesn't spam a real printer in CI.
+  if (!process.env.YANKENT_SMOKE && !process.env.YANKENT_E2E) {
+    maybeStartupTestPrint(ctx);
+  }
+
   // Smoke test: boot, wait for the window to load, then quit.
   // YANKENT_E2E is set by the Playwright harness — it skips the smoke
   // script and the auto-quit so the app stays running for interactive tests.
@@ -323,7 +406,25 @@ if (!gotTheLock) {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
-});
+
+  // ---- Power event listeners (printer reconnection on wake) -------------
+  // After a laptop sleeps, hibernates, or is powered off and back on, the
+  // Bluetooth GATT characteristic the renderer holds becomes stale — the
+  // printer appears "connected" to the OS but writes throw GATT errors.  On
+  // resume/unlock, ping the renderer so it can proactively drop the dead
+  // handle and re-establish the link before the next sale's print fails.
+  // We send the event after a short delay because the Bluetooth adapter and
+  // USB thermal printers take a few seconds to re-enumerate after wake.
+  const notifyPowerResume = (reason) => {
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed() && !isQuitting) {
+        mainWindow.webContents.send('pos:power:resume', reason);
+      }
+    }, 3000);
+  };
+  powerMonitor.on('resume', () => notifyPowerResume('resume'));
+  powerMonitor.on('unlock-screen', () => notifyPowerResume('unlock'));
+ });
 }
 
 app.on('window-all-closed', () => {

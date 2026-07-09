@@ -99,6 +99,12 @@ const SETTINGS_DEFAULTS = {
   printer_char_uuid: '00002af1-0000-1000-8000-00805f9b34fb',
   printer_device_name: '',
   printer_auto_print: '1',
+  // Auto test-print on startup: sends a short ESC/POS test to the Windows
+  // printer named below the first time the POS opens after the laptop is
+  // powered on, so the cashier knows the printer is ready before the first
+  // sale.  '1' = enabled (default), '0' = disabled.
+  startup_test_print: '1',
+  startup_test_printer: 'POS-58',
   // telegram (defaults shipped with the installer so the owner's bot is
   // pre-configured on every fresh install; admin can change in Settings)
   telegram_token: '8888024178:AAHEtknhc05MJzP1d0kCGXoEXpV0xXhJCaE',
