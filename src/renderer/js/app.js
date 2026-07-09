@@ -134,6 +134,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   App._checkLoginPrinterStatus = async function () {
     const statusEl = document.getElementById('printerStatusBarState');
     if (!statusEl) return;
+    // If the startup test print is in flight, don't overwrite the
+    // "Testing print..." status — let it show until the test resolves.
+    if (App._printerTesting) return;
     try {
       const info = await App.pos.printer.checkStatus();
       if (info.printerConnected) {
@@ -148,6 +151,43 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   };
   App._checkLoginPrinterStatus();
+
+  // ---- Startup test-print status (login printer status bar) --------------
+  // While the main process runs the startup auto test-print to the POS-58,
+  // the bottom-left printer status bar shows "Testing print..." with an
+  // animated effect instead of the usual "Printer connected" text.  When
+  // the test finishes (or is skipped/failed), the bar reverts to the normal
+  // status via _checkLoginPrinterStatus().
+  App._setPrinterTestStatus = function (data) {
+    const statusEl = document.getElementById('printerStatusBarState');
+    if (!statusEl) return;
+    const state = data && data.state;
+    if (state === 'testing') {
+      App._printerTesting = true;
+      statusEl.innerHTML = '<span class="dot checking"></span><span class="testing-txt">Testing print<span class="chk-ellipsis"></span></span>';
+    } else {
+      App._printerTesting = false;
+      // Briefly show the result, then revert to the normal status check.
+      if (state === 'done') {
+        statusEl.innerHTML = '<span class="dot on"></span> Printer connected';
+      } else if (state === 'skipped' || state === 'error') {
+        statusEl.innerHTML = '<span class="dot off"></span> Printer not connected';
+      }
+      // After a moment, run the full status check for an accurate reading.
+      setTimeout(() => App._checkLoginPrinterStatus(), 800);
+    }
+  };
+  // Listen for live status updates from the main process.
+  if (window.pos && window.pos.onPrinterTestStatus) {
+    window.pos.onPrinterTestStatus((data) => App._setPrinterTestStatus(data));
+  }
+  // Also query the current state in case the renderer loaded after the
+  // event was already sent (the test print fires ~5s after boot).
+  if (window.pos && window.pos.getPrinterTestStatus) {
+    window.pos.getPrinterTestStatus().then((d) => {
+      if (d && d.state === 'testing') App._setPrinterTestStatus(d);
+    });
+  }
 
   const setupBtn = document.getElementById('loginSetupPrinter');
   if (setupBtn) {

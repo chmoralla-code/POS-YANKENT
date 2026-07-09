@@ -189,9 +189,16 @@ contextBridge.exposeInMainWorld('pos', {
 
   // ---- Power events (wake/resume after sleep or power cycle) ----
   // Fires when the laptop wakes from sleep, hibernation, or is powered
-  // back on after being off.  The renderer uses this to proactively
-  // reconnect the thermal printer before the next sale fails to print.
+  // back on.  The renderer uses this to proactively reconnect the thermal
+  // printer before the next sale fails to print.
   onPowerResume: (cb) => ipcRenderer.on('pos:power:resume', (_e, reason) => cb(reason)),
+
+  // ---- Startup test-print status (login printer status bar) ----
+  // Fired by the main process while the startup auto test-print is running
+  // so the login page can show "Testing print..." instead of "Printer
+  // connected".  data = { state: 'testing'|'done'|'skipped'|'error', ... }
+  onPrinterTestStatus: (cb) => ipcRenderer.on('pos:printer:startupTestStatus', (_e, data) => cb(data)),
+  getPrinterTestStatus: () => { const r = ipcRenderer.invoke('pos:printer:getStartupTestStatus'); return r.then((x) => x.ok ? x.data : { state: null }); },
 
   // ---- External links (system browser) ---------------------------------
   async openExternal(url) {

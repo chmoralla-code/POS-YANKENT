@@ -92,6 +92,11 @@ function markStartupTestDone() {
   }
 }
 
+// Track the startup test-print state so the renderer can show "Testing
+// print..." on the login status bar while the print is in flight, then
+// revert to the normal "Printer connected" / "not connected" status.
+let startupTestState = null; // null | 'testing' | 'done' | 'skipped' | 'error'
+
 // Fire the startup test print if enabled + not already done this boot.
 // Delayed a few seconds so the splash/login screen is up and the printer
 // spooler has settled after boot.
@@ -104,21 +109,40 @@ async function maybeStartupTestPrint(ctx) {
     await new Promise((r) => setTimeout(r, 5000));
     if (isQuitting) return;
     const { _sendStartupTestPrint } = require('./ipc/integrations');
+    // Notify the renderer the test print is starting so the login printer
+    // status bar shows "Testing print..." with an animated effect.
+    startupTestState = 'testing';
+    sendToRenderer('pos:printer:startupTestStatus', { state: 'testing' });
     const res = await _sendStartupTestPrint(ctx);
     if (res && res.ok) {
       console.log('[main] Startup test print sent to "' + res.printer + '".');
+      startupTestState = 'done';
+      sendToRenderer('pos:printer:startupTestStatus', { state: 'done', printer: res.printer });
     } else {
       // Don't mark as done on failure so a retry on the next app launch is
       // possible — unless the printer simply isn't installed (a permanent
       // condition that would retry forever).
       const skipped = res && res.skipped;
       console.warn('[main] Startup test print ' + (skipped ? 'skipped' : 'failed') + ': ' + (res && res.error));
+      startupTestState = skipped ? 'skipped' : 'error';
+      sendToRenderer('pos:printer:startupTestStatus', { state: startupTestState, error: res && res.error });
       if (!skipped) return; // leave the marker unwritten so it retries
     }
     markStartupTestDone();
   } catch (e) {
     console.error('[main] Startup test print error:', e.message);
+    startupTestState = 'error';
+    sendToRenderer('pos:printer:startupTestStatus', { state: 'error', error: e.message });
   }
+}
+
+// Send an IPC event to the renderer window (no-op if the window isn't ready).
+function sendToRenderer(channel, data) {
+  try {
+    if (mainWindow && !mainWindow.isDestroyed() && !isQuitting) {
+      mainWindow.webContents.send(channel, data);
+    }
+  } catch {}
 }
 
 // ---- Auto-backup helpers (top-level so before-quit can access them) ----
@@ -343,6 +367,10 @@ if (!gotTheLock) {
     const ok = setAutoStartup(!!enabled);
     return { ok, data: { enabled: isAutoStartupEnabled() } };
   });
+
+  // Allow the renderer to query the current startup test-print state (in
+  // case it loaded after the IPC event was already sent).
+  ipcMain.handle('pos:printer:getStartupTestStatus', () => ({ ok: true, data: { state: startupTestState } }));
 
   try { initUpdater(mainWindow); } catch (e) {
     console.error('[main] Updater init failed (non-fatal):', e.message);

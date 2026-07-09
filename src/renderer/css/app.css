@@ -840,6 +840,8 @@ table.tbl tr:hover td { background: #fafbfc; }
 .printer-status-bar-state .dot.on { background: #2ecc71; box-shadow: 0 0 8px rgba(46, 204, 113, 0.8); }
 .printer-status-bar-state .dot.off { background: #e74c3c; box-shadow: 0 0 8px rgba(231, 76, 60, 0.6); }
 .printer-status-bar-state .dot.checking { background: #b0b0b8; animation: netPulse 1s ease-in-out infinite; }
+.printer-status-bar-state .testing-txt { color: #fbbf24; font-weight: 700; }
+.printer-status-bar-state .chk-ellipsis::after { content: ''; animation: netDots 1.4s steps(4, end) infinite; display: inline-block; width: 1.6em; text-align: left; }
 .pos-grid { display: grid; grid-template-columns: 1fr 400px; gap: 14px; flex: 1; min-height: 0; }
 .pos-left, .pos-right { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
 .pos-catalog { display: flex; flex-direction: column; flex: 1; min-height: 0; }
