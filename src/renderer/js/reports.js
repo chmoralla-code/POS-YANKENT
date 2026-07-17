@@ -638,3 +638,468 @@ App.views.reports = {
     App.pos.printer.printHtml(html).catch((e) => App.ui.toast(e.message, 'err'));
   },
 };
+
+
+// ===== Expenses & ROI =====================================================
+// Administrator-only financial view. Inventory expense is a live valuation
+// (stock on hand × current cost); historical ROI is explicitly estimated
+// because sale lines do not store a cost snapshot.
+App.views.expenses = {
+  title: 'Expenses & ROI',
+  viewEl: null,
+  data: null,
+  from: '',
+  to: '',
+  query: '',
+  productFilter: 'all',
+  productSort: 'inventory',
+  requestId: 0,
+
+  async render(view) {
+    this.viewEl = view;
+    view.classList.add('view-expenses');
+    view.innerHTML = `
+      <div class="reports-page roi-page">
+        <header class="reports-header roi-header">
+          <div class="reports-heading">
+            <div class="reports-eyebrow">Financial intelligence</div>
+            <h2>Expenses &amp; ROI</h2>
+            <p>See current inventory investment, sales return, estimated product costs, and profitability in one place.</p>
+          </div>
+          <div class="reports-actions">
+            <span class="roi-updated" id="roiUpdated" aria-live="polite">Loading latest figures…</span>
+            <button type="button" class="btn btn-sm btn-ghost" id="roiRefresh">Refresh</button>
+          </div>
+        </header>
+
+        <section class="report-filter-panel roi-filter-panel" aria-labelledby="roiFilterTitle">
+          <div class="report-filter-summary">
+            <span id="roiFilterTitle">Sales period</span>
+            <strong id="roiPeriodLabel" aria-live="polite">${App.ui.esc(this._periodLabel())}</strong>
+            <small>Inventory expense always reflects stock on hand now.</small>
+          </div>
+          <div class="report-filter-fields">
+            <div class="report-date-field"><label class="fl" for="roiFrom">From</label><input id="roiFrom" type="date" value="${App.ui.esc(this.from)}"></div>
+            <div class="report-date-field"><label class="fl" for="roiTo">To</label><input id="roiTo" type="date" value="${App.ui.esc(this.to)}"></div>
+            <button type="button" class="btn btn-primary btn-sm" id="roiApply">Apply range</button>
+            <button type="button" class="btn btn-sm btn-ghost" data-roi-preset="all">All time</button>
+            <button type="button" class="btn btn-sm btn-ghost" data-roi-preset="month">This month</button>
+            <button type="button" class="btn btn-sm btn-ghost" data-roi-preset="year">This year</button>
+          </div>
+        </section>
+
+        <div class="reports-section-heading">
+          <div><h3>Financial overview</h3><p>ROI uses completed physical-product sales only; refund activity follows the date each refund was processed.</p></div>
+        </div>
+        <div class="stat-grid roi-stat-grid" id="roiStats" aria-busy="true">
+          <article class="stat report-stat"><div class="k">Loading</div><div class="v"><span class="spinner"></span></div></article>
+        </div>
+        <div id="roiCostNotice" class="roi-notice" aria-live="polite"></div>
+
+        <div class="roi-insight-grid">
+          <section class="roi-insight-card" aria-labelledby="roiFlowTitle">
+            <div class="roi-card-heading"><div><h3 id="roiFlowTitle">Product return</h3><p>VAT-exclusive physical-product sales compared with estimated product cost.</p></div></div>
+            <div id="roiFlow" class="roi-flow"></div>
+          </section>
+          <section class="roi-insight-card roi-method-card" aria-labelledby="roiMethodTitle">
+            <div class="roi-card-heading"><div><h3 id="roiMethodTitle">How ROI is calculated</h3><p>Simple, transparent calculations based on your POS records.</p></div></div>
+            <div class="roi-formula"><span>Product gross profit</span><strong>Product sales (ex VAT) − estimated product COGS</strong></div>
+            <div class="roi-formula"><span>Product ROI</span><strong>Product gross profit ÷ estimated product COGS × 100</strong></div>
+            <p class="roi-method-note">ROI excludes service and delivery revenue so it is compared only with physical-product cost. COGS uses each product’s <b>current cost</b> because older sales do not contain cost snapshots. For like-for-like VAT reporting, enter cost excluding recoverable input VAT.</p>
+          </section>
+        </div>
+
+        <section class="roi-products-panel" aria-labelledby="roiProductsTitle">
+          <div class="roi-products-head">
+            <div>
+              <h3 id="roiProductsTitle">Product expense &amp; return</h3>
+              <p id="roiProductsSummary">Loading product costs…</p>
+            </div>
+            <button type="button" class="btn btn-sm btn-ghost" id="roiManageCosts">Manage product costs</button>
+          </div>
+          <div class="roi-product-toolbar">
+            <div class="roi-search-field"><label class="fl" for="roiProductSearch">Search products</label><input id="roiProductSearch" type="search" value="${App.ui.esc(this.query)}" placeholder="Name, SKU, category…"></div>
+            <div><label class="fl" for="roiProductFilter">Show</label><select id="roiProductFilter">
+              <option value="all">All physical products</option>
+              <option value="stock">Products in stock</option>
+              <option value="sold">Sold in this period</option>
+              <option value="missing">Missing cost data</option>
+            </select></div>
+            <div><label class="fl" for="roiProductSort">Sort by</label><select id="roiProductSort">
+              <option value="inventory">Highest inventory expense</option>
+              <option value="profit">Highest gross profit</option>
+              <option value="sales">Highest net sales</option>
+              <option value="roi">Highest ROI</option>
+              <option value="name">Product name</option>
+            </select></div>
+          </div>
+          <div class="roi-table-wrap" tabindex="0" role="region" aria-label="Scrollable product expense and return table">
+            <table class="tbl roi-table">
+              <thead><tr>
+                <th>Product</th><th class="right">Stock</th><th class="right">Unit cost</th>
+                <th class="right">Inventory expense</th><th class="right">Base units sold</th>
+                <th class="right">Net sales</th><th class="right">Est. COGS</th>
+                <th class="right">Gross profit</th><th class="right">ROI</th>
+              </tr></thead>
+              <tbody id="roiProductRows"><tr><td colspan="9"><div class="empty-state"><span class="spinner"></span> Loading products…</div></td></tr></tbody>
+            </table>
+          </div>
+        </section>
+      </div>`;
+    this._wire();
+    await this._load();
+  },
+
+  destroy() {
+    this.requestId += 1;
+    this.data = null;
+    if (this.viewEl) {
+      this.viewEl.classList.remove('view-expenses');
+      this.viewEl.innerHTML = '';
+    }
+    this.viewEl = null;
+  },
+
+  _wire() {
+    const view = this.viewEl;
+    const fromEl = view.querySelector('#roiFrom');
+    const toEl = view.querySelector('#roiTo');
+    const syncBounds = () => { toEl.min = fromEl.value || ''; fromEl.max = toEl.value || ''; };
+    fromEl.addEventListener('change', syncBounds);
+    toEl.addEventListener('change', syncBounds);
+    syncBounds();
+
+    view.querySelector('#roiApply').onclick = () => this._applyRange(fromEl.value, toEl.value);
+    view.querySelectorAll('[data-roi-preset]').forEach((button) => {
+      button.onclick = () => this._applyPreset(button.dataset.roiPreset, fromEl, toEl);
+    });
+    view.querySelector('#roiRefresh').onclick = () => this._load();
+
+    const searchEl = view.querySelector('#roiProductSearch');
+    const filterEl = view.querySelector('#roiProductFilter');
+    const sortEl = view.querySelector('#roiProductSort');
+    view.querySelector('#roiManageCosts').onclick = () => this._showMissingCosts();
+    view.querySelector('#roiProductRows').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-edit-cost]');
+      if (!button) return;
+      const product = this.data && this.data.products.find((row) => row.id === Number(button.dataset.editCost));
+      if (product) this._editCost(product);
+    });
+
+    filterEl.value = this.productFilter;
+    sortEl.value = this.productSort;
+    searchEl.addEventListener('input', App.ui.debounce(() => {
+      this.query = searchEl.value;
+      this._renderProductRows();
+    }, 120));
+    filterEl.addEventListener('change', () => {
+      this.productFilter = filterEl.value;
+      this._renderProductRows();
+    });
+    sortEl.addEventListener('change', () => {
+      this.productSort = sortEl.value;
+      this._renderProductRows();
+    });
+  },
+
+  _showMissingCosts() {
+    if (!this.viewEl) return;
+    this.productFilter = 'missing';
+    this.query = '';
+    const filter = this.viewEl.querySelector('#roiProductFilter');
+    const search = this.viewEl.querySelector('#roiProductSearch');
+    if (filter) filter.value = 'missing';
+    if (search) search.value = '';
+    this._renderProductRows();
+    this.viewEl.querySelector('.roi-products-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (search) search.focus();
+  },
+
+  _editCost(product) {
+    const generation = App.captureSessionGeneration();
+    const m = App.ui.modal({
+      title: 'Update Product Cost',
+      closeOnOverlay: false,
+      bodyHtml: `<div class="roi-cost-product"><b>${App.ui.esc(product.name)}</b><span>${App.ui.esc(product.sku)} · ${App.ui.esc(product.category)}${product.active ? '' : ' · Inactive'}</span></div>
+        <div class="field"><label class="fl" for="roiCostInput">Current cost per ${App.ui.esc(product.base_unit)}</label><input id="roiCostInput" type="number" min="0" step="0.01" value="${Number(product.unit_cost || 0).toFixed(2)}" aria-describedby="roiCostHint" autofocus></div>
+        <div class="hint" id="roiCostHint">This current cost updates inventory expense and estimates COGS for past sales. If input VAT is recoverable, enter the VAT-exclusive cost.</div>`,
+      footerHtml: '<button type="button" class="btn btn-ghost" data-a="cancel">Cancel</button><button type="button" class="btn btn-primary" data-a="save">Save cost</button>',
+    });
+    m.el.querySelector('[data-a="cancel"]').onclick = () => m.close();
+    const save = async () => {
+      const input = m.el.querySelector('#roiCostInput');
+      const rawValue = input.value.trim();
+      if (!rawValue) {
+        App.ui.toast('Cost is required; enter 0 only when the product truly has no cost', 'err');
+        input.focus();
+        return;
+      }
+      const value = Number(rawValue);
+      if (!Number.isFinite(value) || value < 0) {
+        App.ui.toast('Cost must be a non-negative number', 'err');
+        input.focus();
+        return;
+      }
+      const button = m.el.querySelector('[data-a="save"]');
+      button.disabled = true;
+      button.textContent = 'Saving…';
+      try {
+        await App.pos.products.setCost(product.id, value);
+        if (!App.isSessionGenerationCurrent(generation)) return;
+        m.close();
+        App.ui.toast(`Cost updated for ${product.name}`, 'ok');
+        await this._load();
+      } catch (error) {
+        if (error.code === 'SESSION_EXPIRED') {
+          document.getElementById('logoutBtn').click();
+          return;
+        }
+        if (!App.isSessionGenerationCurrent(generation)) return;
+        App.ui.toast(error.message, 'err');
+        button.disabled = false;
+        button.textContent = 'Save cost';
+      }
+    };
+    m.el.querySelector('[data-a="save"]').onclick = save;
+    m.el.querySelector('#roiCostInput').addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') { event.preventDefault(); save(); }
+    });
+  },
+
+  async _applyRange(from, to) {
+    if (from && to && from > to) {
+      App.ui.toast('The From date must be earlier than or equal to the To date', 'err');
+      this.viewEl.querySelector('#roiFrom').focus();
+      return;
+    }
+    this.from = from;
+    this.to = to;
+    await this._load();
+  },
+
+  async _applyPreset(preset, fromEl, toEl) {
+    const today = new Date();
+    if (preset === 'all') {
+      this.from = '';
+      this.to = '';
+    } else if (preset === 'month') {
+      this.from = this._dateText(new Date(today.getFullYear(), today.getMonth(), 1));
+      this.to = this._dateText(today);
+    } else if (preset === 'year') {
+      this.from = this._dateText(new Date(today.getFullYear(), 0, 1));
+      this.to = this._dateText(today);
+    }
+    fromEl.value = this.from;
+    toEl.value = this.to;
+    toEl.min = this.from;
+    fromEl.max = this.to;
+    await this._load();
+  },
+
+  _dateText(date) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  },
+
+  _periodLabel() {
+    if (this.from && this.to) return `${this.from} to ${this.to}`;
+    if (this.from) return `From ${this.from}`;
+    if (this.to) return `Through ${this.to}`;
+    return 'All recorded sales';
+  },
+
+  async _load() {
+    const view = this.viewEl;
+    if (!view) return;
+    const requestId = ++this.requestId;
+    const generation = App.captureSessionGeneration();
+    const isCurrent = () => (
+      requestId === this.requestId &&
+      this.viewEl === view &&
+      App.current.view === 'expenses' &&
+      view.isConnected &&
+      App.isSessionGenerationCurrent(generation)
+    );
+    const apply = view.querySelector('#roiApply');
+    const refresh = view.querySelector('#roiRefresh');
+    const stats = view.querySelector('#roiStats');
+    view.setAttribute('aria-busy', 'true');
+    if (stats) stats.setAttribute('aria-busy', 'true');
+    if (apply) { apply.disabled = true; apply.textContent = 'Loading…'; }
+    if (refresh) refresh.disabled = true;
+    try {
+      const data = await App.pos.reports.expensesRoi({
+        from: this.from || undefined,
+        to: this.to || undefined,
+      });
+      if (!isCurrent()) return;
+      this.data = data;
+      this._render();
+      const updated = view.querySelector('#roiUpdated');
+      if (updated) updated.textContent = `Updated ${new Date(data.generated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    } catch (error) {
+      if (error.code === 'SESSION_EXPIRED') {
+        if (requestId === this.requestId && this.viewEl === view && App.isSessionGenerationCurrent(generation)) {
+          App.ui.toast('Session expired — please log in again', 'err');
+          document.getElementById('logoutBtn')?.click();
+        }
+        return;
+      }
+      if (!isCurrent()) return;
+      this.data = null;
+      App.ui.toast(error.message || 'Unable to calculate expenses and ROI', 'err');
+      if (stats) stats.innerHTML = '<div class="report-error" role="alert">Expenses and ROI could not be calculated. Check the database and try again.</div>';
+      const notice = view.querySelector('#roiCostNotice');
+      if (notice) { notice.className = 'roi-notice'; notice.innerHTML = ''; }
+      const flow = view.querySelector('#roiFlow');
+      if (flow) flow.innerHTML = '<div class="report-error" role="alert">Product return details are unavailable.</div>';
+      const rows = view.querySelector('#roiProductRows');
+      if (rows) rows.innerHTML = '<tr><td colspan="9"><div class="empty-state">Product expense data could not be loaded.</div></td></tr>';
+      const productsSummary = view.querySelector('#roiProductsSummary');
+      if (productsSummary) productsSummary.textContent = 'Product costs are unavailable.';
+      const updated = view.querySelector('#roiUpdated');
+      if (updated) updated.textContent = 'Update failed';
+    } finally {
+      if (isCurrent()) {
+        view.setAttribute('aria-busy', 'false');
+        if (stats) stats.setAttribute('aria-busy', 'false');
+        if (apply) { apply.disabled = false; apply.textContent = 'Apply range'; }
+        if (refresh) refresh.disabled = false;
+      }
+    }
+  },
+
+  _render() {
+    if (!this.data || !this.viewEl) return;
+    const summary = this.data.summary;
+    const periodLabel = this._periodLabel();
+    this.viewEl.querySelector('#roiPeriodLabel').textContent = periodLabel;
+    const roiClass = summary.roi_percent == null ? '' : (summary.roi_percent >= 0 ? 'positive' : 'negative');
+    const profitClass = summary.gross_profit >= 0 ? 'positive' : 'negative';
+    const transactionCount = Number(summary.completed_transactions || 0) + Number(summary.refunded_transactions || 0);
+    const refundActivity = Number(summary.refund_activity_total || 0);
+    this.viewEl.querySelector('#roiStats').innerHTML = `
+      ${this._statCard('Current inventory expense', App.ui.money(summary.inventory_expense), `${summary.products_with_stock} stocked product${summary.products_with_stock === 1 ? '' : 's'} · all current stock`, 'expense')}
+      ${this._statCard('Gross POS sales', App.ui.money(summary.gross_sales), `${transactionCount} original transaction${transactionCount === 1 ? '' : 's'} in this sales period · before full-sale refunds`)}
+      ${this._statCard('Refund activity', App.ui.money(refundActivity), `${summary.refund_activity_transactions} refund${summary.refund_activity_transactions === 1 ? '' : 's'} processed in this period · shown separately from ROI`, refundActivity > 0 ? 'negative' : '')}
+      ${this._statCard('Product sales (ex VAT)', App.ui.money(summary.product_net_sales), 'Completed physical-product sales only · services and delivery excluded')}
+      ${this._statCard('Estimated product COGS', App.ui.money(summary.estimated_cogs), 'Current physical-product cost × base units sold', 'expense')}
+      ${this._statCard('Product gross profit', App.ui.money(summary.gross_profit), 'Product sales excluding VAT − estimated product COGS', profitClass)}
+      ${this._statCard('Estimated product ROI', this._percent(summary.roi_percent), 'Product gross profit ÷ estimated product COGS', roiClass)}
+      ${this._statCard('Product gross margin', this._percent(summary.margin_percent), 'Product gross profit as a share of product sales', profitClass)}`;
+
+    const missingStock = Number(summary.products_without_cost || 0);
+    const missingSold = Number(summary.sold_without_cost_count || 0);
+    const notice = this.viewEl.querySelector('#roiCostNotice');
+    if (missingStock || missingSold) {
+      notice.className = 'roi-notice warning';
+      notice.innerHTML = `<div><b>Cost data needs attention</b><span>${missingStock} stocked product${missingStock === 1 ? '' : 's'} and ${missingSold} sold product${missingSold === 1 ? '' : 's'} have no cost. Inventory expense and estimated COGS may be understated; profit and ROI may be overstated or unavailable.</span></div><button type="button" class="btn btn-sm btn-ghost" id="roiFixCosts">Review missing costs</button>`;
+      notice.querySelector('#roiFixCosts').onclick = () => this._showMissingCosts();
+    } else {
+      notice.className = 'roi-notice ok';
+      notice.innerHTML = `<div><b>Product cost coverage: ${this._percent(summary.inventory_cost_coverage_percent)}</b><span>Every stocked or sold physical product has a current cost for these estimates.</span></div>`;
+    }
+
+    const flowMax = Math.max(Number(summary.product_net_sales || 0), Number(summary.estimated_cogs || 0), Math.abs(Number(summary.gross_profit || 0)), 1);
+    const flowRows = [
+      { label: 'Product sales (ex VAT)', value: summary.product_net_sales, className: 'sales' },
+      { label: 'Estimated product COGS', value: summary.estimated_cogs, className: 'cost' },
+      { label: 'Product gross profit', value: summary.gross_profit, className: summary.gross_profit >= 0 ? 'profit' : 'loss' },
+    ];
+    this.viewEl.querySelector('#roiFlow').innerHTML = flowRows.map((row) => {
+      const width = Math.max(2, Math.round((Math.abs(Number(row.value || 0)) / flowMax) * 100));
+      return `<div class="roi-flow-row"><div class="roi-flow-label"><span>${row.label}</span><strong>${App.ui.money(row.value)}</strong></div><div class="roi-flow-track"><span class="roi-flow-bar ${row.className}" style="width:${width}%"></span></div></div>`;
+    }).join('') + `<div class="roi-flow-context"><span>Excluded from product ROI (ex VAT)</span><strong>Services ${App.ui.money(summary.service_net_sales)} · Delivery ${App.ui.money(summary.delivery_net_sales)}</strong></div>`;
+
+    this._renderProductRows();
+  },
+
+  _statCard(label, value, detail, className = '') {
+    return `<article class="stat report-stat roi-stat ${className}"><div class="k">${label}</div><div class="v">${value}</div><small class="muted">${detail}</small></article>`;
+  },
+
+  _percent(value) {
+    if (value == null || !Number.isFinite(Number(value))) return '—';
+    return `${Number(value).toLocaleString('en-PH', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+  },
+
+  _filteredProducts() {
+    const query = String(this.query || '').trim().toLowerCase();
+    let rows = [...((this.data && this.data.products) || [])];
+    if (query) {
+      rows = rows.filter((row) => [row.name, row.sku, row.category, row.base_unit]
+        .some((value) => String(value || '').toLowerCase().includes(query)));
+    }
+    if (this.productFilter === 'stock') rows = rows.filter((row) => Number(row.stock) > 0);
+    if (this.productFilter === 'sold') rows = rows.filter((row) => Number(row.units_sold) > 0);
+    if (this.productFilter === 'missing') rows = rows.filter((row) => row.missing_cost && (Number(row.stock) > 0 || Number(row.units_sold) > 0));
+
+    const number = (value, fallback = 0) => {
+      if (value === null || value === undefined || value === '') return fallback;
+      return Number.isFinite(Number(value)) ? Number(value) : fallback;
+    };
+    const sorters = {
+      inventory: (a, b) => number(b.inventory_expense) - number(a.inventory_expense),
+      profit: (a, b) => number(b.gross_profit) - number(a.gross_profit),
+      sales: (a, b) => number(b.net_sales) - number(a.net_sales),
+      roi: (a, b) => number(b.roi_percent, -Infinity) - number(a.roi_percent, -Infinity),
+      name: (a, b) => String(a.name).localeCompare(String(b.name)),
+    };
+    rows.sort(sorters[this.productSort] || sorters.inventory);
+    return rows;
+  },
+
+  _renderProductRows(reset = true) {
+    if (!this.data || !this.viewEl) return;
+    const rows = this._filteredProducts();
+    const body = this.viewEl.querySelector('#roiProductRows');
+    if (!rows.length) {
+      this._productRowsShown = 0;
+      const summary = this.viewEl.querySelector('#roiProductsSummary');
+      if (summary) summary.textContent = `0 of ${this.data.products.length} physical products · ${this._periodLabel()}`;
+      body.innerHTML = '<tr><td colspan="9"><div class="empty-state">No products match these filters.</div></td></tr>';
+      return;
+    }
+
+    const batchSize = 200;
+    const previous = reset ? 0 : Number(this._productRowsShown || 0);
+    const shown = Math.min(rows.length, reset ? batchSize : previous + batchSize);
+    this._productRowsShown = shown;
+    const summary = this.viewEl.querySelector('#roiProductsSummary');
+    if (summary) {
+      summary.textContent = `${rows.length} of ${this.data.products.length} physical products · showing ${shown} · ${this._periodLabel()}`;
+    }
+
+    const productRows = rows.slice(0, shown).map((row) => {
+      const costRelevant = row.missing_cost && (Number(row.stock) > 0 || Number(row.units_sold) > 0);
+      const profitClass = Number(row.gross_profit) > 0 ? 'roi-money-positive' : (Number(row.gross_profit) < 0 ? 'roi-money-negative' : '');
+      const roiValue = row.roi_percent == null
+        ? (Number(row.net_sales) > 0 && row.missing_cost ? '<span class="roi-cost-missing">Cost needed</span>' : '—')
+        : this._percent(row.roi_percent);
+      return `<tr class="${costRelevant ? 'roi-missing-cost-row' : ''}">
+        <td><div class="roi-product-cell"><b>${App.ui.esc(row.name)}</b><span>${App.ui.esc(row.sku)} · ${App.ui.esc(row.category)}${row.active ? '' : ' · Inactive'}</span>${costRelevant ? '<em>Missing cost</em>' : ''}</div></td>
+        <td class="right">${App.ui.qty(row.stock)} <small>${App.ui.esc(row.base_unit)}</small></td>
+        <td class="right"><div class="roi-cost-cell"><span>${App.ui.money(row.unit_cost)}</span><button type="button" class="roi-cost-edit" data-edit-cost="${row.id}" aria-label="${row.missing_cost ? 'Set' : 'Edit'} unit cost for ${App.ui.esc(row.name)}">${row.missing_cost ? 'Set' : 'Edit'}</button></div></td>
+        <td class="right"><b>${App.ui.money(row.inventory_expense)}</b></td>
+        <td class="right">${App.ui.qty(row.units_sold)}</td>
+        <td class="right">${App.ui.money(row.net_sales)}</td>
+        <td class="right">${App.ui.money(row.estimated_cogs)}</td>
+        <td class="right ${profitClass}">${App.ui.money(row.gross_profit)}</td>
+        <td class="right ${profitClass}">${roiValue}</td>
+      </tr>`;
+    }).join('');
+    const remaining = rows.length - shown;
+    body.innerHTML = productRows + (remaining > 0
+      ? `<tr class="roi-load-more-row"><td colspan="9"><button type="button" class="btn btn-sm btn-ghost" data-load-more>Load ${Math.min(batchSize, remaining)} more products</button><span>${shown} of ${rows.length} shown</span></td></tr>`
+      : '');
+    const loadMore = body.querySelector('[data-load-more]');
+    if (loadMore) {
+      loadMore.onclick = () => {
+        const firstNewIndex = shown;
+        this._renderProductRows(false);
+        const firstNewCostButton = body.querySelectorAll('[data-edit-cost]')[firstNewIndex];
+        const nextLoadMore = body.querySelector('[data-load-more]');
+        (firstNewCostButton || nextLoadMore)?.focus();
+      };
+    }
+  },
+};

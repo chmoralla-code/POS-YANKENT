@@ -102,6 +102,7 @@ contextBridge.exposeInMainWorld('pos', {
     get: (id) => call('pos:products:get', id),
     create: (p) => call('pos:products:create', p),
     update: (id, p) => call('pos:products:update', id, p),
+    setCost: (id, cost) => call('pos:products:setCost', id, cost),
     setStock: (id, stock, reason, date, location) => call('pos:products:setStock', id, stock, reason, date, location),
     delete: (id) => call('pos:products:delete', id),
     deleteAll: () => call('pos:products:deleteAll'),
@@ -166,6 +167,7 @@ contextBridge.exposeInMainWorld('pos', {
     byCashier: (f) => call('pos:reports:byCashier', f || {}),
     salesByDay: (f) => call('pos:reports:salesByDay', f || {}),
     analytics: () => call('pos:reports:analytics'),
+    expensesRoi: (f) => call('pos:reports:expensesRoi', f || {}),
     exportCSV: (type, f) => call('pos:reports:exportCSV', type, f || {}),
   },
 

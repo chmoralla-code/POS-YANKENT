@@ -531,6 +531,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (App.views.pos && typeof App.views.pos.resetSessionState === 'function') {
       App.views.pos.resetSessionState();
     }
+    const activeView = App.current.view && App.views[App.current.view];
+    if (activeView && typeof activeView.destroy === 'function') {
+      try { activeView.destroy(); } catch { /* logout must continue even if view teardown fails */ }
+    }
     App.current.user = null;
     App._loggingOut = false;
     App._batteryLowSent = false; // reset low-battery flag so a new session can alert again
@@ -750,7 +754,7 @@ App._start = async function () {
 App._navigate = async function (name) {
   if (!App.views[name]) return;
   // Role guard: cashiers cannot open admin views.
-  const adminOnlyViews = new Set(['products', 'users', 'reports', 'settings']);
+  const adminOnlyViews = new Set(['products', 'users', 'reports', 'expenses', 'settings']);
   if (adminOnlyViews.has(name) && App.current.user.role !== 'admin') {
     App.ui.toast('Administrator access required', 'err'); return;
   }

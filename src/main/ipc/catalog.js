@@ -148,6 +148,22 @@ function register(ipcMain, ctx) {
     return normalizeProductRow(p, units);
   });
 
+  // Narrow cost-only update used by Expenses & ROI. It intentionally works
+  // for inactive products too, because historical sales may still need a
+  // current cost basis for an administrator's profitability estimate.
+  guard(ipcMain, 'pos:products:setCost', { admin: true }, (_c, id, value) => {
+    const productId = Number(id);
+    if (!Number.isInteger(productId) || productId <= 0) throw new Error('Invalid product');
+    if (value === undefined || value === null || String(value).trim() === '') {
+      throw new Error('Cost is required');
+    }
+    const cost = nonNegativeNumber(value, 'Cost');
+    const product = db.prepare('SELECT id,name,active FROM products WHERE id=?').get(productId);
+    if (!product) throw new Error('Product not found');
+    db.prepare('UPDATE products SET cost=? WHERE id=?').run(cost, productId);
+    return { id: product.id, name: product.name, active: !!product.active, cost };
+  });
+
   guard(ipcMain, 'pos:products:create', { admin: true }, (_c, p = {}) => {
     const name = String(p.name || '').trim();
     if (!name) throw new Error('Name is required');

@@ -274,9 +274,10 @@ App.views.products = {
           <div class="field" style="flex:1"><label class="fl">Unit</label><input id="fUnit" value="${p ? App.ui.esc(p.base_unit) : 'pc'}" placeholder="e.g. bag, pc, kg"></div>
         </div>
         <div class="row gap wrap">
-          <div class="field" style="flex:1"><label class="fl">Stock</label><input id="fStock" type="number" step="0.001" value="${p ? p.stock : 0}"${id ? ' data-orig="' + p.stock + '"' : ''}></div>
-          <div class="field" style="flex:1"><label class="fl">Price</label><input id="fPrice" type="number" step="0.01" value="${p ? p.price : 0}"></div>
-        </div>${id ? '<div class="hint" style="margin-top:-4px">Changing Stock here logs an adjustment movement. Use the <b>Stock</b> button on the card for date/location.</div>' : ''}`,
+          <div class="field" style="flex:1"><label class="fl">Stock</label><input id="fStock" type="number" min="0" step="0.001" value="${p ? p.stock : 0}"${id ? ' data-orig="' + p.stock + '"' : ''}></div>
+          <div class="field" style="flex:1"><label class="fl" for="fCost">Unit Cost</label><input id="fCost" type="number" min="0" step="0.01" value="${p ? Number(p.cost || 0) : 0}" aria-describedby="fCostHint"></div>
+          <div class="field" style="flex:1"><label class="fl">Selling Price</label><input id="fPrice" type="number" min="0" step="0.01" value="${p ? p.price : 0}"></div>
+        </div>${id ? '<div class="hint" id="fCostHint" style="margin-top:-4px">Changing Stock here logs an adjustment movement. Use the <b>Stock</b> button on the card for date/location. Unit Cost estimates expense and ROI; exclude recoverable input VAT.</div>' : '<div class="hint" id="fCostHint" style="margin-top:-4px">Unit Cost estimates product expense, profit, and ROI. Exclude recoverable input VAT.</div>'}`,
       footerHtml: `<button class="btn btn-ghost" data-a="cancel">Cancel</button><button class="btn btn-primary" data-a="save">Save</button>`,
     });
     // "Add new category" handler
@@ -317,13 +318,26 @@ App.views.products = {
       if (!name) { App.ui.toast('Name is required', 'err'); return; }
       const baseUnit = m.el.querySelector('#fUnit').value.trim() || 'pc';
       const price = num(m.el.querySelector('#fPrice').value);
+      const costInput = m.el.querySelector('#fCost');
+      const rawCost = costInput.value.trim();
+      if (!rawCost) {
+        App.ui.toast('Unit Cost is required; enter 0 only when the product truly has no cost', 'err');
+        costInput.focus();
+        return;
+      }
+      const cost = num(rawCost, NaN);
+      if (!Number.isFinite(cost) || cost < 0) {
+        App.ui.toast('Unit Cost must be a non-negative number', 'err');
+        costInput.focus();
+        return;
+      }
       const data = {
         sku: id && p ? p.sku : '',
         name,
         category_id: +m.el.querySelector('#fCat').value || null,
         base_unit: baseUnit,
         stock: parseFloat(m.el.querySelector('#fStock').value) || 0,
-        cost: id && p ? p.cost : 0,
+        cost,
         price,
         low_stock_threshold: id && p ? (p.low != null ? p.low : 10) : 10,
         is_service: false,

@@ -30,12 +30,234 @@ function clampLimit(value, fallback, max) {
 // passing an unknown string.
 const VALID_PAYMENT_METHODS = new Set(['cash', 'card', 'ewallet', 'account']);
 
+function reportDate(value, label) {
+  if (value == null || value === '') return null;
+  const text = String(value).trim();
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  if (!match) throw new Error(`${label} must use YYYY-MM-DD`);
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (parsed.getUTCFullYear() !== year || parsed.getUTCMonth() !== month - 1 || parsed.getUTCDate() !== day) {
+    throw new Error(`${label} is not a valid date`);
+  }
+  return text;
+}
+
+function buildExpensesRoiReport(db, filters = {}) {
+  const from = reportDate(filters.from, 'From date');
+  const to = reportDate(filters.to, 'To date');
+  if (from && to && from > to) throw new Error('From date must be earlier than or equal to To date');
+
+  const dateClauses = [];
+  const params = [];
+  if (from) { dateClauses.push('s.datetime >= ?'); params.push(from + ' 00:00:00'); }
+  if (to) { dateClauses.push('s.datetime <= ?'); params.push(to + ' 23:59:59'); }
+  const dateWhere = dateClauses.length ? ' AND ' + dateClauses.join(' AND ') : '';
+
+  // Aggregate sale headers in SQL so all-time reports remain small even when
+  // the register has years of history. Refunded sales remain in gross sales,
+  // but are excluded from the product revenue and COGS used for ROI.
+  const salesSummary = db.prepare(`SELECT
+      COUNT(*) AS transaction_count,
+      COALESCE(SUM(s.total),0) AS gross_sales,
+      COALESCE(SUM(CASE WHEN s.status='refunded' THEN s.total ELSE 0 END),0) AS refunded_sales_total,
+      COALESCE(SUM(CASE WHEN s.status='completed' THEN s.total ELSE 0 END),0) AS net_sales,
+      COALESCE(SUM(CASE WHEN s.status='completed' THEN s.subtotal ELSE 0 END),0) AS net_sales_ex_vat,
+      COALESCE(SUM(CASE WHEN s.status='completed' THEN s.vat ELSE 0 END),0) AS vat,
+      COALESCE(SUM(CASE WHEN s.status='completed' THEN s.discount ELSE 0 END),0) AS discounts,
+      COALESCE(SUM(CASE WHEN s.status='completed' THEN s.delivery_fee ELSE 0 END),0) AS delivery_fees,
+      SUM(CASE WHEN s.status='completed' THEN 1 ELSE 0 END) AS completed_transactions,
+      SUM(CASE WHEN s.status='refunded' THEN 1 ELSE 0 END) AS refunded_transactions
+    FROM sales s WHERE s.status IN ('completed','refunded')${dateWhere}`).get(...params) || {};
+
+  // Refund activity follows the date the refund was processed. This is shown
+  // separately from ROI, which restates the original sale period by excluding
+  // every fully refunded sale from product return and cost.
+  let refundSql = `SELECT COUNT(*) AS tx,COALESCE(SUM(r.total),0) AS total FROM refunds r WHERE 1=1`;
+  const refundParams = [];
+  if (from) { refundSql += ' AND r.datetime >= ?'; refundParams.push(from + ' 00:00:00'); }
+  if (to) { refundSql += ' AND r.datetime <= ?'; refundParams.push(to + ' 23:59:59'); }
+  const refundActivity = db.prepare(refundSql).get(...refundParams) || { tx: 0, total: 0 };
+
+  // Collapse sale lines to one row per product/service. Product revenue is
+  // VAT-exclusive, shares sale discounts proportionally, and excludes the
+  // delivery fee. Services and delivery are reported separately and never
+  // inflate physical-product ROI against product-only COGS.
+  const metricRows = db.prepare(`WITH filtered_sales AS (
+      SELECT s.id,s.subtotal,s.total,s.delivery_fee
+      FROM sales s WHERE s.status='completed'${dateWhere}
+    ), line_totals AS (
+      SELECT si.sale_id,COALESCE(SUM(si.amount),0) AS line_total
+      FROM sale_items si JOIN filtered_sales fs ON fs.id=si.sale_id
+      GROUP BY si.sale_id
+    )
+    SELECT
+      CASE WHEN si.product_id IS NULL
+        THEN 'missing:' || COALESCE(si.sku,si.name,'unknown')
+        ELSE CAST(si.product_id AS TEXT) END AS product_key,
+      si.product_id,si.line_type,
+      COALESCE(SUM(CASE WHEN si.line_type='product'
+        THEN MAX(COALESCE(si.stock_consumed,0),0) ELSE 0 END),0) AS units_sold,
+      COALESCE(SUM(CASE WHEN lt.line_total>0 AND fs.total>0
+        THEN MAX(fs.total-COALESCE(fs.delivery_fee,0),0)
+          * (fs.subtotal/fs.total) * (COALESCE(si.amount,0)/lt.line_total)
+        ELSE 0 END),0) AS net_sales,
+      COALESCE(SUM(CASE WHEN si.line_type='product'
+        THEN MAX(COALESCE(si.stock_consumed,0),0) * MAX(COALESCE(p.cost,0),0)
+        ELSE 0 END),0) AS cogs,
+      MAX(COALESCE(p.cost,0)) AS current_cost
+    FROM sale_items si
+    JOIN filtered_sales fs ON fs.id=si.sale_id
+    JOIN line_totals lt ON lt.sale_id=si.sale_id
+    LEFT JOIN products p ON p.id=si.product_id
+    GROUP BY product_key,si.product_id,si.line_type`).all(...params);
+
+  const productMetrics = new Map();
+  const soldProducts = new Set();
+  const soldWithoutCost = new Set();
+  let estimatedCogs = 0;
+  let productNetSales = 0;
+  let serviceNetSales = 0;
+  for (const metricRow of metricRows) {
+    const key = String(metricRow.product_key);
+    const unitsSold = Math.max(0, Number(metricRow.units_sold || 0));
+    const netSales = Number(metricRow.net_sales || 0);
+    const cogs = Math.max(0, Number(metricRow.cogs || 0));
+    if (metricRow.line_type === 'service') {
+      serviceNetSales += netSales;
+      continue;
+    }
+    productMetrics.set(key, { unitsSold, netSales, cogs });
+    soldProducts.add(key);
+    if (unitsSold > 0 && Number(metricRow.current_cost || 0) <= 0) soldWithoutCost.add(key);
+    productNetSales += netSales;
+    estimatedCogs += cogs;
+  }
+
+  const inventoryDateWhere = dateWhere.replace(/s\.datetime/g, 'history_sale.datetime');
+  const inventoryProducts = db.prepare(`SELECT p.id,p.sku,p.name,p.base_unit,p.stock,p.cost,p.price,p.active,
+      COALESCE(c.name,'Uncategorized') AS category
+    FROM products p LEFT JOIN categories c ON c.id=p.category_id
+    WHERE COALESCE(p.is_service,0)=0
+      AND (p.active=1 OR p.stock>0 OR EXISTS (
+        SELECT 1 FROM sale_items history_item
+        JOIN sales history_sale ON history_sale.id=history_item.sale_id
+        WHERE history_item.product_id=p.id AND history_item.line_type='product'
+          AND history_sale.status='completed'${inventoryDateWhere}
+      ))
+    ORDER BY p.name COLLATE NOCASE,p.id`).all(...params);
+
+  let inventoryExpense = 0;
+  let inventoryRetailValue = 0;
+  let productsWithStock = 0;
+  let productsWithoutCost = 0;
+  const products = inventoryProducts.map((product) => {
+    const stock = Number(product.stock || 0);
+    const valuedStock = Math.max(0, stock);
+    const unitCost = Math.max(0, Number(product.cost || 0));
+    const unitPrice = Math.max(0, Number(product.price || 0));
+    const inventoryValue = valuedStock * unitCost;
+    const retailValue = valuedStock * unitPrice;
+    if (valuedStock > 0) {
+      productsWithStock++;
+      if (unitCost <= 0) productsWithoutCost++;
+    }
+    inventoryExpense += inventoryValue;
+    inventoryRetailValue += retailValue;
+
+    const metric = productMetrics.get(String(product.id)) || { unitsSold: 0, netSales: 0, cogs: 0 };
+    const profit = metric.netSales - metric.cogs;
+    return {
+      id: product.id,
+      sku: product.sku,
+      name: product.name,
+      category: product.category,
+      base_unit: product.base_unit,
+      active: !!product.active,
+      stock: round2(stock),
+      unit_cost: round2(unitCost),
+      unit_price: round2(unitPrice),
+      inventory_expense: round2(inventoryValue),
+      inventory_retail_value: round2(retailValue),
+      units_sold: round2(metric.unitsSold),
+      net_sales: round2(metric.netSales),
+      estimated_cogs: round2(metric.cogs),
+      gross_profit: round2(profit),
+      roi_percent: metric.cogs > 0 ? round2((profit / metric.cogs) * 100) : null,
+      margin_percent: metric.netSales > 0 ? round2((profit / metric.netSales) * 100) : null,
+      missing_cost: unitCost <= 0,
+    };
+  });
+
+  const grossSales = Number(salesSummary.gross_sales || 0);
+  const refundedTotal = Number(salesSummary.refunded_sales_total || 0);
+  const netSales = Number(salesSummary.net_sales || 0);
+  const netSalesExVat = Number(salesSummary.net_sales_ex_vat || 0);
+  const vat = Number(salesSummary.vat || 0);
+  const discounts = Number(salesSummary.discounts || 0);
+  const deliveryFees = Number(salesSummary.delivery_fees || 0);
+  const completedTransactions = Number(salesSummary.completed_transactions || 0);
+  const refundedTransactions = Number(salesSummary.refunded_transactions || 0);
+  const deliveryNetSales = netSalesExVat - productNetSales - serviceNetSales;
+  const grossProfit = productNetSales - estimatedCogs;
+
+  return {
+    period: { from, to },
+    generated_at: new Date().toISOString(),
+    summary: {
+      inventory_expense: round2(inventoryExpense),
+      inventory_retail_value: round2(inventoryRetailValue),
+      inventory_potential_profit: round2(inventoryRetailValue - inventoryExpense),
+      gross_sales: round2(grossSales),
+      refunds: round2(refundedTotal),
+      refund_activity_total: round2(refundActivity.total),
+      refund_activity_transactions: Number(refundActivity.tx || 0),
+      net_sales: round2(netSales),
+      net_sales_ex_vat: round2(netSalesExVat),
+      vat: round2(vat),
+      discounts: round2(discounts),
+      delivery_fees: round2(deliveryFees),
+      estimated_cogs: round2(estimatedCogs),
+      gross_profit: round2(grossProfit),
+      roi_percent: estimatedCogs > 0 ? round2((grossProfit / estimatedCogs) * 100) : null,
+      margin_percent: productNetSales > 0 ? round2((grossProfit / productNetSales) * 100) : null,
+      completed_transactions: completedTransactions,
+      refunded_transactions: refundedTransactions,
+      product_count: inventoryProducts.length,
+      products_with_stock: productsWithStock,
+      products_without_cost: productsWithoutCost,
+      sold_product_count: soldProducts.size,
+      sold_without_cost_count: soldWithoutCost.size,
+      inventory_cost_coverage_percent: productsWithStock > 0
+        ? round2(((productsWithStock - productsWithoutCost) / productsWithStock) * 100)
+        : 100,
+      product_net_sales: round2(productNetSales),
+      service_net_sales: round2(serviceNetSales),
+      delivery_net_sales: round2(deliveryNetSales),
+    },
+    products,
+    methodology: {
+      cost_basis: 'current_product_cost',
+      revenue_basis: 'completed_physical_product_sales_excluding_vat_services_and_delivery',
+      refund_basis: 'roi_restates_original_sales; refund_activity_uses_processed_date',
+      cost_vat_assumption: 'cost_values_are_compared_as_entered; use_vat_exclusive_cost_when_input_vat_is_recoverable',
+    },
+  };
+}
+
 function register(ipcMain, ctx) {
   const { db, guard } = ctx;
   // Cashier refunds require a short-lived, one-use approval created only
   // after an active administrator password is verified in the main process.
   const refundApprovals = new Map();
   const refundApprovalTtlMs = 2 * 60 * 1000;
+
+  // Product costs and profitability are sensitive administrator-only data.
+  guard(ipcMain, 'pos:reports:expensesRoi', { admin: true }, (_context, filters = {}) =>
+    buildExpensesRoiReport(db, filters || {})
+  );
 
   // A pending sale may only be completed or voided by the exact authenticated
   // session that created it. This prevents a delayed renderer continuation

@@ -1627,3 +1627,108 @@ html.theme-dark .login-submit {
 .pos-credit-meta b { color: var(--ink); font-family: var(--mono); }
 .pos-due-field { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
 .pos-due-field label { display: block; margin-bottom: 5px; }
+
+
+/* ---------- Expenses & ROI ------------------------------------------- */
+.view-expenses { overflow: auto; }
+.roi-page { padding-bottom: 38px; }
+.roi-updated { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.roi-filter-panel .report-filter-summary small { color: var(--muted); font-size: 10px; line-height: 1.35; }
+.roi-stat-grid { margin-bottom: 14px; }
+.roi-stat.positive::before { background: var(--ok); opacity: 1; }
+.roi-stat.negative::before { background: var(--danger); opacity: 1; }
+.roi-stat.expense::before { background: #8a6d1a; opacity: .9; }
+.roi-stat.positive .v { color: #227a3f; }
+.roi-stat.negative .v { color: var(--danger); }
+.roi-stat small { display: block; margin-top: 8px; line-height: 1.35; }
+
+.roi-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 22px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--ok);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+}
+.roi-notice.warning { border-left-color: #8a6d1a; background: rgba(138,109,26,.06); }
+.roi-notice > div { display: flex; flex-direction: column; gap: 2px; }
+.roi-notice b { font-size: 12px; }
+.roi-notice span { color: var(--muted); font-size: 11px; line-height: 1.4; }
+
+.roi-insight-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(320px, .75fr); gap: 12px; margin-bottom: 25px; }
+.roi-insight-card, .roi-products-panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.roi-insight-card { padding: 17px 18px; }
+.roi-card-heading h3, .roi-products-head h3 { margin: 0; font-size: 15px; }
+.roi-card-heading p, .roi-products-head p { margin: 3px 0 0; color: var(--muted); font-size: 11px; line-height: 1.4; }
+.roi-flow { display: flex; flex-direction: column; gap: 14px; margin-top: 17px; }
+.roi-flow-label { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 5px; font-size: 11px; }
+.roi-flow-label span { color: var(--muted); font-weight: 600; }
+.roi-flow-label strong { font-size: 12px; font-variant-numeric: tabular-nums; }
+.roi-flow-track { height: 9px; overflow: hidden; border-radius: 999px; background: var(--line-2); }
+.roi-flow-bar { display: block; min-width: 2px; height: 100%; border-radius: inherit; background: var(--ink); }
+.roi-flow-bar.cost { background: #8a6d1a; }
+.roi-flow-bar.profit { background: var(--ok); }
+.roi-flow-bar.loss { background: var(--danger); }
+.roi-flow-context { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 2px; padding-top: 12px; border-top: 1px solid var(--line-2); font-size: 10px; }
+.roi-flow-context span { color: var(--muted); }
+.roi-flow-context strong { text-align: right; font-size: 10px; font-variant-numeric: tabular-nums; }
+.roi-method-card { display: flex; flex-direction: column; }
+.roi-formula { display: flex; flex-direction: column; gap: 3px; margin-top: 14px; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: var(--radius-sm); background: var(--bg); }
+.roi-formula span { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.roi-formula strong { font-size: 12px; line-height: 1.35; }
+.roi-method-note { margin: 13px 1px 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+
+.roi-products-panel { overflow: hidden; }
+.roi-products-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 18px 13px; border-bottom: 1px solid var(--line-2); }
+.roi-product-toolbar { display: grid; grid-template-columns: minmax(240px, 1fr) 200px 230px; gap: 10px; align-items: end; padding: 13px 18px; background: rgba(127,127,145,.035); border-bottom: 1px solid var(--line-2); }
+.roi-product-toolbar .fl { margin-bottom: 5px; }
+.roi-table-wrap { max-height: 580px; overflow: auto; }
+.roi-table { min-width: 1180px; margin: 0; border: 0; }
+.roi-table thead th { position: sticky; z-index: 2; top: 0; box-shadow: 0 1px 0 var(--line); }
+.roi-table th, .roi-table td { padding: 10px 11px; font-size: 11px; vertical-align: middle; }
+.roi-table td.right { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.roi-table td small { color: var(--muted); font-size: 9px; }
+.roi-product-cell { display: flex; min-width: 220px; flex-direction: column; gap: 2px; }
+.roi-product-cell b { overflow: hidden; max-width: 300px; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.roi-product-cell span { color: var(--muted); font-size: 9px; }
+.roi-product-cell em, .roi-cost-missing { width: max-content; padding: 2px 5px; border-radius: 4px; background: rgba(138,109,26,.12); color: #806315; font-size: 9px; font-style: normal; font-weight: 700; }
+.roi-cost-cell { display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.roi-cost-edit { appearance: none; padding: 2px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--muted); font-size: 9px; font-weight: 700; line-height: 1.35; }
+.roi-cost-edit:hover { border-color: var(--ink); color: var(--ink); background: var(--line-2); }
+.roi-cost-edit:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+.roi-cost-product { display: flex; flex-direction: column; gap: 3px; margin-bottom: 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg); }
+.roi-cost-product b { font-size: 13px; }
+.roi-cost-product span { color: var(--muted); font-size: 10px; line-height: 1.4; }
+.roi-load-more-row td { padding: 14px !important; text-align: center !important; background: var(--bg); }
+.roi-load-more-row td span { margin-left: 9px; color: var(--muted); font-size: 10px; }
+.roi-missing-cost-row td { background: rgba(138,109,26,.035); }
+.roi-money-positive { color: #227a3f; font-weight: 700; }
+.roi-money-negative { color: var(--danger); font-weight: 700; }
+
+html.theme-dark .roi-stat.positive .v, html.theme-dark .roi-money-positive { color: var(--ok); }
+html.theme-dark .roi-notice.warning { background: rgba(251,191,36,.06); }
+html.theme-dark .roi-product-cell em, html.theme-dark .roi-cost-missing { background: rgba(251,191,36,.12); color: #fbbf24; }
+html.theme-dark .roi-missing-cost-row td { background: rgba(251,191,36,.025); }
+html.theme-dark .roi-formula { background: #1a1a1f; }
+html.theme-dark .roi-product-toolbar { background: rgba(255,255,255,.02); }
+
+@media (max-width: 1050px) {
+  .roi-insight-grid { grid-template-columns: 1fr; }
+  .roi-product-toolbar { grid-template-columns: 1fr 1fr; }
+  .roi-search-field { grid-column: 1 / -1; }
+}
+
+@media (max-width: 650px) {
+  .roi-products-head, .roi-notice { align-items: flex-start; flex-direction: column; }
+  .roi-product-toolbar { grid-template-columns: 1fr; }
+  .roi-search-field { grid-column: auto; }
+}
