@@ -2,7 +2,25 @@
 /* YANKENT POS app shell — login, navigation, routing. */
 window.App = window.App || {};
 
-App.current = { user: null, view: 'pos' };
+App.current = { view: 'pos' };
+// Treat each assigned authenticated user object as a new renderer session
+// generation. Async UI work captures this number and must verify it after
+// every await before opening a modal or mutating the next cashier's screen.
+App._sessionGeneration = 0;
+let currentSessionUser = null;
+Object.defineProperty(App.current, 'user', {
+  enumerable: true,
+  configurable: false,
+  get() { return currentSessionUser; },
+  set(value) {
+    if (value !== currentSessionUser) App._sessionGeneration += 1;
+    currentSessionUser = value;
+  },
+});
+App.captureSessionGeneration = () => App._sessionGeneration;
+App.isSessionGenerationCurrent = (generation) => (
+  generation === App._sessionGeneration && !!App.current.user && !App._loggingOut
+);
 App.DEV_FACEBOOK = 'https://www.facebook.com/profile.php?id=61584774638218';
 
 App._delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -508,7 +526,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (e) {
       // confirm() dismissed — proceed to logout without sending
     }
+    await App.ui.closeAllModals();
     await App.pos.logout();
+    if (App.views.pos && typeof App.views.pos.resetSessionState === 'function') {
+      App.views.pos.resetSessionState();
+    }
     App.current.user = null;
     App._loggingOut = false;
     App._batteryLowSent = false; // reset low-battery flag so a new session can alert again
@@ -744,7 +766,7 @@ App._navigate = async function (name) {
     else b.removeAttribute('aria-current');
   });
   const view = document.getElementById('view');
-  view.classList.remove('view-pos');
+  view.classList.remove('view-pos', 'view-utang');
   document.getElementById('viewTitle').textContent = App.views[name].title;
   view.innerHTML = '<div class="empty-state"><span class="spinner"></span> Loading…</div>';
   try { await App.views[name].render(view); }

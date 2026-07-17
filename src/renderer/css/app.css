@@ -1511,3 +1511,119 @@ html.theme-dark .login-footer { border-top-color: var(--line); }
 html.theme-dark .login-submit {
   box-shadow: 0 10px 24px rgba(0,0,0,.35);
 }
+
+/* ---------- Utang / customer loans ----------------------------------- */
+.view-utang { overflow: auto; }
+.utang-page { display: flex; flex-direction: column; gap: 14px; min-height: 100%; }
+.utang-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.utang-head h2 { font-size: 22px; letter-spacing: -.025em; margin-bottom: 3px; }
+.utang-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.utang-stat {
+  min-height: 88px; padding: 15px 16px; border: 1px solid var(--line);
+  border-radius: var(--radius); background: var(--panel); box-shadow: var(--shadow);
+  display: flex; flex-direction: column; justify-content: space-between;
+}
+.utang-stat span { color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.utang-stat b { font-size: 22px; line-height: 1.1; }
+.utang-stat.due { border-left: 4px solid #8a6d1a; }
+.utang-stat.overdue { border-left: 4px solid var(--danger); }
+.utang-reminder-card {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 11px 14px; border: 1px solid var(--line); border-left: 4px solid var(--ok);
+  border-radius: var(--radius-sm); background: var(--panel);
+}
+.utang-reminder-card.warn { border-left-color: #8a6d1a; }
+.utang-reminder-card > div { display: flex; flex-direction: column; gap: 2px; }
+.utang-reminder-card span, .utang-reminder-card small { color: var(--muted); font-size: 12px; }
+.utang-list-panel { overflow: hidden; min-height: 340px; }
+.utang-toolbar { display: grid; grid-template-columns: minmax(240px, 1fr) 190px; gap: 10px; padding: 12px; border-bottom: 1px solid var(--line); }
+.utang-toolbar input, .utang-toolbar select { width: 100%; }
+.utang-table-wrap { overflow: auto; }
+.utang-table, .utang-items { width: 100%; border-collapse: collapse; }
+.utang-table th, .utang-table td, .utang-items th, .utang-items td { padding: 11px 12px; border-bottom: 1px solid var(--line-2); text-align: left; vertical-align: middle; }
+.utang-table th, .utang-items th { color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; background: var(--bg); }
+.utang-table th.right, .utang-table td.right, .utang-items th.right, .utang-items td.right { text-align: right; }
+.utang-table tr:hover td { background: color-mix(in srgb, var(--panel) 78%, var(--bg)); }
+.utang-table tr.is-inactive { opacity: .62; }
+.utang-table td small, .utang-items td small { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
+.utang-name { border: 0; background: none; padding: 0; font-weight: 800; text-align: left; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px; }
+.utang-name:hover { text-decoration-color: currentColor; }
+.utang-money { font-weight: 800; font-family: var(--mono); white-space: nowrap; }
+.utang-status { display: inline-flex; align-items: center; min-height: 23px; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); font-size: 10px; font-weight: 800; letter-spacing: .025em; white-space: nowrap; }
+.utang-status.paid { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 35%, var(--line)); }
+.utang-status.overdue { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 35%, var(--line)); background: color-mix(in srgb, var(--danger) 7%, var(--panel)); }
+.utang-status.due_today, .utang-status.due_soon, .utang-status.needs_due_date, .utang-status.invalid_due_date { color: #735a11; border-color: #d6c17c; background: #fffaf0; }
+.utang-status.cancelled { text-decoration: line-through; color: var(--muted); }
+.utang-loading, .utang-error, .utang-empty { min-height: 120px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; color: var(--muted); text-align: center; padding: 22px; }
+.utang-error { color: var(--danger); }
+.utang-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.utang-form .field { margin: 0; }
+.utang-span-2 { grid-column: 1 / -1; }
+.utang-detail { display: flex; flex-direction: column; gap: 12px; }
+.utang-profile-card { display: grid; grid-template-columns: minmax(0, 1fr) 230px; gap: 12px; }
+.utang-profile-main, .utang-credit-card { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; background: var(--bg); }
+.utang-kicker { display: block; margin-bottom: 7px; color: var(--muted); font: 700 10px/1.2 var(--sans); letter-spacing: .07em; text-transform: uppercase; }
+.utang-profile-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px 16px; }
+.utang-profile-grid div, .utang-credit-card div { min-width: 0; }
+.utang-profile-grid small, .utang-credit-card small, .utang-notes small { display: block; color: var(--muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 3px; }
+.utang-profile-grid b { display: block; font-size: 12px; overflow-wrap: anywhere; }
+.utang-notes { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.utang-notes p { white-space: pre-wrap; font-size: 12px; }
+.utang-credit-card { display: flex; flex-direction: column; gap: 10px; background: var(--ink); color: var(--panel); }
+.utang-credit-card > span { color: color-mix(in srgb, var(--panel) 66%, transparent); font-size: 11px; }
+.utang-credit-card > b { font-size: 24px; }
+.utang-credit-card div { display: flex; justify-content: space-between; gap: 8px; }
+.utang-credit-card small { color: color-mix(in srgb, var(--panel) 60%, transparent); margin: 0; }
+.utang-detail-actions, .utang-loan-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 7px; }
+.utang-loan-list { display: flex; flex-direction: column; gap: 10px; }
+.utang-loan { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--panel); }
+.utang-loan > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 13px 14px; border-bottom: 1px solid var(--line); }
+.utang-loan h3 { font-size: 15px; }
+.utang-loan-totals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 1px solid var(--line); }
+.utang-loan-totals div { padding: 11px 14px; border-right: 1px solid var(--line); }
+.utang-loan-totals div:last-child { border-right: 0; }
+.utang-loan-totals small { display: block; color: var(--muted); font-size: 10px; text-transform: uppercase; margin-bottom: 3px; }
+.utang-loan-totals b { font-family: var(--mono); font-size: 15px; }
+.utang-loan-actions { padding: 9px 12px; border-bottom: 1px solid var(--line); background: var(--bg); }
+.utang-fold { border-bottom: 1px solid var(--line-2); }
+.utang-fold:last-child { border-bottom: 0; }
+.utang-fold summary { cursor: pointer; padding: 11px 14px; font-size: 12px; font-weight: 800; user-select: none; }
+.utang-fold[open] summary { border-bottom: 1px solid var(--line-2); background: var(--bg); }
+.utang-subempty { padding: 14px; color: var(--muted); font-size: 12px; }
+.utang-payments { display: flex; flex-direction: column; }
+.utang-payment { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--line-2); }
+.utang-payment:last-child { border-bottom: 0; }
+.utang-payment > div { display: flex; flex-direction: column; gap: 2px; }
+.utang-payment span, .utang-payment small { color: var(--muted); font-size: 11px; }
+.utang-payment em { color: var(--danger); font-size: 11px; font-style: normal; }
+.utang-payment.is-reversed { opacity: .65; }
+.utang-payment.is-reversed b { text-decoration: line-through; }
+.utang-events { list-style: none; display: flex; flex-direction: column; }
+.utang-events li { display: flex; flex-direction: column; gap: 2px; padding: 9px 14px; border-bottom: 1px solid var(--line-2); font-size: 11px; }
+.utang-events li:last-child { border-bottom: 0; }
+.utang-events span { color: var(--muted); }
+
+@media (max-width: 1100px) {
+  .utang-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .utang-profile-card { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  .utang-head { align-items: stretch; flex-direction: column; }
+  .utang-summary, .utang-form-grid, .utang-profile-grid { grid-template-columns: 1fr; }
+  .utang-span-2 { grid-column: auto; }
+  .utang-toolbar { grid-template-columns: 1fr; }
+  .utang-table th:nth-child(2), .utang-table td:nth-child(2), .utang-table th:nth-child(4), .utang-table td:nth-child(4) { display: none; }
+  .utang-loan-totals { grid-template-columns: 1fr; }
+  .utang-loan-totals div { border-right: 0; border-bottom: 1px solid var(--line); }
+  .utang-loan-totals div:last-child { border-bottom: 0; }
+}
+
+/* On-Account customer and Due Date controls inside Current Sale. */
+.pos-credit-select { padding: 10px 12px; border-top: 1px solid var(--line); background: var(--bg); }
+.pos-credit-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.pos-credit-row label, .pos-due-field label { color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.pos-credit-select select, .pos-due-field input { width: 100%; min-height: 34px; }
+.pos-credit-meta { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 5px 12px; min-height: 18px; margin-top: 6px; color: var(--muted); font-size: 11px; }
+.pos-credit-meta b { color: var(--ink); font-family: var(--mono); }
+.pos-due-field { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+.pos-due-field label { display: block; margin-bottom: 5px; }
