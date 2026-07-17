@@ -921,83 +921,142 @@ App._isNewer = function (a, b) {
   return false; // equal
 };
 
-App._WHATS_NEW_CATS = [
-  { key: 'feat',  icon: '✨', label: "What's New",        test: /\b(added|adds|new|introduc|support|now|launch|enabl)/i },
-  { key: 'fix',   icon: '🐛', label: 'Fixes & Stability', test: /\b(fix|fixes|fixed|patch|resolve|resolves|resolved|bug|crash)/i },
-  { key: 'perf',  icon: '⚡', label: 'Performance',       test: /\b(performance|faster|optim|speed|quicker|snappy)/i },
-  { key: 'sec',   icon: '🔒', label: 'Security',          test: /\b(security|vulnerab|safe|hardened|cve)/i },
-  { key: 'chore', icon: '🧹', label: 'Maintenance',       test: /\b(refactor|clean|deps|depend|chore|bump|tidy|internal)/i },
-];
-
 App._parseReleaseNotes = function (notes) {
-  const raw = String(notes || '').trim();
-  if (!raw) return [];
-  const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  const out = [];
-  let current = null;
-  for (const line of lines) {
-    // Strip leading bullets / numbering
-    const text = line.replace(/^[-*•]\s+/, '').replace(/^\d+\.\s+/, '');
-    const lower = text.toLowerCase();
-    // Section headers in the notes like "### Fixes" or "## New"
-    const headerMatch = text.match(/^#{1,6}\s+(.+)$/);
-    if (headerMatch && text.length < 40) {
-      // Treat short header lines as captions for subsequent items
-      current = { icon: '▸', label: headerMatch[1], items: [] };
-      out.push(current);
-      continue;
-    }
-    const cat = App._WHATS_NEW_CATS.find((c) => c.test.test(lower)) || null;
-    if (current) {
-      current.items.push({ text });
-    } else {
-      const bucket = cat || { key: 'misc', icon: '•', label: 'Other' };
-      let group = out.find((g) => g.label === bucket.label);
-      if (!group) { group = { icon: bucket.icon, label: bucket.label, items: [] }; out.push(group); }
-      group.items.push({ text });
-    }
-  }
-  // Drop empty groups
-  return out.filter((g) => g.items && g.items.length);
+  return window.YankentReleaseNotes.parse(notes);
 };
 
 App._showWhatsNew = function (r) {
   return new Promise((resolve) => {
+    const returnFocus = document.activeElement;
     const groups = App._parseReleaseNotes(r.releaseNotes);
-    const from = r.currentVersion, to = r.version;
+    const totalItems = groups.reduce((total, group) => total + group.items.length, 0);
+    const from = r.currentVersion || '—', to = r.version || '—';
+    const totalLabel = `${totalItems} ${totalItems === 1 ? 'highlight' : 'highlights'}`;
     const body = `
-      <div class="wn-head">
-        <div class="wn-ver">
-          <span class="wn-from">v${App.ui.esc(from)}</span>
-          <span class="wn-arrow">→</span>
-          <span class="wn-to">v${App.ui.esc(to)}</span>
-        </div>
-        <div class="wn-caption">A new version of YANKENT POS is ready to install.</div>
-      </div>
-      <div class="wn-list">
-        ${groups.length ? groups.map((g) => `
-          <div class="wn-group">
-            <div class="wn-group-h"><span class="wn-ic">${g.icon}</span>${App.ui.esc(g.label)} <span class="wn-cnt">${g.items.length}</span></div>
-            ${g.items.map((it) => `<div class="wn-item">${App.ui.esc(it.text)}</div>`).join('')}
-          </div>`).join('') : `<div class="wn-empty">A new version is available. Release notes were not provided.</div>`}
+      <div class="wn-release">
+        <section class="wn-hero">
+          <div class="wn-eyebrow"><span class="wn-ready-dot" aria-hidden="true"></span>Update ready</div>
+          <div class="wn-hero-grid">
+            <div class="wn-hero-copy">
+              <div class="wn-title">A better YANKENT POS is ready.</div>
+              <div class="wn-caption">Review the changes, then download the update when it suits your counter.</div>
+            </div>
+            <div class="wn-version-flow" aria-label="Update from version ${App.ui.esc(from)} to version ${App.ui.esc(to)}">
+              <div class="wn-version-card">
+                <span class="wn-version-label">Installed</span>
+                <strong class="wn-from">v${App.ui.esc(from)}</strong>
+              </div>
+              <span class="wn-arrow" aria-hidden="true">→</span>
+              <div class="wn-version-card wn-version-card-new">
+                <span class="wn-version-label">Available</span>
+                <strong class="wn-to">v${App.ui.esc(to)}</strong>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section class="wn-changes" aria-labelledby="wnChangesHeading">
+          <div class="wn-section-head">
+            <div>
+              <span class="wn-section-kicker">Release notes</span>
+              <h3 id="wnChangesHeading">What's included</h3>
+            </div>
+            ${totalItems ? `<span class="wn-total">${App.ui.esc(totalLabel)}</span>` : ''}
+          </div>
+          <div class="wn-list">
+            ${groups.length ? groups.map((g) => `
+              <section class="wn-group wn-group-${App.ui.esc(g.key)}">
+                <div class="wn-group-h">
+                  <span class="wn-ic" aria-hidden="true">${App.ui.esc(g.marker)}</span>
+                  <span>${App.ui.esc(g.label)}</span>
+                  ${g.items.length > 1 ? `<span class="wn-cnt">${g.items.length}</span>` : ''}
+                </div>
+                <ul class="wn-items">
+                  ${g.items.map((it) => `<li class="wn-item">${App.ui.esc(it.text)}</li>`).join('')}
+                </ul>
+              </section>`).join('') : `
+              <div class="wn-empty">
+                <span class="wn-empty-mark" aria-hidden="true">+</span>
+                <div><strong>Improvements are included</strong><span>Detailed release notes were not provided for this version.</span></div>
+              </div>`}
+          </div>
+          <div class="wn-install-note">
+            <span class="wn-install-ic" aria-hidden="true">↓</span>
+            <div><strong>Download now, restart when ready.</strong><span>You can keep using YANKENT POS while the update downloads in the background.</span></div>
+          </div>
+        </section>
       </div>`;
     const m = App.ui.modal({
       title: "What's New",
       wide: true,
       bodyHtml: body,
-      footerHtml: `<button class="btn btn-ghost" data-a="no">Later</button>
-        <button class="btn btn-primary" data-a="yes">Download &amp; Install</button>`,
+      footerHtml: `<button class="btn btn-ghost" data-a="no">Not now</button>
+        <button class="btn btn-primary" data-a="yes">Download update</button>`,
     });
+    const dialog = m.el.querySelector('.modal');
+    const heading = m.el.querySelector('.modal-h > span');
+    const primaryAction = m.el.querySelector('[data-a="yes"]');
+    const backgroundStates = ['app', 'login', 'printerStatusBar']
+      .map((id) => document.getElementById(id))
+      .filter(Boolean)
+      .map((element) => ({ element, inert: element.inert }));
+    backgroundStates.forEach(({ element }) => { element.inert = true; });
+    dialog.classList.add('wn-modal');
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    heading.id = 'wnDialogTitle';
+    dialog.setAttribute('aria-labelledby', heading.id);
+    dialog.setAttribute('tabindex', '-1');
     let settled = false;
+    let environmentRestored = false;
+    let onKeyDown = null;
+    const restoreEnvironment = () => {
+      if (environmentRestored) return;
+      environmentRestored = true;
+      if (onKeyDown) document.removeEventListener('keydown', onKeyDown);
+      backgroundStates.forEach(({ element, inert }) => { element.inert = inert; });
+      if (returnFocus && typeof returnFocus.focus === 'function') setTimeout(() => returnFocus.focus(), 0);
+    };
+    onKeyDown = (event) => {
+      const topModal = document.querySelector('#modal-root > .modal-overlay:last-child');
+      if (topModal !== m.el) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        finish(false);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = [...m.el.querySelectorAll('button:not([disabled]), select:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+        .filter((element) => element.offsetParent !== null);
+      if (!focusable.length) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
     const finish = (choice, close = true) => {
       if (settled) return;
       settled = true;
+      restoreEnvironment();
       if (close) m.close();
       resolve(choice);
     };
-    m.el.querySelector('[data-a="yes"]').onclick = () => finish(true);
+    document.addEventListener('keydown', onKeyDown);
+    primaryAction.onclick = () => finish(true);
     m.el.querySelector('[data-a="no"]').onclick = () => finish(false);
-    m.onClose = () => finish(false, false);
+    m.onClose = () => {
+      restoreEnvironment();
+      finish(false, false);
+    };
+    requestAnimationFrame(() => primaryAction.focus());
   });
 };
 

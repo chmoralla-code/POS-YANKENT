@@ -9,12 +9,76 @@ const UPDATE = {
   releaseNotes: '- Added safer remote updates\n- Fixed background download errors',
 };
 
+const GITHUB_HTML_UPDATE = {
+  currentVersion: '1.0.0',
+  version: '2.2.6',
+  releaseNotes: '<p>Secure remote updates, printer recovery, reports, cashier, and UI improvements.</p>',
+};
+
 async function waitForRenderer(page) {
   await page.waitForSelector('#startup', { state: 'detached', timeout: 30000 });
   await expect(page.locator('#loginCheckUpdates')).toBeVisible();
 }
 
 test.describe('Updater UI reliability', () => {
+  test("What's New turns GitHub HTML into a safe, focused release summary", async () => {
+    const { electron, page } = await launchApp();
+    try {
+      await waitForRenderer(page);
+      const returnTarget = page.locator('#loginCheckUpdates');
+      await returnTarget.focus();
+
+      await page.evaluate((update) => {
+        window.__whatsNewResult = 'pending';
+        void App._showWhatsNew(update).then((result) => {
+          window.__whatsNewResult = result;
+        });
+      }, GITHUB_HTML_UPDATE);
+
+      const dialog = page.getByRole('dialog', { name: "What's New" });
+      await expect(dialog).toBeVisible();
+      await expect(dialog.locator('.wn-from')).toHaveText('v1.0.0');
+      await expect(dialog.locator('.wn-to')).toHaveText('v2.2.6');
+      await expect(dialog.locator('.wn-total')).toHaveText('5 highlights');
+      await expect(dialog.locator('.wn-item')).toHaveText([
+        'Secure remote updates',
+        'Printer recovery',
+        'Reports',
+        'Cashier',
+        'UI improvements',
+      ]);
+      await expect(dialog).not.toContainText('<p>');
+      await expect(dialog).not.toContainText('Other');
+      await expect(dialog.locator('script, img')).toHaveCount(0);
+      await expect(dialog.getByRole('button', { name: 'Download update' })).toBeFocused();
+      await expect(page.locator('#login')).toHaveJSProperty('inert', true);
+      await page.keyboard.press('Tab');
+      await expect(dialog.getByRole('button', { name: 'Close dialog' })).toBeFocused();
+      await page.keyboard.press('Shift+Tab');
+      await expect(dialog.getByRole('button', { name: 'Download update' })).toBeFocused();
+
+      if (process.env.WHATS_NEW_SCREENSHOT) {
+        await page.screenshot({ path: process.env.WHATS_NEW_SCREENSHOT });
+      }
+
+      await dialog.getByRole('button', { name: 'Not now' }).click();
+      await expect.poll(() => page.evaluate(() => window.__whatsNewResult)).toBe(false);
+      await expect(page.locator('#login')).toHaveJSProperty('inert', false);
+      await expect(returnTarget).toBeFocused();
+
+      await page.evaluate((update) => {
+        window.__whatsNewResult = 'pending';
+        void App._showWhatsNew(update).then((result) => {
+          window.__whatsNewResult = result;
+        });
+      }, GITHUB_HTML_UPDATE);
+      await page.getByRole('dialog', { name: "What's New" }).getByRole('button', { name: 'Download update' }).click();
+      await expect.poll(() => page.evaluate(() => window.__whatsNewResult)).toBe(true);
+    } finally {
+      await electron.close();
+    }
+  });
+
   test("What's New resolves false when dismissed by X or overlay", async () => {
     const { electron, page } = await launchApp();
     try {
