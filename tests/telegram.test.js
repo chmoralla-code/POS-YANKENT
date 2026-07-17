@@ -32,6 +32,7 @@ test('buildReportMessage includes header, today/yesterday/month/year, and footer
   await makeSale(api, cashierSession, 560);
   const msg = buildReportMessage(api.db);
   assert.ok(msg.includes('YANKENT POS Sales Report'));
+  assert.ok(msg.includes('VAT included:'), 'report uses the VAT stored on each sale');
   assert.ok(msg.includes('Today:'));
   assert.ok(msg.includes('Yesterday:'));
   assert.ok(msg.includes('This Month:'));
@@ -93,6 +94,23 @@ test('escapeHtml escapes <, >, & in user-supplied text', () => {
   assert.equal(escapeHtml('<&>'), '&lt;&amp;&gt;');
 });
 
+test('fresh installations do not ship Telegram credentials', async () => {
+  const t = await setup();
+  assert.equal(
+    t.api.db.prepare("SELECT value FROM settings WHERE key='telegram_token'").get().value,
+    ''
+  );
+  assert.equal(
+    t.api.db.prepare("SELECT value FROM settings WHERE key='telegram_chat_id'").get().value,
+    ''
+  );
+  assert.equal(
+    t.api.db.prepare("SELECT value FROM settings WHERE key='telegram_enabled'").get().value,
+    '0'
+  );
+  t.api.close();
+});
+
 test('buildReportMessage HTML-escapes product and cashier names (no Telegram parse failure)', async () => {
   // Regression: product/cashier names with <, >, & broke Telegram's HTML
   // parse mode — the message was rejected with "can't parse entities" and,
@@ -106,6 +124,8 @@ test('buildReportMessage HTML-escapes product and cashier names (no Telegram par
     `INSERT INTO products(sku,name,category_id,base_unit,stock,cost,price,low_stock_threshold,is_service,active)
      VALUES(?,?,?,?,?,?,?,?,?,1)`
   ).run('TEST-HTML', 'Nails & Screws < Premium', null, 'kg', 100, 0, 50, 10, 0);
+  api.db.prepare('INSERT INTO product_units(product_id,unit,factor,price) VALUES(?,?,?,?)')
+    .run(prod.lastInsertRowid, 'kg', 1, 50);
   const res = await api.call('pos:sales:create', cashierSession, {
     items: [{ productId: prod.lastInsertRowid, sku: 'TEST-HTML', name: 'Nails & Screws < Premium', unit: 'kg', qty: 2, unitPrice: 50, factor: 1 }],
     paymentMethod: 'cash', amountTendered: 9999,

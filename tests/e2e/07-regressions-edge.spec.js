@@ -68,10 +68,15 @@ test.describe('Recently Fixed Bugs — Regression', () => {
     try {
       await login(page, 'admin', 'admin123');
       await page.click('.nav-item[data-view="analytics"]');
-      await page.waitForTimeout(800);
+      await expect(page.getByRole('heading', { name: 'Store performance' })).toBeVisible();
       await expect(page.locator('.an-card').first()).toBeVisible();
       const cardText = await page.locator('.an-card').first().textContent();
       expect(cardText.length).toBeGreaterThan(0);
+      const topSellers = page.locator('#anSections .collapse-toggle').first();
+      await expect(topSellers).toHaveAttribute('aria-expanded', 'true');
+      await topSellers.focus();
+      await page.keyboard.press('Enter');
+      await expect(topSellers).toHaveAttribute('aria-expanded', 'false');
     } finally { await electron.close(); }
   });
 

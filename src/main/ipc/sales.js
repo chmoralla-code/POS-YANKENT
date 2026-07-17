@@ -1,10 +1,22 @@
 'use strict';
 
+const { randomUUID } = require('crypto');
 const { computeTotals, round2 } = require('../lib/money');
 const { buildReceipt } = require('../lib/receipt');
 const { buildAnalytics } = require('../lib/telegram');
 
 function placeholders(n) { return Array(n).fill('?').join(','); }
+
+function nonNegativeNumber(value, label) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) throw new Error(`Invalid ${label}`);
+  return n;
+}
+
+function clampLimit(value, fallback, max) {
+  const n = Math.floor(Number(value));
+  return Number.isFinite(n) && n > 0 ? Math.min(n, max) : fallback;
+}
 
 // Payment methods the UI offers (see pos.js pay-grid). Validating here so a
 // malformed payload can't bypass the cash-sufficiency check (only 'cash'
@@ -14,6 +26,10 @@ const VALID_PAYMENT_METHODS = new Set(['cash', 'card', 'ewallet', 'account']);
 
 function register(ipcMain, ctx) {
   const { db, guard } = ctx;
+  // Cashier refunds require a short-lived, one-use approval created only
+  // after an active administrator password is verified in the main process.
+  const refundApprovals = new Map();
+  const refundApprovalTtlMs = 2 * 60 * 1000;
 
   // ---- Create a sale (PENDING — stock not yet deducted) -----------------
   // The sale is recorded with status='pending'.  Stock is NOT deducted,
@@ -34,33 +50,55 @@ function register(ipcMain, ctx) {
       throw new Error('Invalid payment method: ' + (p.paymentMethod || '(empty)'));
     }
 
-    const vatRate = Number(ctx.getSetting(db, 'vat_rate') || 12);
+    const vatRate = nonNegativeNumber(ctx.getSetting(db, 'vat_rate') || 12, 'VAT rate');
+    if (vatRate > 100) throw new Error('Invalid VAT rate');
 
-    // Authoritatively recompute line amounts + totals (renderer values are
-    // display-only; the DB is the source of truth).
+    // Resolve every sellable field from the database. Renderer values are
+    // display-only: trusting its price/factor/service flag would allow stale
+    // UI state (or a malformed payload) to undercharge or bypass stock.
+    const productStmt = db.prepare(
+      'SELECT id, sku, name, base_unit, is_service FROM products WHERE id=? AND active=1'
+    );
+    const unitStmt = db.prepare(
+      'SELECT unit, factor, price FROM product_units WHERE product_id=? AND unit=?'
+    );
     const lineItems = items.map((i) => {
       const qty = Number(i.qty);
-      const unitPrice = Number(i.unitPrice);
-      if (!(qty > 0) || unitPrice < 0) throw new Error('Invalid item: ' + (i.name || ''));
-      const factor = Number(i.factor || 1);
+      if (!Number.isFinite(qty) || qty <= 0) throw new Error('Invalid item quantity');
+      const productId = Number(i.productId);
+      if (!Number.isInteger(productId) || productId <= 0) throw new Error('Invalid product');
+      const product = productStmt.get(productId);
+      if (!product) throw new Error('Product not found or inactive');
+      const requestedUnit = String(i.unit || product.base_unit || '').trim();
+      const sellUnit = unitStmt.get(productId, requestedUnit);
+      if (!sellUnit) throw new Error(`Invalid unit for ${product.name}: ${requestedUnit || '(empty)'}`);
+      const unitPrice = nonNegativeNumber(sellUnit.price, 'unit price');
+      const factor = Number(sellUnit.factor);
+      if (!Number.isFinite(factor) || factor <= 0) throw new Error(`Invalid stock factor for ${product.name}`);
+      const isService = !!product.is_service;
       return {
-        productId: i.productId || null,
-        sku: i.sku, name: i.name, unit: i.unit || 'pc',
+        productId,
+        sku: product.sku, name: product.name, unit: sellUnit.unit,
         qty, unitPrice, factor,
         amount: round2(qty * unitPrice),
-        lineType: i.lineType || (i.isService ? 'service' : 'product'),
+        lineType: isService ? 'service' : 'product',
         stockConsumed: round2(qty * factor),
-        isService: !!i.isService || i.lineType === 'service',
+        isService,
       };
     });
 
+    const discount = nonNegativeNumber(p.discount ?? 0, 'discount');
+    const deliveryFee = nonNegativeNumber(p.deliveryFee ?? 0, 'delivery fee');
+
     const totals = computeTotals(lineItems, {
       vatRate,
-      discount: Number(p.discount || 0),
-      deliveryFee: Number(p.deliveryFee || 0),
+      discount,
+      deliveryFee,
     });
 
-    const tendered = Number(p.amountTendered || 0);
+    const tendered = paymentMethod === 'cash'
+      ? nonNegativeNumber(p.amountTendered ?? 0, 'cash received')
+      : 0;
     if (paymentMethod === 'cash' && tendered < totals.total - 1e-9) {
       throw new Error('Insufficient cash received');
     }
@@ -104,8 +142,8 @@ function register(ipcMain, ctx) {
         'project','po_number','subtotal','vat','discount','delivery_fee','total','payment_method',
         'amount_tendered','change','reference','status'];
       const args = ['PENDING', 0, datetime, session.id, session.full_name, p.customerId || null, customerName,
-        p.project || null, p.poNumber || null, totals.subtotal, totals.vat, Number(p.discount || 0),
-        Number(p.deliveryFee || 0), totals.total, paymentMethod, tendered, change, p.reference || null,
+        p.project || null, p.poNumber || null, totals.subtotal, totals.vat, discount,
+        deliveryFee, totals.total, paymentMethod, tendered, change, p.reference || null,
         'pending'];
       const info = db.prepare(`INSERT INTO sales (${cols.join(',')}) VALUES (${placeholders(cols.length)})`).run(...args);
       const saleId = info.lastInsertRowid;
@@ -148,6 +186,13 @@ function register(ipcMain, ctx) {
     }
 
     db.transaction(() => {
+      // Credit may have changed after this pending sale was created. Check it
+      // again at commit time before stock or balances are mutated.
+      if (sale.payment_method === 'account') {
+        const customer = db.prepare('SELECT type, credit_limit, credit_used FROM customers WHERE id=?').get(sale.customer_id);
+        if (!customer || customer.type !== 'contractor') throw new Error('On-account customer is no longer available');
+        if (customer.credit_used + sale.total > customer.credit_limit + 1e-9) throw new Error('Exceeds credit limit');
+      }
       const decStock = db.prepare('UPDATE products SET stock = stock - ? WHERE id=?');
       const movStmt = db.prepare('INSERT INTO stock_movements(product_id,movement,qty_change,reason,user_id) VALUES(?,?,?,?,?)');
       for (const it of items) {
@@ -190,12 +235,12 @@ function register(ipcMain, ctx) {
     if (f.to) { sql += ` AND datetime <= ?`; params.push(f.to + ' 23:59:59'); }
     if (f.cashierId) { sql += ` AND cashier_id=?`; params.push(f.cashierId); }
     sql += ` ORDER BY datetime DESC LIMIT ?`;
-    params.push(Math.min(f.limit || 200, 1000));
+    params.push(clampLimit(f.limit, 200, 1000));
     return db.prepare(sql).all(...params);
   });
 
   guard(ipcMain, 'pos:sales:recent', { auth: true }, (_c, limit = 10) =>
-    db.prepare("SELECT id, txn_id, datetime, cashier_name, total, payment_method FROM sales WHERE status='completed' ORDER BY datetime DESC LIMIT ?").all(limit)
+    db.prepare("SELECT id, txn_id, datetime, cashier_name, total, payment_method FROM sales WHERE status='completed' ORDER BY datetime DESC LIMIT ?").all(clampLimit(limit, 10, 100))
   );
 
   guard(ipcMain, 'pos:sales:get', { auth: true }, (_c, txnId) => {
@@ -221,23 +266,56 @@ function register(ipcMain, ctx) {
   });
 
   // Verify admin PIN (for refund approval)
-  guard(ipcMain, 'pos:refunds:verifyAdmin', { auth: true }, async (_c, pin) => {
+  guard(ipcMain, 'pos:refunds:verifyAdmin', { auth: true }, async ({ session }, pin, txnId) => {
     const { verifyPassword } = require('../lib/auth');
+    const requestedTxnId = String(txnId || '').trim();
+    if (!requestedTxnId) throw new Error('Transaction ID is required for refund approval');
     const admin = db.prepare("SELECT * FROM users WHERE role='admin' AND active=1").all();
     for (const a of admin) {
       if (verifyPassword(pin, a.password_hash)) {
-        return { ok: true, admin: { id: a.id, name: a.full_name } };
+        const approvalToken = randomUUID();
+        const expiresAt = Date.now() + refundApprovalTtlMs;
+        refundApprovals.set(approvalToken, {
+          adminId: a.id,
+          adminName: a.full_name,
+          requestedBy: session.id,
+          txnId: requestedTxnId,
+          expiresAt,
+        });
+        return { ok: true, admin: { id: a.id, name: a.full_name }, approvalToken, expiresAt };
       }
     }
     return { ok: false };
   });
 
   // Process a refund: restock items, mark sale as refunded, log refund, print receipt
-  guard(ipcMain, 'pos:refunds:process', { auth: true }, (_c, payload) => {
-    const { txnId, adminName, adminId, reason, refundAll } = payload;
+  guard(ipcMain, 'pos:refunds:process', { auth: true }, (_c, payload = {}) => {
+    const { session } = _c;
+    const txnId = String(payload.txnId || '').trim();
+    const reason = String(payload.reason || '').trim();
+    if (reason.length < 3) throw new Error('A refund reason is required');
     const sale = db.prepare('SELECT * FROM sales WHERE txn_id=? AND status=?').get(txnId, 'completed');
     if (!sale) throw new Error('Sale not found or already refunded');
     const items = db.prepare('SELECT * FROM sale_items WHERE sale_id=? ORDER BY id').all(sale.id);
+
+    let adminId;
+    let adminName;
+    if (session.role === 'admin') {
+      adminId = session.id;
+      adminName = session.full_name;
+    } else {
+      const approvalToken = String(payload.approvalToken || '');
+      const approval = refundApprovals.get(approvalToken);
+      if (!approval || approval.requestedBy !== session.id || approval.txnId !== txnId || approval.expiresAt < Date.now()) {
+        if (approval && approval.expiresAt < Date.now()) refundApprovals.delete(approvalToken);
+        throw new Error('Administrator approval is required for refunds');
+      }
+      // Consume before mutating data so the same approval cannot authorize a
+      // second refund through a replayed renderer request.
+      refundApprovals.delete(approvalToken);
+      adminId = approval.adminId;
+      adminName = approval.adminName;
+    }
 
     const result = db.transaction(() => {
       // Mark original sale as refunded
@@ -284,7 +362,7 @@ function register(ipcMain, ctx) {
       const refundTxnId = 'RF-' + String(refundId).padStart(6, '0');
       db.prepare('UPDATE refunds SET refund_txn_id=? WHERE id=?').run(refundTxnId, refundId);
 
-      return { refundTxnId, total: sale.total };
+      return { refundTxnId, total: sale.total, approvedBy: adminName, approvedById: adminId };
     })();
 
     return result;
@@ -299,7 +377,7 @@ function register(ipcMain, ctx) {
     sql += ` ORDER BY r.datetime DESC LIMIT ?`;
     // Cap the limit so a malformed/careless caller can't request millions
     // of rows and freeze the UI — matches the sales:list cap above.
-    params.push(Math.min(Number(f.limit) || 100, 1000));
+    params.push(clampLimit(f.limit, 100, 1000));
     return db.prepare(sql).all(...params);
   });
 
@@ -346,7 +424,7 @@ function register(ipcMain, ctx) {
     if (f.from) { sql += ` AND s.datetime >= ?`; params.push(f.from + ' 00:00:00'); }
     if (f.to) { sql += ` AND s.datetime <= ?`; params.push(f.to + ' 23:59:59'); }
     sql += ` GROUP BY si.product_id ORDER BY total DESC LIMIT ?`;
-    params.push(f.limit || 10);
+    params.push(clampLimit(f.limit, 10, 1000));
     return db.prepare(sql).all(...params);
   });
 

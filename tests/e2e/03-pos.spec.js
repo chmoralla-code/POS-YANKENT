@@ -26,6 +26,7 @@ test.describe('POS — Catalog & Navigation', () => {
       expect(count).toBeGreaterThan(0);
       // First card has name + price
       const firstCard = page.locator('#posGrid .prod-card').first();
+      await expect(firstCard).toHaveAttribute('type', 'button');
       await expect(firstCard.locator('.nm')).not.toBeEmpty();
       await expect(firstCard.locator('.pr')).not.toBeEmpty();
     } finally { await electron.close(); }
@@ -52,10 +53,13 @@ test.describe('POS — Catalog & Navigation', () => {
     try {
       await login(page, 'admin', 'admin123');
       await page.waitForSelector('.tab[data-tab="services"]');
-      await page.click('.tab[data-tab="services"]');
+      await page.locator('.tab[data-tab="products"]').focus();
+      await page.keyboard.press('ArrowRight');
       await expect(page.locator('.tab[data-tab="services"]')).toHaveClass(/active/);
+      await expect(page.locator('.tab[data-tab="services"]')).toHaveAttribute('aria-selected', 'true');
       await page.click('.tab[data-tab="products"]');
       await expect(page.locator('.tab[data-tab="products"]')).toHaveClass(/active/);
+      await expect(page.locator('.tab[data-tab="products"]')).toHaveAttribute('aria-selected', 'true');
     } finally { await electron.close(); }
   });
 
@@ -107,6 +111,10 @@ test.describe('POS — Cart', () => {
         if ((await page.locator('#posCart [data-idx]').count()) > 0) { added = true; break; }
       }
       expect(added).toBe(true);
+      await expect(page.locator('#posCart [data-act="minus"]')).toHaveAttribute('aria-label', /Decrease quantity/);
+      await expect(page.locator('#posCart [data-act="plus"]')).toHaveAttribute('aria-label', /Increase quantity/);
+      await expect(page.locator('#posCart [data-act="rm"]')).toHaveAttribute('aria-label', /Remove .* from cart/);
+      await expect(page.locator('#posCart input[data-field="qty"]')).toHaveAttribute('aria-label', /Quantity for/);
     } finally { await electron.close(); }
   });
 
@@ -168,8 +176,54 @@ test.describe('POS — Cart', () => {
       await page.waitForSelector('#posPay button[data-pay="card"]');
       await page.click('#posPay button[data-pay="card"]');
       await expect(page.locator('#posPay button[data-pay="card"]')).toHaveClass(/active/);
+      await expect(page.locator('#posPay button[data-pay="card"]')).toHaveAttribute('aria-pressed', 'true');
+      await expect(page.locator('#posPay button[data-pay="cash"]')).toHaveAttribute('aria-pressed', 'false');
       await page.click('#posPay button[data-pay="cash"]');
       await expect(page.locator('#posPay button[data-pay="cash"]')).toHaveClass(/active/);
+      await expect(page.locator('#posPay button[data-pay="cash"]')).toHaveAttribute('aria-pressed', 'true');
     } finally { await electron.close(); }
+  });
+});
+
+test.describe('POS — Cashier refund controls', () => {
+  test('cashier refund requires an administrator password and a reason', async () => {
+    const adminApp = await launchApp();
+    let txnId;
+    try {
+      await login(adminApp.page, 'admin', 'admin123');
+      txnId = await adminApp.page.evaluate(async () => {
+        const products = await window.pos.products.list({ includeServices: false });
+        const product = products.find((p) => !p.is_service && p.active !== false && p.active !== 0);
+        if (!product) throw new Error('No product available for refund test');
+        await window.pos.products.setStock(product.id, 5, 'Refund E2E stock', null, null);
+        const unit = (product.units && product.units[0]) || { unit: product.base_unit, price: product.price };
+        const sale = await window.pos.sales.create({
+          items: [{ productId: product.id, unit: unit.unit, qty: 1 }],
+          paymentMethod: 'cash',
+          amountTendered: Number(unit.price) || 0,
+        });
+        await window.pos.sales.commit(sale.txnId);
+        return sale.txnId;
+      });
+    } finally { await adminApp.electron.close(); }
+
+    const cashierApp = await launchApp({ resetDb: false });
+    try {
+      const page = cashierApp.page;
+      await login(page, 'cashier', 'cashier123');
+      await page.locator('#posRefund').click();
+      await page.locator('#rfTxn').fill(txnId);
+      await page.locator('[data-a="lookup"]').click();
+      await expect(page.locator('#rfAdminPin')).toBeVisible();
+      await expect(page.locator('#rfReason')).toBeVisible();
+
+      await page.locator('#rfReason').fill('Customer return');
+      await page.locator('[data-a="refund"]').click();
+      await expect(page.locator('#toast')).toContainText('Administrator password is required');
+
+      await page.locator('#rfAdminPin').fill('wrong-password');
+      await page.locator('[data-a="refund"]').click();
+      await expect(page.locator('#toast')).toContainText('Administrator password is incorrect');
+    } finally { await cashierApp.electron.close(); }
   });
 });

@@ -23,20 +23,35 @@ App.views.reports = {
     this.viewEl = view;
     const salesActive = this.tab === 'sales';
     view.innerHTML = `
-      <div class="tabs" id="rTabs">
-        <div class="tab ${salesActive ? 'active' : ''}" data-tab="sales">Sales Reports</div>
-        <div class="tab ${salesActive ? '' : 'active'}" data-tab="delivery">Stock &amp; Restock History</div>
-      </div>
-      <div id="rSales" class="tab-pane ${salesActive ? '' : 'hidden'}"></div>
-      <div id="rDelivery" class="tab-pane ${salesActive ? 'hidden' : ''}"></div>`;
-    view.querySelectorAll('#rTabs .tab').forEach((t) => t.onclick = () => this._switchTab(t.dataset.tab));
+      <div class="reports-page">
+        <div class="tabs reports-tabs" id="rTabs" role="tablist" aria-label="Reports sections">
+          <button type="button" id="rTabSales" class="tab ${salesActive ? 'active' : ''}" data-tab="sales" role="tab" aria-controls="rSales" aria-selected="${salesActive}" tabindex="${salesActive ? '0' : '-1'}">Sales Reports</button>
+          <button type="button" id="rTabDelivery" class="tab ${salesActive ? '' : 'active'}" data-tab="delivery" role="tab" aria-controls="rDelivery" aria-selected="${!salesActive}" tabindex="${salesActive ? '-1' : '0'}">Stock &amp; Restock History</button>
+        </div>
+        <div id="rSales" class="tab-pane reports-pane ${salesActive ? '' : 'hidden'}" role="tabpanel" aria-labelledby="rTabSales"></div>
+        <div id="rDelivery" class="tab-pane reports-pane ${salesActive ? 'hidden' : ''}" role="tabpanel" aria-labelledby="rTabDelivery"></div>
+      </div>`;
+    const tabs = [...view.querySelectorAll('#rTabs .tab')];
+    tabs.forEach((t) => t.onclick = () => this._switchTab(t.dataset.tab));
+    view.querySelector('#rTabs').addEventListener('keydown', (e) => {
+      if (!['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+      e.preventDefault();
+      const current = tabs.findIndex((t) => t.getAttribute('aria-selected') === 'true');
+      const next = e.key === 'ArrowRight' ? (current + 1) % tabs.length : (current - 1 + tabs.length) % tabs.length;
+      tabs[next].click(); tabs[next].focus();
+    });
     await this._load();
   },
 
   _switchTab(tab) {
     this.tab = tab;
     const v = this.viewEl;
-    v.querySelectorAll('#rTabs .tab').forEach((x) => x.classList.toggle('active', x.dataset.tab === tab));
+    v.querySelectorAll('#rTabs .tab').forEach((x) => {
+      const active = x.dataset.tab === tab;
+      x.classList.toggle('active', active);
+      x.setAttribute('aria-selected', String(active));
+      x.tabIndex = active ? 0 : -1;
+    });
     v.querySelector('#rSales').classList.toggle('hidden', tab !== 'sales');
     v.querySelector('#rDelivery').classList.toggle('hidden', tab !== 'delivery');
     if (tab === 'delivery') {
@@ -53,94 +68,185 @@ App.views.reports = {
   _renderSalesShell() {
     const v = this.viewEl.querySelector('#rSales');
     v.innerHTML = `
-      <div class="toolbar">
-        <label class="fl" style="margin:0">From</label><input id="rFrom" type="date" style="max-width:150px">
-        <label class="fl" style="margin:0">To</label><input id="rTo" type="date" style="max-width:150px">
-        <button class="btn btn-primary btn-sm" id="rGo">Apply</button>
-        <button class="btn btn-sm btn-ghost" id="rClear" title="Clear date range">All time</button>
-        <div class="fill"></div>
-        <button class="btn btn-sm btn-ghost" id="rSendTg">📨 Telegram</button>
-        <button class="btn btn-sm btn-ghost" id="rPrint">Print</button>
-        <button class="btn btn-sm btn-danger" id="rReset" title="Erase all sales data (users, products, settings preserved)">Reset</button>
+      <header class="reports-header">
+        <div class="reports-heading">
+          <div class="reports-eyebrow">Sales intelligence</div>
+          <h2>Sales performance</h2>
+          <p>Review revenue, product performance, cashier activity, payments, and refunds.</p>
+        </div>
+        <div class="reports-actions" aria-label="Report actions">
+          <button type="button" class="btn btn-sm btn-ghost" id="rSendTg">Send to Telegram</button>
+          <button type="button" class="btn btn-sm btn-ghost" id="rPrint">Print report</button>
+          <span class="reports-action-separator" aria-hidden="true"></span>
+          <button type="button" class="btn btn-sm btn-danger" id="rReset" title="Permanently erase sales, refunds, and stock movements">Erase sales data…</button>
+        </div>
+      </header>
+      <section class="report-filter-panel" aria-labelledby="rFilterTitle">
+        <div class="report-filter-summary">
+          <span id="rFilterTitle">Report period</span>
+          <strong id="rPeriodLabel" aria-live="polite">${App.ui.esc(this._periodLabel())}</strong>
+        </div>
+        <div class="report-filter-fields">
+          <div class="report-date-field"><label class="fl" for="rFrom">From</label><input id="rFrom" type="date" value="${App.ui.esc(this.from)}"></div>
+          <div class="report-date-field"><label class="fl" for="rTo">To</label><input id="rTo" type="date" value="${App.ui.esc(this.to)}"></div>
+          <button type="button" class="btn btn-primary btn-sm" id="rGo">Apply range</button>
+          <button type="button" class="btn btn-sm btn-ghost" id="rClear" title="Show all recorded sales" ${!this.from && !this.to ? 'disabled' : ''}>Clear dates</button>
+        </div>
+      </section>
+      <div class="reports-section-heading">
+        <div><h3>Store overview</h3><p>Rolling totals for today, yesterday, this month, and this year.</p></div>
       </div>
       <div id="rStats" class="stat-grid"></div>
-      <div class="collapse-list" id="rSections" style="margin-top:16px"></div>`;
+      <div class="reports-section-heading reports-details-heading">
+        <div><h3>Report details</h3><p id="rDetailsPeriod">${App.ui.esc(this._periodLabel())} · date filters apply to period-based sections.</p></div>
+        <button type="button" class="btn btn-sm btn-ghost" id="rExpandAll">Expand all</button>
+      </div>
+      <div class="collapse-list report-sections" id="rSections"></div>`;
     this._wireSales();
   },
 
   _wireSales() {
     const v = this.viewEl.querySelector('#rSales');
-    v.querySelector('#rGo').onclick = () => { this.from = v.querySelector('#rFrom').value; this.to = v.querySelector('#rTo').value; this._loadSales(); };
-    v.querySelector('#rClear').onclick = () => { this.from = ''; this.to = ''; v.querySelector('#rFrom').value = ''; v.querySelector('#rTo').value = ''; this._loadSales(); };
+    const fromEl = v.querySelector('#rFrom');
+    const toEl = v.querySelector('#rTo');
+    const syncDateBounds = () => { toEl.min = fromEl.value || ''; fromEl.max = toEl.value || ''; };
+    fromEl.addEventListener('change', syncDateBounds); toEl.addEventListener('change', syncDateBounds); syncDateBounds();
+    v.querySelector('#rGo').onclick = () => this._applySalesFilters(fromEl.value, toEl.value);
+    v.querySelector('#rClear').onclick = async () => {
+      this.from = ''; this.to = ''; fromEl.value = ''; toEl.value = ''; syncDateBounds();
+      await this._loadSales();
+    };
     v.querySelector('#rPrint').onclick = () => this._print();
     v.querySelector('#rReset').onclick = () => this._resetSales();
     v.querySelector('#rSendTg').onclick = async () => {
-      const b = v.querySelector('#rSendTg'); b.disabled = true; b.textContent = '📨 Sending…';
+      const b = v.querySelector('#rSendTg'); b.disabled = true; b.textContent = 'Sending…';
       try { const r = await App.pos.telegram.sendReport(); r.ok ? App.ui.toast('Report sent ✓', 'ok') : App.ui.toast(r.error || 'Failed', 'err'); }
       catch (e) { App.ui.toast(e.message, 'err'); }
-      b.disabled = false; b.textContent = '📨 Telegram';
+      b.disabled = false; b.textContent = 'Send to Telegram';
+    };
+    v.querySelector('#rExpandAll').onclick = () => {
+      const sections = [...v.querySelectorAll('.collapse-section')];
+      const shouldOpen = sections.some((s) => !s.classList.contains('open'));
+      sections.forEach((s) => this._setSectionOpen(s, shouldOpen));
+      this._syncExpandAll();
     };
     // Click anywhere on a section header to toggle expand/collapse
     v.querySelector('#rSections').addEventListener('click', (e) => {
-      const hdr = e.target.closest('.collapse-h');
-      if (hdr) {
-        const sec = hdr.parentElement;
-        sec.classList.toggle('open');
-        return;
-      }
       // CSV button on a section header
       const csvBtn = e.target.closest('[data-x]');
       if (csvBtn) { this._csv(csvBtn.dataset.x); return; }
+      const toggle = e.target.closest('.collapse-toggle');
+      if (toggle) {
+        const sec = toggle.closest('.collapse-section');
+        this._setSectionOpen(sec, !sec.classList.contains('open'));
+        this._syncExpandAll();
+        return;
+      }
       // Reprint on recent sales row
       const txn = e.target.closest('[data-txn]')?.dataset.txn;
       if (txn) { App.printer.printReceiptFallback(txn).catch((err) => App.ui.toast(err.message, 'err')); }
     });
   },
 
+  async _applySalesFilters(from, to) {
+    if (from && to && from > to) {
+      App.ui.toast('The From date must be earlier than or equal to the To date', 'err');
+      this.viewEl.querySelector('#rFrom').focus();
+      return;
+    }
+    this.from = from; this.to = to;
+    await this._loadSales();
+  },
+
+  _setSectionOpen(section, open) {
+    if (!section) return;
+    section.classList.toggle('open', open);
+    const toggle = section.querySelector('.collapse-toggle');
+    const body = section.querySelector('.collapse-b');
+    if (toggle) toggle.setAttribute('aria-expanded', String(open));
+    if (body) body.hidden = !open;
+  },
+
+  _syncExpandAll() {
+    const v = this.viewEl && this.viewEl.querySelector('#rSales');
+    if (!v) return;
+    const sections = [...v.querySelectorAll('.collapse-section')];
+    const button = v.querySelector('#rExpandAll');
+    if (button) button.textContent = sections.length && sections.every((s) => s.classList.contains('open')) ? 'Collapse all' : 'Expand all';
+  },
+
+  _periodLabel() {
+    if (this.from && this.to) return `${this.from} to ${this.to}`;
+    if (this.from) return `From ${this.from}`;
+    if (this.to) return `Through ${this.to}`;
+    return 'All recorded sales';
+  },
+
   async _loadSales() {
+    const pane = this.viewEl.querySelector('#rSales');
+    const applyButton = pane && pane.querySelector('#rGo');
+    if (pane) pane.setAttribute('aria-busy', 'true');
+    if (applyButton) { applyButton.disabled = true; applyButton.textContent = 'Loading…'; }
     const f = { from: this.from || undefined, to: this.to || undefined };
-    const [summary, best, csr, day, list, analytics, refunds, refundSummary] = await Promise.all([
-      App.pos.reports.summary(),
-      App.pos.reports.bestSelling(f),
-      App.pos.reports.byCashier(f),
-      App.pos.reports.salesByDay(f),
-      App.pos.sales.list(f),
-      App.pos.reports.analytics(),
-      App.pos.refunds.list(f),
-      App.pos.refunds.summary(),
-    ]);
-    this.data = { summary, best, csr, day, list, analytics, refunds, refundSummary };
-    this._renderSales();
+    try {
+      const [summary, best, csr, day, list, analytics, refunds, refundSummary] = await Promise.all([
+        App.pos.reports.summary(),
+        App.pos.reports.bestSelling(f),
+        App.pos.reports.byCashier(f),
+        App.pos.reports.salesByDay(f),
+        App.pos.sales.list(f),
+        App.pos.reports.analytics(),
+        App.pos.refunds.list(f),
+        App.pos.refunds.summary(),
+      ]);
+      this.data = { summary, best, csr, day, list, analytics, refunds, refundSummary };
+      this._renderSales();
+    } catch (e) {
+      App.ui.toast(e.message || 'Unable to load reports', 'err');
+      if (!this.data) {
+        const sections = pane && pane.querySelector('#rSections');
+        if (sections) sections.innerHTML = '<div class="report-error" role="alert">Reports could not be loaded. Check the database and try again.</div>';
+      }
+    } finally {
+      if (pane) pane.setAttribute('aria-busy', 'false');
+      if (applyButton) { applyButton.disabled = false; applyButton.textContent = 'Apply range'; }
+    }
   },
 
   _renderSales() {
     const d = this.data; const v = this.viewEl.querySelector('#rSales');
     const s = d.summary;
     const a = d.analytics || {};
-    const rs = d.refundSummary || {};
+    const periodLabel = this._periodLabel();
+    const periodEl = v.querySelector('#rPeriodLabel');
+    const detailsEl = v.querySelector('#rDetailsPeriod');
+    if (periodEl) periodEl.textContent = periodLabel;
+    if (detailsEl) detailsEl.textContent = `${periodLabel} · date filters apply to period-based sections.`;
+    const clearButton = v.querySelector('#rClear');
+    if (clearButton) clearButton.disabled = !this.from && !this.to;
 
     // ---- Summary stat cards (always visible) ---------------------------
     v.querySelector('#rStats').innerHTML = `
-      <div class="stat">
+      <article class="stat report-stat">
         <div class="k">Today</div>
         <div class="v">${App.ui.money(s.today.total)}</div>
         <small class="muted">${s.today.tx} transaction${s.today.tx === 1 ? '' : 's'}</small>
-      </div>
-      <div class="stat">
+      </article>
+      <article class="stat report-stat">
         <div class="k">Yesterday</div>
         <div class="v">${App.ui.money(s.yesterday.total)}</div>
         <small class="muted">${s.yesterday.tx} transaction${s.yesterday.tx === 1 ? '' : 's'}</small>
-      </div>
-      <div class="stat">
+      </article>
+      <article class="stat report-stat">
         <div class="k">This Month</div>
         <div class="v">${App.ui.money(s.month.total)}</div>
         <small class="muted">${s.month.tx} transaction${s.month.tx === 1 ? '' : 's'}</small>
-      </div>
-      <div class="stat">
+      </article>
+      <article class="stat report-stat">
         <div class="k">This Year</div>
         <div class="v">${App.ui.money(s.year.total)}</div>
         <small class="muted">${s.year.tx} transaction${s.year.tx === 1 ? '' : 's'}</small>
-      </div>`;
+      </article>`;
 
     // ---- Render collapsible sections ----------------------------------
     const avg = a.today && a.today.tx > 0 ? a.avgTx : 0;
@@ -152,25 +258,25 @@ App.views.reports = {
     const day = d.day || [];
     const list = d.list || [];
     const refunds = d.refunds || [];
-    const refundToday = rs.today || { tx: 0, total: 0 };
+    const refundTotal = refunds.reduce((sum, r) => sum + Number(r.total || 0), 0);
 
     // Build preview summaries (one line, muted) for each section header
     const sections = [
       {
         key: 'breakdown',
-        title: "Today's Breakdown",
-        preview: `Avg ${App.ui.money(avg)} · ${items} items · Best ${bestDay ? App.ui.money(bestDay.total) : '—'}`,
+        title: 'Performance highlights',
+        preview: `Today avg ${App.ui.money(avg)} · ${items} items · Record day ${bestDay ? App.ui.money(bestDay.total) : '—'}`,
         csv: null,
         body: `<div class="kv">
-          <div class="kv-row"><span class="kv-k">Avg. transaction</span><span class="kv-v">${App.ui.money(avg)}</span></div>
-          <div class="kv-row"><span class="kv-k">Items sold</span><span class="kv-v">${items}</span></div>
-          <div class="kv-row"><span class="kv-k">Best sales day</span><span class="kv-v">${bestDay ? App.ui.money(bestDay.total) : '—'}</span></div>
+          <div class="kv-row"><span class="kv-k">Today's average transaction</span><span class="kv-v">${App.ui.money(avg)}</span></div>
+          <div class="kv-row"><span class="kv-k">Items sold today</span><span class="kv-v">${items}</span></div>
+          <div class="kv-row"><span class="kv-k">Best sales day (all time)</span><span class="kv-v">${bestDay ? App.ui.money(bestDay.total) : '—'}</span></div>
           <div class="kv-row"><span class="kv-k muted">${bestDay ? bestDay.label : 'no sales yet'}</span><span class="kv-v muted">${bestDay ? '↗ peak' : ''}</span></div>
         </div>`,
       },
       {
         key: 'payments',
-        title: 'Payment Methods',
+        title: 'Payment methods today',
         preview: pays.length ? pays.map((p) => `${p.payment_method} ${App.ui.money(p.total)}`).join(' · ') : 'No payments today',
         csv: null,
         body: pays.length ? `<div class="kv">
@@ -243,34 +349,39 @@ App.views.reports = {
       {
         key: 'refunds',
         title: 'Refunds',
-        preview: refundToday.tx ? `${refundToday.tx} today · ${App.ui.money(refundToday.total)}` : 'No refunds today',
+        preview: refunds.length ? `${refunds.length} in this period · ${App.ui.money(refundTotal)}` : 'No refunds in this period',
         csv: 'refunds',
         body: refunds.length ? `<div style="overflow:auto;max-height:240px"><table class="tbl"><thead><tr><th>Refund ID</th><th>Original Txn</th><th>Date</th><th>Cashier</th><th class="right">Amount</th><th>Reason</th></tr></thead><tbody>
           ${refunds.map((r) => `<tr style="color:var(--danger)"><td class="mono">${App.ui.esc(r.refund_txn_id)}</td><td class="mono">${App.ui.esc(r.original_txn_id)}</td><td>${App.ui.fmtDate(r.datetime)}</td><td>${App.ui.esc(r.cashier_name)}</td><td class="right">${App.ui.money(r.total)}</td><td class="muted">${App.ui.esc(r.reason || '—')}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty-state muted">No refunds</div>',
       },
     ];
 
-    // All sections start closed by default — the user clicks to open and
-    // see the data.  Expand state is preserved across re-renders (e.g. when
-    // changing the date range) so a section the user already opened stays
-    // open after the data refreshes.
-    const openDefaults = {};
+    // Open the most decision-useful summaries on first visit. Expand state
+    // is preserved across re-renders when the date range changes.
+    const openDefaults = { breakdown: true };
     const container = v.querySelector('#rSections');
     const prevOpen = {};
     container.querySelectorAll('.collapse-section').forEach((s) => { prevOpen[s.dataset.key] = s.classList.contains('open'); });
     const isOpen = (k) => (k in prevOpen ? prevOpen[k] : openDefaults[k]);
 
-    container.innerHTML = sections.map((s) => `<div class="collapse-section${isOpen(s.key) ? ' open' : ''}" data-key="${s.key}">
-      <div class="collapse-h" role="button" tabindex="0">
-        <div class="collapse-arrow">▸</div>
-        <div class="collapse-info">
-          <div class="collapse-title">${App.ui.esc(s.title)}</div>
-          <div class="collapse-preview muted">${s.preview}</div>
+    container.innerHTML = sections.map((s) => {
+      const open = !!isOpen(s.key);
+      const bodyId = `rSection-${s.key}`;
+      return `<section class="collapse-section${open ? ' open' : ''}" data-key="${s.key}">
+        <div class="collapse-h">
+          <button type="button" class="collapse-toggle" aria-expanded="${open}" aria-controls="${bodyId}">
+            <span class="collapse-arrow" aria-hidden="true">▸</span>
+            <span class="collapse-info">
+              <span class="collapse-title">${App.ui.esc(s.title)}</span>
+              <span class="collapse-preview muted">${s.preview}</span>
+            </span>
+          </button>
+          ${s.csv ? `<button type="button" class="btn btn-sm btn-ghost collapse-action" data-x="${s.csv}" title="Export ${App.ui.esc(s.title)} as CSV">Export CSV</button>` : ''}
         </div>
-        ${s.csv ? `<button class="btn btn-sm btn-ghost" data-x="${s.csv}" title="Export CSV">CSV</button>` : ''}
-      </div>
-      <div class="collapse-b">${s.body}</div>
-    </div>`).join('');
+        <div class="collapse-b" id="${bodyId}"${open ? '' : ' hidden'}>${s.body}</div>
+      </section>`;
+    }).join('');
+    this._syncExpandAll();
   },
 
   async _load() {
@@ -288,58 +399,111 @@ App.views.reports = {
   _renderDeliveryShell() {
     const v = this.viewEl.querySelector('#rDelivery');
     v.innerHTML = `
-      <div class="toolbar">
-        <label class="fl" style="margin:0">From</label><input id="dFrom" type="date" style="max-width:150px">
-        <label class="fl" style="margin:0">To</label><input id="dTo" type="date" style="max-width:150px">
-        <input id="dQ" type="search" placeholder="Search product, SKU, reason, location…" style="max-width:260px">
-        <button class="btn btn-primary btn-sm" id="dGo">Apply</button>
-        <div class="fill"></div>
-        <button class="btn btn-sm btn-ghost" id="dCsv">CSV</button>
-        <button class="btn btn-sm btn-ghost" id="dPrint">Print</button>
+      <header class="reports-header">
+        <div class="reports-heading">
+          <div class="reports-eyebrow">Inventory intelligence</div>
+          <h2>Stock &amp; restock history</h2>
+          <p>Trace incoming stock by product, source, reason, location, and staff member.</p>
+        </div>
+        <div class="reports-actions" aria-label="Restock history actions">
+          <button type="button" class="btn btn-sm btn-ghost" id="dCsv">Export CSV</button>
+          <button type="button" class="btn btn-sm btn-ghost" id="dPrint">Print history</button>
+        </div>
+      </header>
+      <section class="report-filter-panel" aria-labelledby="dFilterTitle">
+        <div class="report-filter-summary">
+          <span id="dFilterTitle">Inventory activity</span>
+          <strong id="dPeriodLabel" aria-live="polite">${App.ui.esc(this._deliveryFilterLabel())}</strong>
+        </div>
+        <div class="report-filter-fields">
+          <div class="report-date-field"><label class="fl" for="dFrom">From</label><input id="dFrom" type="date" value="${App.ui.esc(this.dFrom)}"></div>
+          <div class="report-date-field"><label class="fl" for="dTo">To</label><input id="dTo" type="date" value="${App.ui.esc(this.dTo)}"></div>
+          <div class="report-search-field"><label class="fl" for="dQ">Search records</label><input id="dQ" type="search" value="${App.ui.esc(this.dQ)}" placeholder="Product, SKU, reason, location…"></div>
+          <button type="button" class="btn btn-primary btn-sm" id="dGo">Apply filters</button>
+          <button type="button" class="btn btn-sm btn-ghost" id="dClear" ${!this.dFrom && !this.dTo && !this.dQ ? 'disabled' : ''}>Clear filters</button>
+        </div>
+      </section>
+      <div class="reports-section-heading">
+        <div><h3>Inventory overview</h3><p>Totals reflect the active period and search filters.</p></div>
       </div>
       <div id="dStats" class="stat-grid"></div>
-      <div style="margin-top:16px">
-        <button class="btn btn-primary btn-sm" id="dShowRecords" style="margin-bottom:12px">▸ Show Records</button>
-        <div id="dRecordsWrap" style="display:none"></div>
-      </div>`;
+      <div class="reports-section-heading reports-details-heading">
+        <div><h3>Restock records</h3><p id="dRecordsSummary">Loading inventory activity…</p></div>
+        <button type="button" class="btn btn-sm btn-ghost" id="dShowRecords" aria-expanded="false" aria-controls="dRecordsWrap">Show records</button>
+      </div>
+      <div id="dRecordsWrap" class="report-records" hidden></div>`;
     this._wireDelivery();
   },
 
   _wireDelivery() {
     const v = this.viewEl.querySelector('#rDelivery');
-    v.querySelector('#dGo').onclick = () => {
-      this.dFrom = v.querySelector('#dFrom').value;
-      this.dTo = v.querySelector('#dTo').value;
-      this.dQ = v.querySelector('#dQ').value;
-      this._loadDeliveries();
+    const fromEl = v.querySelector('#dFrom');
+    const toEl = v.querySelector('#dTo');
+    const searchEl = v.querySelector('#dQ');
+    const syncDateBounds = () => { toEl.min = fromEl.value || ''; fromEl.max = toEl.value || ''; };
+    fromEl.addEventListener('change', syncDateBounds); toEl.addEventListener('change', syncDateBounds); syncDateBounds();
+    v.querySelector('#dGo').onclick = async () => {
+      if (fromEl.value && toEl.value && fromEl.value > toEl.value) {
+        App.ui.toast('The From date must be earlier than or equal to the To date', 'err');
+        fromEl.focus(); return;
+      }
+      this.dFrom = fromEl.value; this.dTo = toEl.value; this.dQ = searchEl.value.trim();
+      await this._loadDeliveries();
     };
-    v.querySelector('#dQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') v.querySelector('#dGo').click(); });
+    v.querySelector('#dClear').onclick = async () => {
+      this.dFrom = ''; this.dTo = ''; this.dQ = '';
+      fromEl.value = ''; toEl.value = ''; searchEl.value = ''; syncDateBounds();
+      await this._loadDeliveries();
+    };
+    searchEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') v.querySelector('#dGo').click(); });
     v.querySelector('#dCsv').onclick = () => this._csv('deliveries');
     v.querySelector('#dPrint').onclick = () => this._printDeliveries();
     const showBtn = v.querySelector('#dShowRecords');
     if (showBtn) {
       showBtn.onclick = () => {
         const wrap = v.querySelector('#dRecordsWrap');
-        const visible = wrap.style.display !== 'none';
-        wrap.style.display = visible ? 'none' : 'block';
-        showBtn.textContent = visible ? '▸ Show Records' : '▾ Hide Records';
-        if (!visible && this.dData) this._renderDeliveryTable();
+        const willOpen = wrap.hidden;
+        wrap.hidden = !willOpen;
+        showBtn.setAttribute('aria-expanded', String(willOpen));
+        showBtn.textContent = willOpen ? 'Hide records' : 'Show records';
+        if (willOpen && this.dData) this._renderDeliveryTable();
       };
     }
   },
 
+  _deliveryFilterLabel() {
+    let label = 'All restock records';
+    if (this.dFrom && this.dTo) label = `${this.dFrom} to ${this.dTo}`;
+    else if (this.dFrom) label = `From ${this.dFrom}`;
+    else if (this.dTo) label = `Through ${this.dTo}`;
+    return this.dQ ? `${label} · matching “${this.dQ}”` : label;
+  },
+
   async _loadDeliveries() {
+    const pane = this.viewEl.querySelector('#rDelivery');
+    const applyButton = pane && pane.querySelector('#dGo');
+    if (pane) pane.setAttribute('aria-busy', 'true');
+    if (applyButton) { applyButton.disabled = true; applyButton.textContent = 'Loading…'; }
     const f = {
       from: this.dFrom || undefined,
       to: this.dTo || undefined,
       q: this.dQ || undefined,
     };
-    const [list, summary] = await Promise.all([
-      App.pos.deliveries.list(f),
-      App.pos.deliveries.summary(f),
-    ]);
-    this.dData = { list, summary };
-    this._renderDelivery();
+    try {
+      const [list, summary] = await Promise.all([
+        App.pos.deliveries.list(f),
+        App.pos.deliveries.summary(f),
+      ]);
+      this.dData = { list, summary };
+      this._renderDelivery();
+    } catch (e) {
+      App.ui.toast(e.message || 'Unable to load restock history', 'err');
+      const summary = pane && pane.querySelector('#dRecordsSummary');
+      if (summary) summary.textContent = 'Restock history could not be loaded.';
+    } finally {
+      if (pane) pane.setAttribute('aria-busy', 'false');
+      if (applyButton) { applyButton.disabled = false; applyButton.textContent = 'Apply filters'; }
+    }
   },
 
   _renderDelivery() {
@@ -349,35 +513,39 @@ App.views.reports = {
     const s = d.summary || {};
     const totals = s.totals || {};
     const top = s.top || null;
+    const period = v.querySelector('#dPeriodLabel');
+    if (period) period.textContent = this._deliveryFilterLabel();
+    const clearButton = v.querySelector('#dClear');
+    if (clearButton) clearButton.disabled = !this.dFrom && !this.dTo && !this.dQ;
     v.querySelector('#dStats').innerHTML = `
-      <div class="stat">
+      <article class="stat report-stat">
         <div class="k">Total Restocks</div>
         <div class="v">${totals.tx || 0}</div>
         <small class="muted">delivery events logged</small>
-      </div>
-      <div class="stat">
+      </article>
+      <article class="stat report-stat">
         <div class="k">Units Received</div>
         <div class="v">${App.ui.qty(totals.units || 0)}</div>
         <small class="muted">total quantity added</small>
-      </div>
-      <div class="stat">
+      </article>
+      <article class="stat report-stat">
         <div class="k">Products Restocked</div>
         <div class="v">${s.products || 0}</div>
         <small class="muted">distinct items restocked</small>
-      </div>
-      <div class="stat">
+      </article>
+      <article class="stat report-stat">
         <div class="k">Top Restocked</div>
-        <div class="v" style="font-size:14px">${top ? App.ui.esc(top.name) : '—'}</div>
+        <div class="v report-stat-name">${top ? App.ui.esc(top.name) : '—'}</div>
         <small class="muted">${top ? '+' + App.ui.qty(top.qty) + ' units' : 'no data'}</small>
-      </div>`;
+      </article>`;
 
     const rows = d.list || [];
+    const recordsSummary = v.querySelector('#dRecordsSummary');
+    if (recordsSummary) recordsSummary.textContent = `${rows.length} record${rows.length === 1 ? '' : 's'} · ${this._deliveryFilterLabel()}`;
     const showBtn = v.querySelector('#dShowRecords');
-    if (showBtn) {
-      showBtn.textContent = (rows.length ? `▸ Show Records (${rows.length})` : '▸ Show Records');
-    }
+    if (showBtn) showBtn.textContent = showBtn.getAttribute('aria-expanded') === 'true' ? `Hide records (${rows.length})` : `Show records (${rows.length})`;
     const wrap = v.querySelector('#dRecordsWrap');
-    if (wrap && wrap.style.display !== 'none') this._renderDeliveryTable();
+    if (wrap && !wrap.hidden) this._renderDeliveryTable();
   },
 
   _renderDeliveryTable() {

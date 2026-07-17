@@ -1,0 +1,4 @@
+provider: github
+owner: chmoralla-code
+repo: POS-YANKENT
+updaterCacheDirName: yankent-pos-updater

@@ -15,7 +15,7 @@ function makeGuard({ getSession, requireRole, touchSession, isSessionExpired, ge
       try {
         const session = getSession(token);
         // Check idle timeout for authenticated endpoints.
-        if (opts && opts.auth && session) {
+        if (opts && (opts.auth || opts.admin) && session) {
           const idleMin = Number(getSetting(db, 'session_idle_timeout') || '15');
           if (idleMin > 0 && isSessionExpired(token, idleMin * 60 * 1000)) {
             // Session expired — force re-authentication.
@@ -152,18 +152,40 @@ function registerAll(ipcMain, ctx) {
     return db.prepare('SELECT id, username, full_name, role, active, created_at FROM users ORDER BY id').all();
   });
 
-  guard(ipcMain, 'pos:users:create', { admin: true }, (_c, u) => {
-    const exists = db.prepare('SELECT id FROM users WHERE username=?').get(u.username);
+  guard(ipcMain, 'pos:users:create', { admin: true }, (_c, u = {}) => {
+    const username = String(u.username || '').trim();
+    const fullName = String(u.full_name || '').trim();
+    const password = String(u.password || '');
+    const role = String(u.role || '');
+    if (!username) throw new Error('Username is required');
+    if (!fullName) throw new Error('Full name is required');
+    if (password.length < 4) throw new Error('Password must be at least 4 characters');
+    if (!['admin', 'cashier'].includes(role)) throw new Error('Invalid user role');
+    const exists = db.prepare('SELECT id FROM users WHERE username=?').get(username);
     if (exists) throw new Error('Username already exists');
     const info = db.prepare(
       'INSERT INTO users(username, password_hash, full_name, role, active) VALUES(?,?,?,?,1)'
-    ).run(u.username, hashPassword(u.password), u.full_name, u.role);
+    ).run(username, hashPassword(password), fullName, role);
     return { id: info.lastInsertRowid };
   });
 
-  guard(ipcMain, 'pos:users:update', { admin: true }, (_c, id, u) => {
+  guard(ipcMain, 'pos:users:update', { admin: true }, ({ session }, id, u = {}) => {
+    const target = db.prepare('SELECT id, role, active FROM users WHERE id=?').get(id);
+    if (!target) throw new Error('User not found');
+    const fullName = String(u.full_name || '').trim();
+    const role = String(u.role || '');
+    const active = u.active ? 1 : 0;
+    if (!fullName) throw new Error('Full name is required');
+    if (!['admin', 'cashier'].includes(role)) throw new Error('Invalid user role');
+    if (session && session.id === target.id && (!active || role !== 'admin')) {
+      throw new Error('You cannot deactivate or demote your own account');
+    }
+    if (target.role === 'admin' && target.active && (!active || role !== 'admin')) {
+      const adminCount = db.prepare("SELECT COUNT(*) AS c FROM users WHERE role='admin' AND active=1").get().c;
+      if (adminCount <= 1) throw new Error('Cannot deactivate or demote the only active admin');
+    }
     db.prepare('UPDATE users SET full_name=?, role=?, active=? WHERE id=?')
-      .run(u.full_name, u.role, u.active ? 1 : 0, id);
+      .run(fullName, role, active, target.id);
     return true;
   });
 
@@ -195,7 +217,11 @@ function registerAll(ipcMain, ctx) {
   });
 
   guard(ipcMain, 'pos:users:setPassword', { admin: true }, (_c, id, password) => {
-    db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(hashPassword(password), id);
+    const value = String(password || '');
+    if (value.length < 4) throw new Error('Password must be at least 4 characters');
+    const target = db.prepare('SELECT id FROM users WHERE id=?').get(id);
+    if (!target) throw new Error('User not found');
+    db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(hashPassword(value), target.id);
     return true;
   });
 

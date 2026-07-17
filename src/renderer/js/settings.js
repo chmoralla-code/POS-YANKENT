@@ -58,7 +58,7 @@ App.views.settings = {
               <div style="flex:1">${this._row('Phone', 'store_phone', this.s.store_phone || '')}</div>
             </div>
             <div class="row gap wrap">
-              <div style="flex:1">${this._row('VAT rate % (exclusive)', 'vat_rate', this.s.vat_rate)}</div>
+              <div style="flex:1">${this._row('VAT rate % (inclusive)', 'vat_rate', this.s.vat_rate)}</div>
               <div style="flex:1">${this._row('Currency symbol', 'currency_symbol', this.s.currency_symbol)}</div>
               <div style="flex:1">${this._row('Receipt width (chars)', 'receipt_width', this.s.receipt_width)}</div>
               <div style="flex:1">${this._row('Discount % (cashier can apply)', 'discount_percent', this.s.discount_percent || '0')}</div>
@@ -83,11 +83,10 @@ App.views.settings = {
             <div class="row gap"><span id="sBtAvail"></span><span class="muted" id="sBtConn"></span><div class="fill"></div></div>
             <div class="row gap" style="margin:10px 0">
               <button class="btn btn-primary btn-sm" id="sPair">Pair Bluetooth Printer</button>
-              <button class="btn btn-ghost btn-sm" id="sTest">Test Print</button>
-              <button class="btn btn-ghost btn-sm" id="sSys">System Print Test</button>
+              <button class="btn btn-ghost btn-sm" id="sTest">Test Current Printer</button>
               <button class="btn btn-ghost btn-sm" id="sInstallDriver">Install Printer Driver</button>
             </div>
-            <div class="hint">No Bluetooth printer? Click <b>Install Printer Driver</b> (runs as admin), then set Printer type to <b>System printer</b> and run a System Print Test.</div>
+            <div class="hint">For a USB printer, choose <b>System printer</b> and select the connected Windows queue below.</div>
             <div class="field"><label class="fl">Printer type</label><select id="s_printer_type">
               <option value="bluetooth" ${this.s.printer_type === 'bluetooth' ? 'selected' : ''}>Bluetooth (ESC/POS via Web Bluetooth)</option>
               <option value="system" ${this.s.printer_type === 'system' ? 'selected' : ''}>System printer (Windows-paired thermal / any)</option>
@@ -95,14 +94,18 @@ App.views.settings = {
             </select></div>
             <label class="row gap-sm"><input type="checkbox" id="sAuto" ${this.s.printer_auto_print === '1' ? 'checked' : ''}> Auto-print receipt after every sale</label>
 
-            <div class="sec-title" style="margin-top:10px">Startup auto test-print</div>
-            <div class="hint">When the POS first opens after the laptop is powered on, it sends a test print to the Windows printer below so the cashier knows the printer is ready before the first sale. Fires once per boot — restarting the app does not re-print.</div>
-            <label class="row gap-sm"><input type="checkbox" id="sStartupTest" ${this.s.startup_test_print !== '0' ? 'checked' : ''}> Auto test-print on startup (after laptop power-on)</label>
-            <div class="field"><label class="fl">Windows printer name</label><select id="sStartupPrinter"></select></div>
+            <div class="sec-title" style="margin-top:10px">Windows receipt printer</div>
+            <div class="hint">Used for USB receipts, reprints, reports, and the startup test. Connected USB queues are detected by their physical port.</div>
+            <div class="field"><label class="fl">Selected Windows queue</label><select id="sStartupPrinter"></select></div>
+            <div class="hint" id="sPrinterRoute">Checking Windows printers…</div>
             <div class="row gap" style="margin:6px 0">
-              <button class="btn btn-ghost btn-sm" id="sStartupTestNow">Test Startup Print Now</button>
+              <button class="btn btn-ghost btn-sm" id="sStartupTestNow">Test Selected Windows Printer</button>
               <button class="btn btn-ghost btn-sm" id="sRefreshPrinters">Refresh printer list</button>
             </div>
+
+            <div class="sec-title" style="margin-top:10px">Startup auto test-print</div>
+            <div class="hint">After a laptop power-on, YANKENT sends one short test to the selected Windows printer. Restarting the app during the same boot does not print again.</div>
+            <label class="row gap-sm"><input type="checkbox" id="sStartupTest" ${this.s.startup_test_print !== '0' ? 'checked' : ''}> Auto test-print after laptop power-on</label>
 
             <div class="sec-title" style="margin-top:10px">Advanced (BLE service / characteristic UUIDs)</div>
             <div class="row gap wrap">
@@ -184,14 +187,31 @@ App.views.settings = {
         </div>
       </div>`;
 
-    // Click header to expand/collapse (ignore clicks on form controls)
+    const toggleSection = (hdr) => {
+      const sec = hdr.parentElement;
+      const open = !sec.classList.contains('open');
+      sec.classList.toggle('open', open);
+      hdr.setAttribute('aria-expanded', String(open));
+      const body = sec.querySelector('.collapse-b');
+      if (body) body.hidden = !open;
+      this._open[sec.dataset.key] = open;
+    };
+    view.querySelectorAll('.settings-collapse .collapse-section').forEach((sec) => {
+      const hdr = sec.querySelector('.collapse-h');
+      const body = sec.querySelector('.collapse-b');
+      const bodyId = `sSection-${sec.dataset.key}`;
+      body.id = bodyId;
+      body.hidden = !sec.classList.contains('open');
+      hdr.setAttribute('aria-controls', bodyId);
+      hdr.setAttribute('aria-expanded', String(sec.classList.contains('open')));
+      hdr.addEventListener('keydown', (e) => {
+        if (!['Enter', ' '].includes(e.key)) return;
+        e.preventDefault(); toggleSection(hdr);
+      });
+    });
     view.querySelector('.settings-collapse').addEventListener('click', (e) => {
       const hdr = e.target.closest('.collapse-h');
-      if (hdr) {
-        const sec = hdr.parentElement;
-        sec.classList.toggle('open');
-        this._open[sec.dataset.key] = sec.classList.contains('open');
-      }
+      if (hdr) toggleSection(hdr);
     });
 
     this._wire(online);
@@ -244,9 +264,43 @@ App.views.settings = {
       } catch (e) { App.ui.toast(e.message, 'err'); }
     };
 
-    v.querySelector('#sPair').onclick = async () => { try { const n = await App.printer.pair(); App.ui.toast('Paired: ' + n + ' ✓', 'ok'); v.querySelector('#sBtConn').textContent = '● Connected: ' + n; this._updatePreview('printer'); } catch (e) { App.ui.toast(e.message, 'err'); } };
-    v.querySelector('#sTest').onclick = async () => { try { if (!App.printer.isConnected()) await App.printer.pair(); await App.printer.testPrint(); App.ui.toast('Test print sent ✓', 'ok'); } catch (e) { App.ui.toast(e.message, 'err'); } };
-    v.querySelector('#sSys').onclick = async () => { try { const { text } = await App.pos.printer.testPrint(); await App.printer.printTextFallback('YANKENT POS\nPrinter test\n' + new Date().toLocaleString() + '\n\n'); App.ui.toast('System print dialog opened', 'ok'); } catch (e) { App.ui.toast(e.message, 'err'); } };
+    const saveSelectedWindowsPrinter = async () => {
+      const sel = v.querySelector('#sStartupPrinter');
+      if (!sel || !sel.value) throw new Error('Select a Windows printer first');
+      await App.pos.settings.set('startup_test_printer', sel.value);
+      this.s.startup_test_printer = sel.value;
+      App.settingsCache.startup_test_printer = sel.value;
+      return sel.value;
+    };
+
+    v.querySelector('#sPair').onclick = async () => {
+      try {
+        const n = await App.printer.pair();
+        await App.pos.settings.set('printer_type', 'bluetooth');
+        App.settingsCache.printer_type = 'bluetooth';
+        v.querySelector('#s_printer_type').value = 'bluetooth';
+        App.ui.toast('Paired: ' + n + ' ✓', 'ok');
+        v.querySelector('#sBtConn').textContent = '● Connected: ' + n;
+        this._updatePreview('printer');
+      } catch (e) { App.ui.toast(e.message, 'err'); }
+    };
+    v.querySelector('#sTest').onclick = async () => {
+      try {
+        const type = v.querySelector('#s_printer_type').value;
+        if (type === 'none') throw new Error('Printing is disabled');
+        await App.pos.settings.set('printer_type', type);
+        App.settingsCache.printer_type = type;
+        if (type === 'system') {
+          await saveSelectedWindowsPrinter();
+          const res = await App.pos.printer.startupTest();
+          App.ui.toast('Test print sent to "' + res.printer + '" ✓', 'ok');
+        } else {
+          if (!App.printer.isConnected()) await App.printer.pair();
+          await App.printer.testPrint();
+          App.ui.toast('Bluetooth test print sent ✓', 'ok');
+        }
+      } catch (e) { App.ui.toast(e.message, 'err'); }
+    };
     v.querySelector('#sInstallDriver').onclick = async () => {
       const ok = await App.ui.confirm('Run the PrinterDriver installer now? Windows will ask for admin permission. After it finishes, set Printer type to "System printer" and test.');
       if (!ok) return;
@@ -257,28 +311,54 @@ App.views.settings = {
       } catch (e) { App.ui.toast(e.message, 'err'); }
     };
 
-    // ---- Startup auto test-print controls ----
+    // ---- Windows printer discovery and routing ----
     const loadPrinterList = async () => {
       const sel = v.querySelector('#sStartupPrinter');
-      if (!sel) return;
+      const routeEl = v.querySelector('#sPrinterRoute');
+      if (!sel) return null;
       sel.innerHTML = '<option>Loading…</option>';
+      if (routeEl) routeEl.textContent = 'Checking Windows printers…';
       try {
-        const printers = await App.pos.printer.listWindowsPrinters();
-        const saved = (this.s.startup_test_printer || 'POS-58');
+        const status = await App.pos.printer.windowsStatus();
+        const printers = Array.isArray(status.printers) ? status.printers : [];
+        const saved = this.s.startup_test_printer || status.configured || 'POS-58';
+        const selectedName = status.selected && status.selected.name ? status.selected.name : saved;
         if (!printers.length) {
-          sel.innerHTML = `<option value="${saved}">${App.ui.esc(saved)} (not detected)</option>`;
-          return;
+          sel.innerHTML = `<option value="${App.ui.esc(saved)}">${App.ui.esc(saved)} (not detected)</option>`;
+          if (routeEl) routeEl.textContent = status.error || 'No Windows printers were detected.';
+          return status;
         }
-        // Prefer an exact/near match to the saved name; otherwise list all.
-        sel.innerHTML = printers.map((p) =>
-          `<option value="${App.ui.esc(p)}" ${p.toLowerCase() === saved.toLowerCase() ? 'selected' : ''}>${App.ui.esc(p)}</option>`
-        ).join('');
-        // If the saved name isn't in the list, prepend it so it's visible.
-        if (!printers.some((p) => p.toLowerCase() === saved.toLowerCase())) {
-          sel.innerHTML = `<option value="${App.ui.esc(saved)}" selected>${App.ui.esc(saved)} (not detected)</option>` + sel.innerHTML;
+
+        sel.innerHTML = printers.map((p) => {
+          const state = p.connected === true ? 'connected' : (p.connected === false ? 'disconnected' : 'installed');
+          const recommended = status.autoSelected && p.name === selectedName ? ' · recommended' : '';
+          const label = p.name + (p.port ? ' — ' + p.port : '') + ' · ' + state + recommended;
+          const selected = p.name.toLowerCase() === selectedName.toLowerCase() ? 'selected' : '';
+          return `<option value="${App.ui.esc(p.name)}" ${selected}>${App.ui.esc(label)}</option>`;
+        }).join('');
+
+        if (!printers.some((p) => p.name.toLowerCase() === selectedName.toLowerCase())) {
+          sel.innerHTML = `<option value="${App.ui.esc(selectedName)}" selected>${App.ui.esc(selectedName)} (not detected)</option>` + sel.innerHTML;
         }
-      } catch {
-        sel.innerHTML = `<option value="${App.ui.esc(this.s.startup_test_printer || 'POS-58')}">${App.ui.esc(this.s.startup_test_printer || 'POS-58')}</option>`;
+        if (routeEl) {
+          if (status.selected) {
+            routeEl.textContent = status.reason || ('Ready: ' + status.selected.name + (status.selected.port ? ' on ' + status.selected.port : ''));
+          } else {
+            routeEl.textContent = status.error || 'Choose an installed Windows printer.';
+          }
+        }
+        // Existing USB installations were historically saved as Bluetooth.
+        // Show the correct route immediately when no BLE device was ever paired.
+        const typeSel = v.querySelector('#s_printer_type');
+        if (status.autoSelected && !this.s.printer_device_name && typeSel && typeSel.value === 'bluetooth') {
+          typeSel.value = 'system';
+        }
+        return status;
+      } catch (e) {
+        const fallback = this.s.startup_test_printer || 'POS-58';
+        sel.innerHTML = `<option value="${App.ui.esc(fallback)}">${App.ui.esc(fallback)}</option>`;
+        if (routeEl) routeEl.textContent = 'Printer discovery failed: ' + e.message;
+        return null;
       }
     };
     loadPrinterList();
@@ -287,18 +367,19 @@ App.views.settings = {
       const btn = v.querySelector('#sStartupTestNow');
       btn.disabled = true; btn.textContent = 'Printing…';
       try {
-        // Save the selected printer first so the test uses the right one.
-        const sel = v.querySelector('#sStartupPrinter');
-        if (sel && sel.value) {
-          await App.pos.settings.set('startup_test_printer', sel.value);
-          this.s.startup_test_printer = sel.value;
-          App.settingsCache.startup_test_printer = sel.value;
-        }
+        await saveSelectedWindowsPrinter();
+        await App.pos.settings.set('printer_type', 'system');
+        App.settingsCache.printer_type = 'system';
+        v.querySelector('#s_printer_type').value = 'system';
         const res = await App.pos.printer.startupTest();
-        if (res && res.ok) App.ui.toast('Test print sent to "' + res.printer + '" ✓', 'ok');
-        else App.ui.toast((res && res.error) || 'Test print failed', 'err');
-      } catch (e) { App.ui.toast(e.message, 'err'); }
-      finally { btn.disabled = false; btn.textContent = 'Test Startup Print Now'; }
+        const routeEl = v.querySelector('#sPrinterRoute');
+        if (routeEl) routeEl.textContent = 'Ready: ' + res.printer;
+        App.ui.toast('Test print sent to "' + res.printer + '" ✓', 'ok');
+      } catch (e) {
+        App.ui.toast(e.message, 'err');
+      } finally {
+        btn.disabled = false; btn.textContent = 'Test Selected Windows Printer';
+      }
     };
     v.querySelector('#sTgTest').onclick = async () => { try { const r = await App.pos.telegram.test(); r.ok ? App.ui.toast('Test message sent ✓', 'ok') : App.ui.toast(r.error || 'Failed', 'err'); } catch (e) { App.ui.toast(e.message, 'err'); } };
     v.querySelector('#sTgReport').onclick = async () => { try { const r = await App.pos.telegram.sendReport(); r.ok ? App.ui.toast('Report sent ✓', 'ok') : App.ui.toast(r.error || 'Failed', 'err'); } catch (e) { App.ui.toast(e.message, 'err'); } };
@@ -322,8 +403,11 @@ App.views.settings = {
           el.innerHTML = `<div class="hint">v${r.currentVersion} → v${r.version} available</div>`;
           const ok = await App._showWhatsNew(r);
           if (!ok) return;
-          await App._showDownloadProgress(r);
+          const downloaded = await App._showDownloadProgress(r);
           el.innerHTML = '<div class="hint" style="color:var(--ok)">Update downloaded — restart to install.</div>';
+          if (!downloaded) {
+            el.innerHTML = '<div class="hint" style="color:var(--danger)">Update download failed. Check your internet connection and try again.</div>';
+          }
         } else {
           el.innerHTML = '<div class="hint" style="color:var(--ok)">You are up to date (v' + r.currentVersion + ').</div>';
         }

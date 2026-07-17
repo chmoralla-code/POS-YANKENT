@@ -105,24 +105,27 @@ const SETTINGS_DEFAULTS = {
   // sale.  '1' = enabled (default), '0' = disabled.
   startup_test_print: '1',
   startup_test_printer: 'POS-58',
-  // telegram (defaults shipped with the installer so the owner's bot is
-  // pre-configured on every fresh install; admin can change in Settings)
-  telegram_token: '8888024178:AAHEtknhc05MJzP1d0kCGXoEXpV0xXhJCaE',
-  telegram_chat_id: '5161011730',
+  // Telegram credentials are installation-specific secrets. Enter them
+  // once in Settings; never ship them in source code or an installer.
+  telegram_token: '',
+  telegram_chat_id: '',
   telegram_enabled: '0',
   app_version: '1',
   session_idle_timeout: '15', // minutes; 0 = disabled (not recommended)
 };
 
 function ensureSettings(db) {
-  const has = db.prepare('SELECT COUNT(*) AS c FROM settings').get();
-  if (!has.c) {
-    const ins = db.prepare('INSERT INTO settings(key,value) VALUES(?,?)');
-    const tx = db.transaction((entries) => {
-      for (const [k, v] of entries) ins.run(k, v);
-    });
-    tx(Object.entries(SETTINGS_DEFAULTS));
-  }
+  // Seed every missing key, not only an entirely empty settings table.
+  // Existing installations predate newer settings (for example the selected
+  // Windows receipt printer), so the old all-or-nothing check left those keys
+  // absent forever and silently activated hard-coded fallbacks.
+  const ins = db.prepare('INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)');
+  const tx = db.transaction((entries) => {
+    for (const [k, v] of entries) ins.run(k, v);
+  });
+  tx(Object.entries(SETTINGS_DEFAULTS));
+
+
   return SETTINGS_DEFAULTS;
 }
 

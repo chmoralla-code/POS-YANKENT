@@ -12,6 +12,12 @@ test.describe('Settings', () => {
       await page.waitForTimeout(800);
       const text = await page.locator('#view').textContent();
       expect(text).toMatch(/Store|Telegram|Backup|Printer/i);
+      const firstSection = page.locator('.settings-collapse .collapse-h').first();
+      await expect(firstSection).toHaveAttribute('aria-expanded', 'false');
+      await firstSection.focus();
+      await page.keyboard.press('Enter');
+      await expect(firstSection).toHaveAttribute('aria-expanded', 'true');
+      await expect(page.locator('#s_store_name')).toBeVisible();
     } finally { await electron.close(); }
   });
 

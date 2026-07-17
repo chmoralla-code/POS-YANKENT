@@ -35,7 +35,10 @@ test('buildReceipt returns a complete receipt object with items + totals', async
   assert.equal(receipt.items[0].name, 'Portland Cement 40kg');
   assert.equal(receipt.items[0].qty, 2);
   assert.equal(receipt.items[0].isService, false);
-  assert.equal(receipt.total, 627.2); // 560 net + 12% VAT = 627.20
+  assert.equal(receipt.total, 560); // catalog price already includes VAT
+  assert.equal(receipt.vatRate, 12);
+  api.db.prepare("UPDATE settings SET value='5' WHERE key='vat_rate'").run();
+  assert.equal(buildReceipt(api.db, res.saleId).vatRate, 12, 'reprint keeps the sale-time VAT rate');
   assert.equal(receipt.paymentMethod, 'cash');
   assert.ok(receipt.storeName);
   assert.ok(receipt.symbol);
@@ -140,16 +143,26 @@ function decodeEscposText(buf) {
 test('no line exceeds width when item names are long and amounts are large (regression)', async () => {
   const t = await setup();
   const { api, cashierSession } = t;
-  const cement = api.db.prepare('SELECT * FROM products WHERE sku=?').get('CMT-001');
+  const addProduct = (sku, name, unit, stock, price) => {
+    const id = api.db.prepare(
+      `INSERT INTO products(sku,name,category_id,base_unit,stock,cost,price,low_stock_threshold,is_service,active)
+       VALUES(?,?,NULL,?,?,0,?,10,0,1)`
+    ).run(sku, name, unit, stock, price).lastInsertRowid;
+    api.db.prepare('INSERT INTO product_units(product_id,unit,factor,price) VALUES(?,?,1,?)').run(id, unit, price);
+    return { id, sku, name, unit, price };
+  };
+  const roofing = addProduct('LONG-ROOF', 'Alpha Zinc Roofing Sheet Premium Gauge 24', 'sheet', 10, 1000);
+  const adhesive = addProduct('LONG-ADH', 'ABC Tile Adhesive Premium 25kg Bag', 'bag', 10, 400);
+  const tape = addProduct('LONG-TAPE', '3M Electrical Tape Professional Grade', 'roll', 10, 35);
   // Long product names + large peso amounts that previously overflowed:
   //   "Alpha Zinc Roofing Sheet Premium Gauge 24" (truncated) + qty 5 @ 1000
   //   -> amount 5000 -> formatMoney "PHP 5,000.00" (12 chars).
   // The peso sign is 1 char in JS but renders as "PHP " (4) on the printer,
   // which is exactly the expansion that used to push ".00" to a new line.
   const res = await makeSale(api, cashierSession, [
-    { productId: cement.id, sku: cement.sku, name: 'Alpha Zinc Roofing Sheet Premium Gauge 24', unit: 'sheet', qty: 5, unitPrice: 1000, factor: 1 },
-    { productId: cement.id, sku: cement.sku, name: 'ABC Tile Adhesive Premium 25kg Bag', unit: 'bag', qty: 4, unitPrice: 400, factor: 1 },
-    { productId: cement.id, sku: cement.sku, name: '3M Electrical Tape Professional Grade', unit: 'roll', qty: 7, unitPrice: 35, factor: 1 },
+    { productId: roofing.id, sku: roofing.sku, name: roofing.name, unit: roofing.unit, qty: 5, unitPrice: roofing.price, factor: 1 },
+    { productId: adhesive.id, sku: adhesive.sku, name: adhesive.name, unit: adhesive.unit, qty: 4, unitPrice: adhesive.price, factor: 1 },
+    { productId: tape.id, sku: tape.sku, name: tape.name, unit: tape.unit, qty: 7, unitPrice: tape.price, factor: 1 },
   ]);
   const receipt = buildReceipt(api.db, res.saleId);
   const width = 32;

@@ -196,8 +196,8 @@ function escapeHtml(s) {
 
 /**
  * Split a VAT-inclusive total into net + VAT components (for display only).
- * The DB stores `total` = subtotal + vat (VAT-exclusive pricing model), so to
- * show the breakdown we derive net = total / (1 + rate/100).
+ * The DB stores VAT-inclusive totals, so derive the net component with
+ * net = total / (1 + rate/100).
  */
 function vatSplit(total, vatRate = 12) {
   const t = Number(total) || 0;
@@ -251,7 +251,8 @@ function buildAnalytics(db) {
  */
 function buildReportMessage(db) {
   const today = db.prepare(
-    `SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total
+    `SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total,
+            COALESCE(SUM(subtotal),0) AS net, COALESCE(SUM(vat),0) AS vat
      FROM sales WHERE status='completed'
        AND date(datetime)=date('now','localtime')`
   ).get();
@@ -263,7 +264,9 @@ function buildReportMessage(db) {
   ).get();
 
   const month = db.prepare(
-    `SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total FROM sales WHERE status='completed'
+    `SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total,
+            COALESCE(SUM(subtotal),0) AS net, COALESCE(SUM(vat),0) AS vat
+     FROM sales WHERE status='completed'
        AND strftime('%Y-%m', datetime)=strftime('%Y-%m','now','localtime')`
   ).get();
 
@@ -284,20 +287,16 @@ function buildReportMessage(db) {
   }
 
   const a = buildAnalytics(db);
-  // VAT breakdown for today — the owner needs to see the VAT remittance
-  // component separately now that pricing is VAT-exclusive (VAT is added on
-  // top of the net subtotal at checkout).
-  const vatRate = 12;
-  const todaySplit = vatSplit(today.total, vatRate);
-  const monthSplit = vatSplit(month.total, vatRate);
+  // Sum the VAT split persisted on each sale. This remains correct even if
+  // the configured VAT rate changes during the reporting period.
   const lines = [
     '<b>YANKENT POS Sales Report</b>',
     '━━━━━━━━━━━━━━━━━━',
     `📅 Today: ${reportMoney(today.total)} / ${today.tx} transactions`,
-    `   Net: ${reportMoney(todaySplit.net)} · VAT ${vatRate}%: ${reportMoney(todaySplit.vat)}`,
+    `   Net: ${reportMoney(today.net)} · VAT included: ${reportMoney(today.vat)}`,
     `📆 Yesterday: ${reportMoney(yesterday.total)} / ${yesterday.tx} transactions`,
     `📊 This Month: ${reportMoney(month.total)} / ${month.tx} tx`,
-    `   Net: ${reportMoney(monthSplit.net)} · VAT ${vatRate}%: ${reportMoney(monthSplit.vat)}`,
+    `   Net: ${reportMoney(month.net)} · VAT included: ${reportMoney(month.vat)}`,
     `📈 This Year: ${reportMoney(year.total)} / ${year.tx} tx`,
     `🏆 Best Day: ${bestDay}`,
     '',

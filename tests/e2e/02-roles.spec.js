@@ -10,6 +10,9 @@ test.describe('Role-Based Access', () => {
       await login(page, 'cashier', 'cashier123');
       // POS active by default
       await expect(page.locator('.nav-item[data-view="pos"]')).toHaveClass(/active/);
+      await expect(page.locator('.nav-item[data-view="pos"]')).toHaveAttribute('aria-current', 'page');
+      await expect(page.getByRole('navigation', { name: 'Main navigation' })).toBeVisible();
+      await expect(page.locator('#navRole')).toHaveText('Cashier');
       // Analytics visible
       await expect(page.locator('.nav-item[data-view="analytics"]')).toBeVisible();
       // Admin items hidden
@@ -29,6 +32,8 @@ test.describe('Role-Based Access', () => {
         await expect(el).toBeVisible();
         await expect(el).not.toHaveClass(/hidden/);
       }
+      await expect(page.getByText('Administration', { exact: true })).toBeVisible();
+      await expect(page.locator('#navRole')).toHaveText('Administrator');
     } finally { await electron.close(); }
   });
 

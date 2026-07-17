@@ -15,33 +15,72 @@ App.views.analytics = {
   viewEl: null,
   // Per-section open/close state so re-renders (e.g. after data refresh)
   // preserve what the cashier already expanded.
-  openState: { topSellers: false, refunds: false },
+  openState: { topSellers: true, refunds: false },
 
   async render(view) {
     this.viewEl = view;
     view.classList.add('view-analytics');
+    const role = App.current.user && App.current.user.role === 'admin' ? 'Administrator' : 'Cashier';
     view.innerHTML = `
       <div class="an-wrap">
-        <div class="an-cards" id="anCards">
-          <div class="an-card muted">Loading…</div>
+        <header class="an-header">
+          <div>
+            <div class="an-eyebrow">${role} dashboard</div>
+            <h2>Store performance</h2>
+            <p>Monitor current sales activity, payment mix, products, and refunds.</p>
+          </div>
+          <div class="an-refresh-wrap">
+            <span class="an-updated" id="anUpdated" aria-live="polite">Loading latest data…</span>
+            <button type="button" class="btn btn-sm btn-ghost" id="anRefresh">Refresh</button>
+          </div>
+        </header>
+        <div class="an-dashboard-groups" id="anCards" aria-busy="true">
+          <section class="an-group" aria-labelledby="anSalesHeading">
+            <div class="an-group-heading"><h3 id="anSalesHeading">Sales overview</h3><p>Rolling store totals and the best recorded day.</p></div>
+            <div class="an-cards" id="anSalesCards"><div class="an-card muted">Loading…</div></div>
+          </section>
+          <section class="an-group" aria-labelledby="anOpsHeading">
+            <div class="an-group-heading"><h3 id="anOpsHeading">Today’s operations</h3><p>Transaction quality, payment mix, and refund activity.</p></div>
+            <div class="an-cards" id="anOpsCards"><div class="an-card muted">Loading…</div></div>
+          </section>
         </div>
-        <div class="collapse-list" id="anSections" style="margin-top:4px"></div>
+        <section class="an-group" aria-labelledby="anDetailHeading">
+          <div class="an-group-heading"><h3 id="anDetailHeading">Activity details</h3><p>Open a section for item-level information.</p></div>
+          <div class="collapse-list an-sections" id="anSections"></div>
+        </section>
       </div>`;
-    // Click-anywhere-on-header toggles open/close for any section.
+    view.querySelector('#anRefresh').onclick = async () => {
+      const button = view.querySelector('#anRefresh');
+      button.disabled = true; button.textContent = 'Refreshing…';
+      await this._load();
+      button.disabled = false; button.textContent = 'Refresh';
+    };
     view.querySelector('#anSections').addEventListener('click', (e) => {
-      const hdr = e.target.closest('.collapse-h');
-      if (!hdr) return;
-      const sec = hdr.parentElement;
+      const toggle = e.target.closest('.collapse-toggle');
+      if (!toggle) return;
+      const sec = toggle.closest('.collapse-section');
       const key = sec.dataset.key;
-      sec.classList.toggle('open');
-      this.openState[key] = sec.classList.contains('open');
+      const open = !sec.classList.contains('open');
+      this._setSectionOpen(sec, open);
+      this.openState[key] = open;
     });
     await this._load();
   },
 
+  _setSectionOpen(section, open) {
+    section.classList.toggle('open', open);
+    const toggle = section.querySelector('.collapse-toggle');
+    const body = section.querySelector('.collapse-b');
+    if (toggle) toggle.setAttribute('aria-expanded', String(open));
+    if (body) body.hidden = !open;
+  },
+
   async _load() {
     const cardsEl = this.viewEl.querySelector('#anCards');
+    const salesCardsEl = this.viewEl.querySelector('#anSalesCards');
+    const opsCardsEl = this.viewEl.querySelector('#anOpsCards');
     const sectionsEl = this.viewEl.querySelector('#anSections');
+    cardsEl.setAttribute('aria-busy', 'true');
     try {
       const [summary, analytics, refunds, refundSummary] = await Promise.all([
         App.pos.reports.summary(),
@@ -64,7 +103,7 @@ App.views.analytics = {
       const refundToday = rs.today || { tx: 0, total: 0 };
       const refundMonth = rs.month || { tx: 0, total: 0 };
 
-      cardsEl.innerHTML = `
+      salesCardsEl.innerHTML = `
         <div class="an-card an-card-accent">
           <div class="an-k">Today</div>
           <div class="an-v">${App.ui.money(today.total)}</div>
@@ -89,7 +128,8 @@ App.views.analytics = {
           <div class="an-k">Best Day</div>
           <div class="an-v">${best ? App.ui.money(best.total) : '—'}</div>
           <div class="an-sub">${best ? App.ui.esc(best.label) : ''}</div>
-        </div>
+        </div>`;
+      opsCardsEl.innerHTML = `
         <div class="an-card">
           <div class="an-k">Avg. Transaction</div>
           <div class="an-v">${App.ui.money(avg)}</div>
@@ -166,19 +206,32 @@ App.views.analytics = {
         { key: 'refunds',    title: 'Refund History',      preview: refundPreview, body: refundBody },
       ];
 
-      sectionsEl.innerHTML = sections.map((sec) => `<div class="collapse-section${this.openState[sec.key] ? ' open' : ''}" data-key="${sec.key}">
-        <div class="collapse-h" role="button" tabindex="0">
-          <div class="collapse-arrow">▸</div>
-          <div class="collapse-info">
-            <div class="collapse-title">${App.ui.esc(sec.title)}</div>
-            <div class="collapse-preview muted">${sec.preview}</div>
+      sectionsEl.innerHTML = sections.map((sec) => {
+        const open = !!this.openState[sec.key];
+        const bodyId = `anSection-${sec.key}`;
+        return `<section class="collapse-section${open ? ' open' : ''}" data-key="${sec.key}">
+          <div class="collapse-h">
+            <button type="button" class="collapse-toggle" aria-expanded="${open}" aria-controls="${bodyId}">
+              <span class="collapse-arrow" aria-hidden="true">▸</span>
+              <span class="collapse-info">
+                <span class="collapse-title">${App.ui.esc(sec.title)}</span>
+                <span class="collapse-preview muted">${sec.preview}</span>
+              </span>
+            </button>
           </div>
-        </div>
-        <div class="collapse-b">${sec.body}</div>
-      </div>`).join('');
+          <div class="collapse-b" id="${bodyId}"${open ? '' : ' hidden'}>${sec.body}</div>
+        </section>`;
+      }).join('');
+      const updated = this.viewEl.querySelector('#anUpdated');
+      if (updated) updated.textContent = `Updated ${new Date().toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' })}`;
     } catch (e) {
-      cardsEl.innerHTML = '<div class="an-card muted">Analytics unavailable.</div>';
+      salesCardsEl.innerHTML = '<div class="an-card muted">Analytics unavailable.</div>';
+      opsCardsEl.innerHTML = '';
       sectionsEl.innerHTML = `<div class="an-muted">${App.ui.esc(e.message)}</div>`;
+      const updated = this.viewEl.querySelector('#anUpdated');
+      if (updated) updated.textContent = 'Unable to refresh';
+    } finally {
+      cardsEl.setAttribute('aria-busy', 'false');
     }
   },
 };

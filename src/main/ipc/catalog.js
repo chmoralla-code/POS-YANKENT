@@ -2,6 +2,31 @@
 
 /** Products, categories, product units, customers. */
 
+function clampLimit(value, fallback, max) {
+  const n = Math.floor(Number(value));
+  return Number.isFinite(n) && n > 0 ? Math.min(n, max) : fallback;
+}
+
+function nonNegativeNumber(value, label, fallback = 0) {
+  const n = value === undefined || value === null || value === '' ? fallback : Number(value);
+  if (!Number.isFinite(n) || n < 0) throw new Error(`${label} must be a non-negative number`);
+  return n;
+}
+
+function normalizeUnits(units, baseUnit, defaultPrice) {
+  const source = Array.isArray(units) && units.length
+    ? units
+    : [{ unit: baseUnit, factor: 1, price: defaultPrice }];
+  return source.map((u) => {
+    const unit = String(u.unit || '').trim();
+    const factor = Number(u.factor);
+    const price = nonNegativeNumber(u.price, 'Unit price', defaultPrice);
+    if (!unit) throw new Error('Unit name is required');
+    if (!Number.isFinite(factor) || factor <= 0) throw new Error('Unit factor must be greater than zero');
+    return { unit, factor, price };
+  });
+}
+
 function register(ipcMain, ctx) {
   const { db, guard } = ctx;
 
@@ -60,6 +85,20 @@ function register(ipcMain, ctx) {
   });
 
   // ---- Products ----------------------------------------------------------
+  // Coerce SQLite 0/1 into a reliable flag for the renderer (and ensure every
+  // active product has at least one sellable unit — services created before
+  // unit repair would otherwise show price-only / fail to add cleanly).
+  function normalizeProductRow(r, units) {
+    const isService = !!(r && (r.is_service === 1 || r.is_service === true || r.is_service === '1'));
+    r.is_service = isService ? 1 : 0;
+    r.units = Array.isArray(units) ? units : [];
+    if (!r.units.length) {
+      const unit = String(r.base_unit || (isService ? 'svc' : 'pc')).trim() || (isService ? 'svc' : 'pc');
+      r.units = [{ unit, factor: 1, price: Number(r.price) || 0 }];
+    }
+    return r;
+  }
+
   // List with the default (first) unit price and stock for the catalog grid.
   guard(ipcMain, 'pos:products:list', { auth: true }, (_c, filter = {}) => {
     let sql = `
@@ -70,17 +109,33 @@ function register(ipcMain, ctx) {
       WHERE p.active = 1`;
     const params = [];
     if (filter.includeServices === false) sql += ` AND p.is_service = 0`;
+    // Optional: list only services (POS Services tab / Products admin Services tab)
+    if (filter.servicesOnly === true) sql += ` AND p.is_service = 1`;
     if (filter.categoryId) { sql += ` AND p.category_id = ?`; params.push(filter.categoryId); }
     if (filter.q) {
       sql += ` AND (LOWER(p.sku) LIKE ? OR LOWER(p.name) LIKE ?)`;
       const q = '%' + String(filter.q).toLowerCase() + '%';
       params.push(q, q);
     }
-    sql += ` ORDER BY p.is_service, p.name`;
+    // Services first when mixed list, then A–Z — newest services tend to be
+    // found faster on admin screens; POS filters by tab either way.
+    sql += ` ORDER BY p.is_service DESC, p.name COLLATE NOCASE`;
     const rows = db.prepare(sql).all(...params);
-    // attach sellable units
     const unitsStmt = db.prepare('SELECT unit, factor, price FROM product_units WHERE product_id=? ORDER BY id');
-    for (const r of rows) r.units = unitsStmt.all(r.id);
+    const insUnit = db.prepare('INSERT INTO product_units(product_id,unit,factor,price) VALUES(?,?,?,?)');
+    for (const r of rows) {
+      let units = unitsStmt.all(r.id);
+      // Repair missing units in the DB so cart/sales always have a sell unit.
+      if (!units.length) {
+        const isService = !!(r.is_service === 1 || r.is_service === true || r.is_service === '1');
+        const unit = String(r.base_unit || (isService ? 'svc' : 'pc')).trim() || (isService ? 'svc' : 'pc');
+        const price = Number(r.price) || 0;
+        try { insUnit.run(r.id, unit, 1, price); } catch { /* unique race ok */ }
+        units = unitsStmt.all(r.id);
+        if (!units.length) units = [{ unit, factor: 1, price }];
+      }
+      normalizeProductRow(r, units);
+    }
     return rows;
   });
 
@@ -89,12 +144,20 @@ function register(ipcMain, ctx) {
       SELECT p.*, c.name AS category FROM products p
       LEFT JOIN categories c ON p.category_id=c.id WHERE p.id=?`).get(id);
     if (!p) return null;
-    p.units = db.prepare('SELECT id, unit, factor, price FROM product_units WHERE product_id=? ORDER BY id').all(id);
-    return p;
+    const units = db.prepare('SELECT id, unit, factor, price FROM product_units WHERE product_id=? ORDER BY id').all(id);
+    return normalizeProductRow(p, units);
   });
 
-  guard(ipcMain, 'pos:products:create', { admin: true }, (_c, p) => {
-    if (!p.name) throw new Error('Name is required');
+  guard(ipcMain, 'pos:products:create', { admin: true }, (_c, p = {}) => {
+    const name = String(p.name || '').trim();
+    if (!name) throw new Error('Name is required');
+    const isService = !!p.is_service;
+    const baseUnit = String(p.base_unit || 'pc').trim() || 'pc';
+    const stock = isService ? 0 : nonNegativeNumber(p.stock, 'Stock');
+    const cost = nonNegativeNumber(p.cost, 'Cost');
+    const price = nonNegativeNumber(p.price, 'Price');
+    const lowStock = nonNegativeNumber(p.low_stock_threshold, 'Low-stock threshold', 10);
+    const units = normalizeUnits(p.units, baseUnit, price);
     const info = db.transaction(() => {
       // Auto-generate an internal code (SKU) if not provided — never shown to users.
       let sku = p.sku && String(p.sku).trim();
@@ -105,42 +168,49 @@ function register(ipcMain, ctx) {
       const r = db.prepare(
         `INSERT INTO products(sku,name,category_id,base_unit,stock,cost,price,low_stock_threshold,is_service,active)
           VALUES(?,?,?,?,?,?,?,?,?,1)`
-      ).run(sku, p.name, p.category_id || null, p.base_unit || 'pc', p.stock || 0, p.cost || 0, p.price || 0, p.low_stock_threshold ?? 10, p.is_service ? 1 : 0);
+      ).run(sku, name, p.category_id || null, baseUnit, stock, cost, price, lowStock, isService ? 1 : 0);
       const pid = r.lastInsertRowid;
       const ins = db.prepare('INSERT INTO product_units(product_id,unit,factor,price) VALUES(?,?,?,?)');
-      if (Array.isArray(p.units) && p.units.length) {
-        for (const u of p.units) ins.run(pid, u.unit, u.factor, u.price);
-      } else {
-        ins.run(pid, p.base_unit || 'pc', 1, p.price || 0);
-      }
+      for (const u of units) ins.run(pid, u.unit, u.factor, u.price);
       // record initial stock as a restock movement
-      if ((p.stock || 0) !== 0) {
+      if (stock !== 0) {
         db.prepare('INSERT INTO stock_movements(product_id,movement,qty_change,reason,user_id) VALUES(?,?,?,?,?)')
-          .run(pid, 'restock', p.stock, 'Initial stock', _c.session?.id || null);
+          .run(pid, 'restock', stock, 'Initial stock', _c.session?.id || null);
       }
       return pid;
     })();
     return { id: info };
   });
 
-  guard(ipcMain, 'pos:products:update', { admin: true }, (_c, id, p) => {
+  guard(ipcMain, 'pos:products:update', { admin: true }, (_c, id, p = {}) => {
     db.transaction(() => {
       // Preserve active status unless explicitly set. The Edit form never sends
       // `active`, so defaulting it to 0 would silently soft-delete the product
       // every time it is edited — it then vanishes from the catalog (which only
       // lists active=1). Deactivation is the Del button's job, not Edit's.
-      const existing = db.prepare('SELECT active FROM products WHERE id=?').get(id);
+      const existing = db.prepare('SELECT active, sku FROM products WHERE id=?').get(id);
+      if (!existing) throw new Error('Product not found');
+      const name = String(p.name || '').trim();
+      const baseUnit = String(p.base_unit || '').trim();
+      const sku = String(p.sku || existing.sku || '').trim();
+      if (!name) throw new Error('Name is required');
+      if (!baseUnit) throw new Error('Base unit is required');
+      if (!sku) throw new Error('SKU is required');
+      const cost = nonNegativeNumber(p.cost, 'Cost');
+      const price = nonNegativeNumber(p.price, 'Price');
+      const lowStock = nonNegativeNumber(p.low_stock_threshold, 'Low-stock threshold', 10);
       const active = (p.active === undefined || p.active === null)
-        ? (existing ? existing.active : 1)
+        ? existing.active
         : (p.active ? 1 : 0);
       db.prepare(
         `UPDATE products SET sku=?, name=?, category_id=?, base_unit=?, cost=?, price=?,
            low_stock_threshold=?, is_service=?, active=? WHERE id=?`
-      ).run(p.sku, p.name, p.category_id || null, p.base_unit, p.cost || 0, p.price || 0, p.low_stock_threshold ?? 10, p.is_service ? 1 : 0, active, id);
+      ).run(sku, name, p.category_id || null, baseUnit, cost, price, lowStock, p.is_service ? 1 : 0, active, id);
       if (Array.isArray(p.units)) {
+        const units = normalizeUnits(p.units, baseUnit, price);
         db.prepare('DELETE FROM product_units WHERE product_id=?').run(id);
         const ins = db.prepare('INSERT INTO product_units(product_id,unit,factor,price) VALUES(?,?,?,?)');
-        for (const u of p.units) ins.run(id, u.unit, u.factor, u.price);
+        for (const u of units) ins.run(id, u.unit, u.factor, u.price);
       }
     })();
     return true;
@@ -151,17 +221,19 @@ function register(ipcMain, ctx) {
     const row = db.prepare('SELECT stock, is_service FROM products WHERE id=?').get(id);
     if (!row) throw new Error('Product not found');
     if (row.is_service) throw new Error('Cannot set stock for a service');
-    const delta = Number(newStock) - row.stock;
+    const stock = Number(newStock);
+    if (!Number.isFinite(stock) || stock < 0) throw new Error('Stock must be a non-negative number');
+    const delta = stock - row.stock;
     const now = new Date();
     const pad = (n) => String(n).padStart(2, '0');
     const localNow = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
     const dt = date ? `${date} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}` : localNow;
     db.transaction(() => {
-      db.prepare('UPDATE products SET stock=? WHERE id=?').run(newStock, id);
+      db.prepare('UPDATE products SET stock=? WHERE id=?').run(stock, id);
       db.prepare('INSERT INTO stock_movements(product_id,movement,qty_change,reason,user_id,datetime,source_location) VALUES(?,?,?,?,?,?,?)')
         .run(id, 'adjustment', delta, reason || 'Stock count', _c.session?.id || null, dt, location || null);
     })();
-    return { stock: Number(newStock), delta };
+    return { stock, delta };
   });
 
   guard(ipcMain, 'pos:products:movements', { admin: true }, (_c, id) =>
@@ -194,7 +266,7 @@ function register(ipcMain, ctx) {
       params.push(like, like, like, like, like);
     }
     sql += ` ORDER BY sm.datetime DESC LIMIT ?`;
-    params.push(Math.min(f.limit || 500, 2000));
+    params.push(clampLimit(f.limit, 500, 2000));
     return db.prepare(sql).all(...params);
   });
 

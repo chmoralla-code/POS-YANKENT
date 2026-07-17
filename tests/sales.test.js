@@ -34,9 +34,11 @@ test('create sale records a PENDING sale (no stock deduction), commit deducts st
   });
   assert.match(res.txnId, /^YK-\d{6}$/);
   assert.equal(res.saleId > 0, true);
-  // 2*280 + 1*95 = 655 net; total = 655 + 12% VAT = 733.60
+  // Catalog prices include VAT, so the customer pays 2*280 + 1*95 = 655.
   const sale = api.db.prepare('SELECT * FROM sales WHERE id=?').get(res.saleId);
-  assert.equal(sale.total, 733.6);
+  assert.equal(sale.total, 655);
+  assert.equal(sale.subtotal, 584.82);
+  assert.equal(sale.vat, 70.18);
   assert.equal(sale.status, 'pending');
   // stock NOT yet deducted (pending sale)
   const cementAfterCreate = api.db.prepare('SELECT stock FROM products WHERE id=?').get(cement.id).stock;
@@ -130,8 +132,8 @@ test('mixed product + service sale: service consumes no stock on commit', async 
   // for accounting, but no product stock is decremented)
   const svcMovs = api.db.prepare("SELECT * FROM stock_movements WHERE product_id=?").all(cut.id);
   assert.equal(svcMovs.length, 0);
-  // 280 + 75 = 355 net; total = 355 + 12% VAT = 397.60
-  assert.equal(api.db.prepare('SELECT total FROM sales WHERE id=?').get(res.saleId).total, 397.6);
+  // 280 + 75 = 355 VAT-inclusive.
+  assert.equal(api.db.prepare('SELECT total FROM sales WHERE id=?').get(res.saleId).total, 355);
   t.api.close();
 });
 
@@ -176,9 +178,51 @@ test('invalid payment method is rejected (cannot bypass cash/credit checks)', as
   t.api.close();
 });
 
+test('sale lines use authoritative catalog price, unit factor, and product type', async () => {
+  const t = await setup();
+  const { api, cement, cashierSession } = t;
+  const res = await api.call('pos:sales:create', cashierSession, {
+    items: [{
+      productId: cement.id, sku: 'FAKE', name: 'Free Item', unit: 'bag', qty: 1,
+      unitPrice: 0, factor: 0, isService: true, lineType: 'service',
+    }],
+    paymentMethod: 'cash', amountTendered: 280,
+  });
+  const item = api.db.prepare('SELECT * FROM sale_items WHERE sale_id=?').get(res.saleId);
+  assert.equal(item.sku, cement.sku);
+  assert.equal(item.name, cement.name);
+  assert.equal(item.unit_price, 280);
+  assert.equal(item.amount, 280);
+  assert.equal(item.stock_consumed, 1);
+  assert.equal(item.line_type, 'product');
+  assert.equal(res.receipt.total, 280);
+  await assert.rejects(() => api.call('pos:sales:create', cashierSession, {
+    items: [{ productId: cement.id, unit: 'not-a-real-unit', qty: 1, unitPrice: 1 }],
+    paymentMethod: 'cash', amountTendered: 999,
+  }), /Invalid unit/);
+  await assert.rejects(() => api.call('pos:sales:create', cashierSession, {
+    items: [{ productId: cement.id, unit: 'bag', qty: 1, unitPrice: 280 }],
+    paymentMethod: 'cash', amountTendered: 'not-a-number',
+  }), /Invalid cash received/);
+  t.api.close();
+});
+
+test('on-account credit is rechecked when a pending sale is committed', async () => {
+  const t = await setup();
+  const { api, cement, contractor, cashierSession } = t;
+  const res = await api.call('pos:sales:create', cashierSession, {
+    items: [{ productId: cement.id, unit: 'bag', qty: 1, unitPrice: 280 }],
+    customerId: contractor.id, paymentMethod: 'account', amountTendered: 0,
+  });
+  api.db.prepare('UPDATE customers SET credit_used=? WHERE id=?').run(contractor.credit_limit - 100, contractor.id);
+  await assert.rejects(() => api.call('pos:sales:commit', cashierSession, res.txnId), /Exceeds credit limit/);
+  assert.equal(api.db.prepare('SELECT status FROM sales WHERE id=?').get(res.saleId).status, 'pending');
+  t.api.close();
+});
+
 test('refund restocks items, marks sale refunded, creates refund record', async () => {
   const t = await setup();
-  const { api, cement, cashierSession, adminSession } = t;
+  const { api, admin, cement, cashierSession } = t;
   const res = await api.call('pos:sales:create', cashierSession, {
     items: [{ productId: cement.id, sku: cement.sku, name: cement.name, unit: 'bag', qty: 4, unitPrice: 280, factor: 1 }],
     paymentMethod: 'cash', amountTendered: 2000,
@@ -186,11 +230,15 @@ test('refund restocks items, marks sale refunded, creates refund record', async 
   // commit the sale first so stock is deducted (refund requires completed)
   await api.call('pos:sales:commit', cashierSession, res.txnId);
   const stockAfterSale = api.db.prepare('SELECT stock FROM products WHERE id=?').get(cement.id).stock;
+  const approval = await api.call('pos:refunds:verifyAdmin', cashierSession, 'admin123', res.txnId);
+  assert.equal(approval.ok, true);
+  assert.ok(approval.approvalToken);
   const r = await api.call('pos:refunds:process', cashierSession, {
-    txnId: res.txnId, adminId: 1, adminName: 'YANKENT Admin', reason: 'Customer changed mind', refundAll: true,
+    txnId: res.txnId, approvalToken: approval.approvalToken, reason: 'Customer changed mind', refundAll: true,
   });
   assert.match(r.refundTxnId, /^RF-\d{6}$/);
-  assert.equal(r.total, 1254.4); // 4*280=1120 net + 12% VAT = 1254.40
+  assert.equal(r.total, 1120); // catalog prices already include VAT
+  assert.equal(r.approvedBy, admin.full_name);
   // stock restored
   const stockAfterRefund = api.db.prepare('SELECT stock FROM products WHERE id=?').get(cement.id).stock;
   assert.equal(stockAfterRefund, stockAfterSale + 4);
@@ -201,10 +249,66 @@ test('refund restocks items, marks sale refunded, creates refund record', async 
   const refund = api.db.prepare('SELECT * FROM refunds WHERE refund_txn_id=?').get(r.refundTxnId);
   assert.ok(refund);
   assert.equal(refund.original_txn_id, res.txnId);
+  assert.equal(refund.admin_id, admin.id);
+  assert.equal(refund.admin_name, admin.full_name);
   // restock movement logged
   const movs = api.db.prepare("SELECT * FROM stock_movements WHERE movement='refund' AND product_id=?").all(cement.id);
   assert.equal(movs.length, 1);
   assert.equal(movs[0].qty_change, 4);
+  t.api.close();
+});
+
+test('cashier cannot forge administrator approval for a refund', async () => {
+  const t = await setup();
+  const { api, cement, cashierSession } = t;
+  const res = await api.call('pos:sales:create', cashierSession, {
+    items: [{ productId: cement.id, unit: 'bag', qty: 1 }],
+    paymentMethod: 'cash', amountTendered: 500,
+  });
+  await api.call('pos:sales:commit', cashierSession, res.txnId);
+
+  await assert.rejects(
+    () => api.call('pos:refunds:process', cashierSession, {
+      txnId: res.txnId,
+      adminId: 1,
+      adminName: 'YANKENT Admin',
+      reason: 'Customer return',
+    }),
+    /Administrator approval is required/
+  );
+  assert.equal(api.db.prepare('SELECT status FROM sales WHERE id=?').get(res.saleId).status, 'completed');
+  t.api.close();
+});
+
+test('refund approval rejects a wrong administrator password', async () => {
+  const t = await setup();
+  const approval = await t.api.call('pos:refunds:verifyAdmin', t.cashierSession, 'wrong-password', 'YK-000001');
+  assert.equal(approval.ok, false);
+  assert.equal(approval.approvalToken, undefined);
+  t.api.close();
+});
+
+test('refund approval token is bound to the reviewed transaction', async () => {
+  const t = await setup();
+  const { api, cement, cashierSession } = t;
+  const createSale = () => api.call('pos:sales:create', cashierSession, {
+    items: [{ productId: cement.id, unit: 'bag', qty: 1 }],
+    paymentMethod: 'cash', amountTendered: 500,
+  });
+  const first = await createSale();
+  const second = await createSale();
+  await api.call('pos:sales:commit', cashierSession, first.txnId);
+  await api.call('pos:sales:commit', cashierSession, second.txnId);
+  const approval = await api.call('pos:refunds:verifyAdmin', cashierSession, 'admin123', first.txnId);
+
+  await assert.rejects(
+    () => api.call('pos:refunds:process', cashierSession, {
+      txnId: second.txnId,
+      approvalToken: approval.approvalToken,
+      reason: 'Wrong transaction attempt',
+    }),
+    /Administrator approval is required/
+  );
   t.api.close();
 });
 
@@ -216,8 +320,9 @@ test('cannot refund the same sale twice', async () => {
     paymentMethod: 'cash', amountTendered: 500,
   });
   await api.call('pos:sales:commit', cashierSession, res.txnId);
-  await api.call('pos:refunds:process', cashierSession, { txnId: res.txnId, adminId: 1, adminName: 'A', reason: 'x', refundAll: true });
-  await assert.rejects(() => api.call('pos:refunds:process', cashierSession, { txnId: res.txnId, adminId: 1, adminName: 'A', reason: 'x', refundAll: true }), /not found or already refunded/);
+  const approval = await api.call('pos:refunds:verifyAdmin', cashierSession, 'admin123', res.txnId);
+  await api.call('pos:refunds:process', cashierSession, { txnId: res.txnId, approvalToken: approval.approvalToken, reason: 'Duplicate refund test', refundAll: true });
+  await assert.rejects(() => api.call('pos:refunds:process', cashierSession, { txnId: res.txnId, reason: 'Duplicate refund test', refundAll: true }), /not found or already refunded/);
   t.api.close();
 });
 

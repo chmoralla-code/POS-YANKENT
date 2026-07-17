@@ -144,3 +144,33 @@ test('auth channel returns the session for a valid token', async () => {
   assert.equal(session.role, 'admin');
   t.api.close();
 });
+
+test('admin-only IPC channels enforce the configured idle timeout', async () => {
+  const t = await setup();
+  const admin = t.api.db.prepare('SELECT * FROM users WHERE username=?').get('admin');
+  const s = createSession(admin);
+  t.api.db.prepare("UPDATE settings SET value='1' WHERE key='session_idle_timeout'").run();
+  s.lastActivity = Date.now() - 61 * 1000;
+  await assert.rejects(
+    () => t.api.call('pos:users:list', s),
+    (err) => err.code === 'SESSION_EXPIRED' && /expired/i.test(err.message)
+  );
+  t.api.close();
+});
+
+test('user management rejects lockout, invalid roles, and weak passwords', async () => {
+  const t = await setup();
+  const admin = t.api.db.prepare('SELECT * FROM users WHERE username=?').get('admin');
+  const s = createSession(admin);
+  await assert.rejects(() => t.api.call('pos:users:update', s, admin.id, {
+    full_name: admin.full_name, role: 'cashier', active: 1,
+  }), /cannot deactivate or demote/i);
+  await assert.rejects(() => t.api.call('pos:users:create', s, {
+    username: 'badrole', password: 'valid-password', full_name: 'Bad Role', role: 'owner',
+  }), /Invalid user role/);
+  await assert.rejects(() => t.api.call('pos:users:create', s, {
+    username: 'weak', password: '123', full_name: 'Weak Password', role: 'cashier',
+  }), /at least 4 characters/);
+  await assert.rejects(() => t.api.call('pos:users:setPassword', s, admin.id, ''), /at least 4 characters/);
+  t.api.close();
+});

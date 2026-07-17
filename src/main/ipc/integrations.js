@@ -27,8 +27,9 @@ function sendRawFileToPrinter(filePath, printerName) {
     // If no printer name given, fall back to the Windows default printer.
     const printerExpr = printerName
       ? "'" + String(printerName).replace(/'/g, "''") + "'"
-      : '(Get-CimInstance -ClassName Win32_Printer -Filter "Default=true").Name';
+      : '((New-Object System.Drawing.Printing.PrinterSettings).PrinterName)';
     const psScript = [
+      'Add-Type -AssemblyName System.Drawing',
       'Add-Type -MemberDefinition @"',
       '[DllImport("winspool.drv", CharSet = CharSet.Auto)]',
       'public static extern bool OpenPrinter(string p, out IntPtr h, IntPtr pd);',
@@ -85,23 +86,303 @@ function sendRawFileToPrinter(filePath, printerName) {
 }
 
 /**
- * List installed Windows printer names.
- * @returns {Promise<string[]>}
+ * Windows printer queues are persistent: replacing a USB printer often leaves
+ * the old queue behind and installs the replacement as "POS-58 (1)". Queue
+ * status/offline flags are unreliable for these drivers, so each USB00x port
+ * is mapped to its PnP device and checked through cfgmgr32.
  */
-function listWindowsPrinters() {
+function listWindowsPrinterDetails() {
   return new Promise((resolve) => {
+    const psScript = [
+      '$ErrorActionPreference = "Stop"',
+      "Add-Type -TypeDefinition @'",
+      'using System;',
+      'using System.Runtime.InteropServices;',
+      'public static class YankentUsbDeviceState {',
+      '  [DllImport("cfgmgr32.dll", CharSet = CharSet.Unicode)]',
+      '  private static extern int CM_Locate_DevNodeW(out uint node, string id, uint flags);',
+      '  [DllImport("cfgmgr32.dll")]',
+      '  private static extern int CM_Get_DevNode_Status(out uint status, out uint problem, uint node, uint flags);',
+      '  public static bool IsConnected(string id) {',
+      '    if (String.IsNullOrWhiteSpace(id)) return false;',
+      '    uint node, status, problem;',
+      '    return CM_Locate_DevNodeW(out node, id, 0) == 0',
+      '      && CM_Get_DevNode_Status(out status, out problem, node, 0) == 0',
+      '      && (status & 0x00000002) != 0;',
+      '  }',
+      '}',
+      "'@",
+      "$printerRoot = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Print\\Printers'",
+      "$portsRoot = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Print\\Monitors\\USB Monitor\\Ports'",
+      '$defaultPrinter = ""',
+      'try {',
+      '  Add-Type -AssemblyName System.Drawing -ErrorAction Stop',
+      '  $defaultPrinter = (New-Object System.Drawing.Printing.PrinterSettings).PrinterName',
+      '} catch {}',
+      '$items = @(Get-ChildItem -LiteralPath $printerRoot | ForEach-Object {',
+      '  $p = Get-ItemProperty -LiteralPath $_.PSPath',
+      '  $port = [string]$p.Port',
+      '  $connected = $null',
+      "  if ($port -match '^USB\\d+$') {",
+      '    $deviceId = (Get-ItemProperty -LiteralPath (Join-Path $portsRoot $port) -Name "Device Id" -ErrorAction SilentlyContinue)."Device Id"',
+      '    $connected = [YankentUsbDeviceState]::IsConnected([string]$deviceId)',
+      '  }',
+      '  [pscustomobject]@{',
+      '    name = [string]$p.Name',
+      '    port = $port',
+      '    driver = [string]$p."Printer Driver"',
+      '    connected = $connected',
+      '    isDefault = ([string]$p.Name -ieq $defaultPrinter)',
+      '  }',
+      '})',
+      '$json = ConvertTo-Json -InputObject $items -Compress -Depth 3',
+      '[Console]::Out.Write($json)',
+    ].join('\n');
+
     let out = '';
-    const child = spawn('powershell', ['-NoProfile', '-Command',
-      'Get-Printer | Select-Object -ExpandProperty Name'], {
-      windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'],
-    });
+    let settled = false;
+    let timer = null;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      resolve(value);
+    };
+    let child;
+    try {
+      child = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', psScript], {
+        windowsHide: true,
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+    } catch {
+      finish([]);
+      return;
+    }
     child.stdout.on('data', (d) => { out += d.toString(); });
-    child.on('error', () => resolve([]));
+    child.on('error', () => finish([]));
     child.on('exit', () => {
-      resolve(out.split('\n').map((s) => s.trim()).filter(Boolean));
+      try {
+        const parsed = JSON.parse(out.trim() || '[]');
+        const rows = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : []);
+        finish(rows
+          .filter((p) => p && p.name)
+          .map((p) => ({
+            name: String(p.name).trim(),
+            port: String(p.port || '').trim(),
+            driver: String(p.driver || '').trim(),
+            connected: p.connected === true ? true : (p.connected === false ? false : null),
+            isDefault: !!p.isDefault,
+          }))
+          .sort((a, b) => Number(b.connected === true) - Number(a.connected === true) || a.name.localeCompare(b.name)));
+      } catch {
+        finish([]);
+      }
     });
-    setTimeout(() => { try { child.kill(); } catch {} resolve([]); }, 5000);
+    timer = setTimeout(() => { try { child.kill(); } catch {} finish([]); }, 7000);
   });
+}
+
+const THERMAL_PRINTER_RE = /thermal|receipt|58mm|80mm|(?:^|[\s_-])pos(?:[\s_-]|\d)|esc.?pos|xprinter|gprinter|zjiang/i;
+
+function isThermalPrinter(printer) {
+  return THERMAL_PRINTER_RE.test(String(printer && printer.name || '') + ' ' + String(printer && printer.driver || ''));
+}
+
+function printerFamilyName(name) {
+  return String(name || '').trim().toLowerCase().replace(/\s+\(\d+\)$/, '');
+}
+
+/**
+ * Keep the configured queue when it is usable. If Windows left that exact USB
+ * queue behind after hardware replacement, select one unambiguous connected
+ * sibling (same base name or thermal driver) instead.
+ */
+function resolveWindowsPrinter(printers, configuredName) {
+  const list = (Array.isArray(printers) ? printers : [])
+    .filter((p) => p && String(p.name || '').trim())
+    .map((p) => ({
+      name: String(p.name).trim(),
+      port: String(p.port || '').trim(),
+      driver: String(p.driver || '').trim(),
+      connected: p.connected === true ? true : (p.connected === false ? false : null),
+      isDefault: !!p.isDefault,
+    }));
+  const configured = String(configuredName || '').trim();
+  const exact = list.find((p) => p.name.toLowerCase() === configured.toLowerCase());
+
+  // For non-USB queues, null means installed/unknown and remains a valid exact
+  // choice. Only a definitive USB disconnection triggers replacement.
+  if (exact && exact.connected !== false) {
+    return { selected: exact, autoSelected: false, code: 'configured' };
+  }
+
+  const connectedThermal = list.filter((p) => p.connected === true && isThermalPrinter(p));
+  const family = printerFamilyName(configured);
+  const familyMatches = connectedThermal.filter((p) => printerFamilyName(p.name) === family);
+  const driverMatches = exact && exact.driver
+    ? connectedThermal.filter((p) => p.driver.toLowerCase() === exact.driver.toLowerCase())
+    : [];
+  const replacements = familyMatches.length ? familyMatches : driverMatches;
+
+  if (replacements.length === 1) {
+    const selected = replacements[0];
+    return {
+      selected,
+      autoSelected: true,
+      code: exact ? 'replacement' : 'renamed',
+      reason: 'Configured printer "' + (configured || '(none)') + '" is unavailable; using connected replacement "' + selected.name + '" on ' + (selected.port || 'its active port') + '.',
+    };
+  }
+
+  // Never auto-route to a different model merely because it is the only
+  // connected queue; a strong same-family match is still required.
+  if ((!exact || exact.connected === false) && connectedThermal.length === 1 && printerFamilyName(connectedThermal[0].name) === family) {
+    return {
+      selected: connectedThermal[0],
+      autoSelected: true,
+      code: 'only-connected-thermal',
+      reason: 'Using the only connected thermal printer "' + connectedThermal[0].name + '".',
+    };
+  }
+
+  const installed = list.map((p) => p.name + (p.port ? ' (' + p.port + ')' : '')).join(', ') || '(none)';
+  if (exact && exact.connected === false) {
+    return {
+      selected: null,
+      autoSelected: false,
+      code: 'disconnected',
+      error: 'Printer "' + exact.name + '" is installed on ' + (exact.port || 'Windows') + ' but is not physically connected. Installed: ' + installed,
+    };
+  }
+  return {
+    selected: null,
+    autoSelected: false,
+    code: 'not-found',
+    error: 'Printer "' + (configured || '(not configured)') + '" was not found. Installed: ' + installed,
+  };
+}
+
+/**
+ * Convert queue discovery into a stable, renderer-friendly health model.
+ * This function is pure so recovery decisions can be regression tested
+ * without touching the Windows spooler or a physical printer.
+ */
+function buildWindowsPrinterHealth(printers, configuredName) {
+  const list = (Array.isArray(printers) ? printers : [])
+    .filter((p) => p && String(p.name || '').trim())
+    .map((p) => ({
+      name: String(p.name).trim(),
+      port: String(p.port || '').trim(),
+      driver: String(p.driver || '').trim(),
+      connected: p.connected === true ? true : (p.connected === false ? false : null),
+      isDefault: !!p.isDefault,
+    }));
+  const configured = String(configuredName || '').trim();
+  const resolution = resolveWindowsPrinter(list, configured);
+  const connectedThermal = list.filter((p) => p.connected === true && isThermalPrinter(p));
+  const staleThermal = list.filter((p) => p.connected === false && isThermalPrinter(p));
+  const configuredPrinter = list.find((p) => p.name.toLowerCase() === configured.toLowerCase()) || null;
+
+  let status = 'offline';
+  if (resolution.selected && resolution.autoSelected) status = 'repair-available';
+  else if (resolution.selected) status = 'ready';
+  else if (connectedThermal.length > 1) status = 'needs-selection';
+
+  const canAutoRecover = status === 'repair-available'
+    && resolution.selected
+    && resolution.selected.connected === true
+    && isThermalPrinter(resolution.selected);
+  const message = status === 'ready'
+    ? 'Printer is ready.'
+    : status === 'repair-available'
+      ? (resolution.reason || 'A connected replacement printer was found.')
+      : status === 'needs-selection'
+        ? 'More than one thermal printer is connected. Choose one in Settings.'
+        : (resolution.error || 'No connected thermal printer was found.');
+
+  return {
+    configured,
+    printers: list,
+    configuredPrinter,
+    selected: resolution.selected,
+    connectedThermalPrinters: connectedThermal,
+    staleThermalPrinters: staleThermal,
+    autoSelected: !!resolution.autoSelected,
+    code: resolution.code,
+    status,
+    ready: status === 'ready',
+    canAutoRecover,
+    needsSelection: status === 'needs-selection',
+    reason: resolution.reason || '',
+    error: resolution.error || '',
+    message,
+  };
+}
+
+async function getWindowsPrinterHealth(ctx, listPrinters = listWindowsPrinterDetails) {
+  const printers = await listPrinters();
+  // Read settings after discovery so a slow, older request cannot repaint a
+  // route that was repaired while Windows enumeration was still running.
+  const configured = ctx.getSetting(ctx.db, 'startup_test_printer') || 'POS-58';
+  const printerType = ctx.getSetting(ctx.db, 'printer_type') || 'bluetooth';
+  const pairedBluetoothName = ctx.getSetting(ctx.db, 'printer_device_name') || '';
+  const health = buildWindowsPrinterHealth(printers, configured);
+  if (printerType === 'none') {
+    return { ...health, printerType, pairedBluetoothName, status: 'disabled', ready: false, canAutoRecover: false, message: 'Printing is disabled in Settings.' };
+  }
+  if (printerType === 'bluetooth' && pairedBluetoothName) {
+    return {
+      ...health,
+      printerType,
+      pairedBluetoothName,
+      status: 'bluetooth-configured',
+      ready: false,
+      canAutoRecover: false,
+      message: 'A Bluetooth printer is configured. Use Printer Settings to change the route.',
+    };
+  }
+  return { ...health, printerType, pairedBluetoothName };
+}
+
+async function autoRecoverWindowsPrinter(ctx, listPrinters = listWindowsPrinterDetails) {
+  const health = await getWindowsPrinterHealth(ctx, listPrinters);
+  if (!health.canAutoRecover || !health.selected) {
+    return { ...health, repaired: false, previousPrinter: health.configured };
+  }
+
+  const previousPrinter = health.configured;
+  const previousType = health.printerType || 'bluetooth';
+  ctx.setSetting(ctx.db, 'startup_test_printer', health.selected.name);
+  ctx.setSetting(ctx.db, 'printer_type', 'system');
+  const after = buildWindowsPrinterHealth(health.printers, health.selected.name);
+  return {
+    ...after,
+    printerType: 'system',
+    pairedBluetoothName: health.pairedBluetoothName || '',
+    repaired: previousPrinter.toLowerCase() !== health.selected.name.toLowerCase() || previousType !== 'system',
+    previousPrinter,
+    previousType,
+    message: 'YANKENT switched from "' + previousPrinter + '" to "' + health.selected.name + '"' + (health.selected.port ? ' on ' + health.selected.port : '') + '.',
+  };
+}
+async function listWindowsPrinters() {
+  const printers = await listWindowsPrinterDetails();
+  return printers.map((p) => p.name);
+}
+
+async function resolveConfiguredWindowsPrinter(ctx, persist = true) {
+  const configured = ctx.getSetting(ctx.db, 'startup_test_printer') || 'POS-58';
+  const printers = await listWindowsPrinterDetails();
+  const resolution = resolveWindowsPrinter(printers, configured);
+  if (persist && resolution.selected && resolution.autoSelected && typeof ctx.setSetting === 'function') {
+    ctx.setSetting(ctx.db, 'startup_test_printer', resolution.selected.name);
+    const type = ctx.getSetting(ctx.db, 'printer_type');
+    const pairedBluetoothName = ctx.getSetting(ctx.db, 'printer_device_name');
+    if (type === 'bluetooth' && !pairedBluetoothName) {
+      ctx.setSetting(ctx.db, 'printer_type', 'system');
+    }
+  }
+  return { configured, printers, ...resolution };
 }
 
 /**
@@ -113,15 +394,12 @@ function listWindowsPrinters() {
  * @returns {Promise<{ok:boolean, error?:string, printer?:string, skipped?:boolean}>}
  */
 async function sendStartupTestPrint(ctx) {
-  const printerName = ctx.getSetting(ctx.db, 'startup_test_printer') || 'POS-58';
   const width = Number(ctx.getSetting(ctx.db, 'receipt_width') || 32);
-  // Verify the configured printer is actually installed — avoid a confusing
-  // silent failure when the printer name was typed wrong or the OS renamed it.
-  const installed = await listWindowsPrinters();
-  const found = installed.find((p) => p.toLowerCase() === printerName.toLowerCase());
-  if (!found) {
-    return { ok: false, skipped: true, error: 'Printer "' + printerName + '" not found in Windows. Installed: ' + (installed.join(', ') || '(none)') };
+  const route = await resolveConfiguredWindowsPrinter(ctx);
+  if (!route.selected) {
+    return { ok: false, skipped: route.code === 'not-found', error: route.error };
   }
+  const printerName = route.selected.name;
   // Build the test-print bytes (ESC/POS init + a few lines + cut) and write
   // them to a temp file.  We send the RAW ESC/POS bytes, not plain text, so
   // the POS-58 renders the store name centered and performs a clean cut.
@@ -130,10 +408,10 @@ async function sendStartupTestPrint(ctx) {
   const tmp = path.join(os.tmpdir(), `yankent-startup-test-${Date.now()}.bin`);
   try {
     fs.writeFileSync(tmp, bytes);
-    const res = await sendRawFileToPrinter(tmp, found);
-    return { ...res, printer: found };
+    const res = await sendRawFileToPrinter(tmp, printerName);
+    return { ...res, printer: printerName, autoSelected: route.autoSelected };
   } catch (e) {
-    return { ok: false, error: e.message, printer: found };
+    return { ok: false, error: e.message, printer: printerName };
   } finally {
     try { fs.unlinkSync(tmp); } catch {}
   }
@@ -166,32 +444,30 @@ function register(ipcMain, ctx) {
   // POS-58 connected over USB, not Bluetooth).  It encodes the receipt to
   // ESC/POS bytes in the main process and sends them in RAW mode to the
   // Windows printer named in settings (default "POS-58") via winspool — the
-  // same proven path the startup auto test-print uses.  No Bluetooth/GATT
-  // involvement, so it works regardless of printer_type.  Falls back to the
-  // Windows default printer if the named one isn't found.
+  // same path the startup auto test-print uses. If Windows retained a stale
+  // queue after hardware replacement, the single connected sibling queue is
+  // selected and saved automatically.
   guard(ipcMain, 'pos:printer:printReceiptRaw', { auth: true }, async (_c, txnId) => {
     const sale = db.prepare('SELECT id FROM sales WHERE txn_id=?').get(txnId);
     if (!sale) throw new Error('Sale not found: ' + txnId);
     const receipt = buildReceipt(db, sale.id);
     const width = Number(ctx.getSetting(db, 'receipt_width') || 32);
     const bytes = encodeReceipt(receipt, width);
-    const printerName = ctx.getSetting(db, 'startup_test_printer') || 'POS-58';
+    const route = await resolveConfiguredWindowsPrinter(ctx);
+    if (!route.selected) throw new Error(route.error || 'No connected Windows printer');
+    const printerName = route.selected.name;
     const tmp = path.join(os.tmpdir(), `yankent-receipt-${Date.now()}.bin`);
     try {
       fs.writeFileSync(tmp, bytes);
-      // Try the named printer first; if it's not installed, fall back to the
-      // Windows default printer so the receipt still prints.
-      const installed = await listWindowsPrinters();
-      const found = installed.find((p) => p.toLowerCase() === printerName.toLowerCase());
-      const res = await sendRawFileToPrinter(tmp, found || null);
-      if (!res.ok) throw new Error(res.error || ('Failed to print to ' + (found || printerName)));
-      return { ok: true, printer: res.printer || (found || printerName) };
+      const res = await sendRawFileToPrinter(tmp, printerName);
+      if (!res.ok) throw new Error(res.error || ('Failed to print to ' + printerName));
+      return { ok: true, printer: printerName, autoSelected: route.autoSelected };
     } finally {
       try { fs.unlinkSync(tmp); } catch {}
     }
   });
 
-  // Print raw text directly to the Windows default thermal printer.
+  // Print raw text directly to the selected Windows thermal printer.
   // Uses the RawPrinterHelper .NET API to send text in RAW mode so the
   // printer driver receives exact monospaced 32-char lines without any
   // spooler reformatting, wrapping, or font substitution.
@@ -222,20 +498,20 @@ function register(ipcMain, ctx) {
     // so the footer clears the cutter.  Collapsing would jam the footer
     // inside the printer mechanism.
 
-    // Write text to a temp file and send it to the default printer in
-    // RAW mode using a PowerShell snippet that invokes the .NET
-    // winspool API. This sends bytes directly to the printer spooler
-    // bypassing any GDI/font reformatting — the POS-58 receives the
-    // exact 32-char monospaced text.
+    // Reports and text fallbacks use the same selected Windows printer as
+    // receipts; never silently redirect to a stale Windows default queue.
+    const route = await resolveConfiguredWindowsPrinter(ctx);
+    if (!route.selected) throw new Error(route.error || 'No connected Windows printer');
+    const printerName = route.selected.name;
     const tmp = path.join(os.tmpdir(), `yankent-receipt-${Date.now()}.txt`);
     try {
       fs.writeFileSync(tmp, text, 'utf8');
-      await sendRawFileToPrinter(tmp, null);
-    } catch {
+      const res = await sendRawFileToPrinter(tmp, printerName);
+      if (!res.ok) throw new Error(res.error || ('Failed to print to ' + printerName));
+      return { printer: printerName, autoSelected: route.autoSelected };
     } finally {
       try { fs.unlinkSync(tmp); } catch {}
     }
-    return true;
   });
 
   // ---- Printer driver installer (bundled .exe, launched elevated) -------
@@ -274,35 +550,25 @@ function register(ipcMain, ctx) {
         : path.join(__dirname, '..', '..', '..', 'resources', 'PrinterDriver.exe');
       const driverPath = fs.existsSync(downloadsExe) ? downloadsExe : (fs.existsSync(bundledExe) ? bundledExe : null);
 
-      // List installed Windows printers via PowerShell.
-      let printers = [];
-      try {
-        const out = require('child_process').execSync(
-          'powershell -NoProfile -Command "Get-Printer | Select-Object -ExpandProperty Name"',
-          { encoding: 'utf8', timeout: 5000, windowsHide: true }
-        );
-        printers = out.split('\n').map((s) => s.trim()).filter(Boolean);
-      } catch {}
-
-      // Heuristic: a thermal printer is "connected" if any installed printer
-      // name contains common thermal brand keywords.
-      const thermalKeywords = /thermal|receipt|58mm|80mm|pos|esc.?pos|xprinter|gprinter|zjiang/i;
-      const thermalConnected = printers.some((p) => thermalKeywords.test(p));
+      const configured = ctx.getSetting(ctx.db, 'startup_test_printer') || 'POS-58';
+      const printerDetails = await listWindowsPrinterDetails();
+      const health = buildWindowsPrinterHealth(printerDetails, configured);
+      const printers = health.printers.map((p) => p.name);
 
       return {
         ok: true,
         data: {
+          ...health,
           driverAvailable: !!driverPath,
           driverPath,
           installedPrinters: printers,
-          // Only report "connected" when a thermal-style printer is actually
-          // installed — not for any random A4 inkjet.  Otherwise the login
-          // screen shows a false "Printer connected" indicator.
-          printerConnected: thermalConnected,
+          printerDetails: health.printers,
+          printerConnected: health.ready,
+          recoveryAvailable: health.canAutoRecover,
         },
       };
     } catch (e) {
-      return { ok: true, data: { driverAvailable: false, installedPrinters: [], printerConnected: false } };
+      return { ok: true, data: { driverAvailable: false, installedPrinters: [], printerConnected: false, status: 'offline', ready: false, canAutoRecover: false, needsSelection: false } };
     }
   });
 
@@ -316,30 +582,51 @@ function register(ipcMain, ctx) {
       return { ok: true, data: [] };
     }
   });
-
-  // ---- Startup test print (manual trigger from Settings) -----------------
-  // Sends a test print to the configured Windows printer (default "POS-58")
-  // in RAW mode.  Used by the Settings page "Test startup print" button so
-  // the admin can verify the auto-test works before relying on it.
-  ipcMain.handle('pos:printer:startupTest', async () => {
+  // Connected queue details plus the route YANKENT will actually use.
+  ipcMain.handle('pos:printer:windowsStatus', async () => {
     try {
-      const res = await sendStartupTestPrint(ctx);
-      return { ok: !!res.ok, data: res, error: res.ok ? null : (res.error || 'Failed') };
+      const health = await getWindowsPrinterHealth(ctx);
+      return { ok: true, data: health };
+    } catch (e) {
+      return { ok: true, data: { configured: '', printers: [], selected: null, autoSelected: false, code: 'error', status: 'offline', ready: false, canAutoRecover: false, needsSelection: false, error: e.message, message: e.message } };
+    }
+  });
+  // Public, no-input recovery action for login and cashier use. It can only
+  // persist the one unambiguous connected thermal queue found by Windows.
+  // It never sends a print job, clears the spooler, or guesses between queues.
+  ipcMain.handle('pos:printer:autoRecover', async () => {
+    try {
+      return { ok: true, data: await autoRecoverWindowsPrinter(ctx) };
     } catch (e) {
       return { ok: false, error: e.message };
     }
   });
 
-  // Launch the PrinterDriver.exe from Downloads (or bundled) — non-elevated
-  // so no UAC prompt; the driver installer handles its own elevation if needed.
+
+
+  // ---- Startup test print (manual trigger from Settings) -----------------
+  // Sends a test print to the configured Windows printer (default "POS-58")
+  // in RAW mode.  Used by the Settings page "Test startup print" button so
+  // the admin can verify the auto-test works before relying on it.
+  guard(ipcMain, 'pos:printer:startupTest', { auth: true }, async () => {
+    try {
+      const res = await sendStartupTestPrint(ctx);
+      if (!res.ok) throw new Error(res.error || 'Test print failed');
+      return res;
+    } catch (e) {
+      throw e;
+    }
+  });
+
+  // Launch only the installer bundled with YANKENT. Never elevate an
+  // arbitrary same-named executable from Downloads.
   ipcMain.handle('pos:printer:setupFromLogin', async () => {
     try {
-      const downloadsExe = path.join(os.homedir(), 'Downloads', 'PrinterDriver.exe');
       const bundledExe = ctx.app.isPackaged
         ? path.join(process.resourcesPath, 'PrinterDriver.exe')
         : path.join(__dirname, '..', '..', '..', 'resources', 'PrinterDriver.exe');
-      const exe = fs.existsSync(downloadsExe) ? downloadsExe : (fs.existsSync(bundledExe) ? bundledExe : null);
-      if (!exe) return { ok: false, error: 'PrinterDriver.exe not found in Downloads or app folder.' };
+      const exe = fs.existsSync(bundledExe) ? bundledExe : null;
+      if (!exe) return { ok: false, error: 'Bundled PrinterDriver.exe was not found.' };
       const child = spawn('powershell', ['-NoProfile', '-Command', `Start-Process -FilePath '${exe}' -Verb RunAs`], {
         windowsHide: true,
         detached: true,
@@ -454,17 +741,36 @@ function register(ipcMain, ctx) {
     }
   });
 
-  // Public: start downloading the update (available pre-login too)
+  // Public: start downloading the update (available pre-login too). Await
+  // electron-updater so network/checksum failures reach the renderer.
   ipcMain.handle('pos:update:download', async () => {
-    updater.downloadUpdate();
-    return { ok: true, data: true };
+    try {
+      const result = await updater.downloadUpdate();
+      return { ok: true, data: result };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
   });
 
-  // Public: install the downloaded update (available pre-login too)
+  // Public: expose updater state and install only a completed download.
+  ipcMain.handle('pos:update:state', () => ({ ok: true, data: updater.getState() }));
+
   ipcMain.handle('pos:update:install', async () => {
-    updater.installUpdate();
-    return { ok: true, data: true };
+    try {
+      return { ok: true, data: updater.installUpdate() };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
   });
 }
 
-module.exports = { register, _sendStartupTestPrint: sendStartupTestPrint, _listWindowsPrinters: listWindowsPrinters, _sendRawFileToPrinter: sendRawFileToPrinter };
+module.exports = {
+  register,
+  _sendStartupTestPrint: sendStartupTestPrint,
+  _listWindowsPrinters: listWindowsPrinters,
+  _listWindowsPrinterDetails: listWindowsPrinterDetails,
+  _resolveWindowsPrinter: resolveWindowsPrinter,
+  _buildWindowsPrinterHealth: buildWindowsPrinterHealth,
+  _autoRecoverWindowsPrinter: autoRecoverWindowsPrinter,
+  _sendRawFileToPrinter: sendRawFileToPrinter,
+};

@@ -81,6 +81,29 @@ test('setStock rejects a service product', async () => {
   t.api.close();
 });
 
+test('setStock rejects negative and non-numeric inventory values', async () => {
+  const t = await setup();
+  const { api, adminSession } = t;
+  const cement = api.db.prepare('SELECT * FROM products WHERE sku=?').get('CMT-001');
+  await assert.rejects(() => api.call('pos:products:setStock', adminSession, cement.id, -1, 'bad'), /non-negative/);
+  await assert.rejects(() => api.call('pos:products:setStock', adminSession, cement.id, 'not-a-number', 'bad'), /non-negative/);
+  assert.equal(api.db.prepare('SELECT stock FROM products WHERE id=?').get(cement.id).stock, cement.stock);
+  t.api.close();
+});
+
+test('product creation rejects invalid prices and unit factors', async () => {
+  const t = await setup();
+  const { api, adminSession } = t;
+  await assert.rejects(() => api.call('pos:products:create', adminSession, {
+    name: 'Negative Price', base_unit: 'pc', stock: 1, price: -10,
+  }), /Price must be a non-negative number/);
+  await assert.rejects(() => api.call('pos:products:create', adminSession, {
+    name: 'Bad Factor', base_unit: 'pc', stock: 1, price: 10,
+    units: [{ unit: 'box', factor: 0, price: 10 }],
+  }), /factor must be greater than zero/);
+  t.api.close();
+});
+
 test('delete product soft-deletes (active=0); deleteAll wipes + resets sequence', async () => {
   const t = await setup();
   const { api, adminSession } = t;
@@ -99,6 +122,43 @@ test('delete product soft-deletes (active=0); deleteAll wipes + resets sequence'
   assert.equal(api.db.prepare('SELECT COUNT(*) AS c FROM stock_movements').get().c, 0);
   // categories preserved
   assert.ok(api.db.prepare('SELECT COUNT(*) AS c FROM categories').get().c > 0);
+  t.api.close();
+});
+
+test('create service is flagged is_service and appears in services-only list', async () => {
+  const t = await setup();
+  const { api, adminSession } = t;
+  const created = await api.call('pos:products:create', adminSession, {
+    name: 'Test Delivery Fee',
+    base_unit: 'svc',
+    stock: 99, // must be forced to 0 for services
+    price: 350,
+    is_service: true,
+    units: [{ unit: 'svc', factor: 1, price: 350 }],
+  });
+  assert.ok(created.id);
+  const row = api.db.prepare('SELECT * FROM products WHERE id=?').get(created.id);
+  assert.equal(row.is_service, 1);
+  assert.equal(row.stock, 0);
+  assert.equal(row.active, 1);
+  const units = api.db.prepare('SELECT * FROM product_units WHERE product_id=?').all(created.id);
+  assert.equal(units.length, 1);
+  assert.equal(units[0].unit, 'svc');
+  assert.equal(units[0].price, 350);
+
+  const list = await api.call('pos:products:list', adminSession, { includeServices: true });
+  const found = list.find((p) => p.id === created.id);
+  assert.ok(found, 'service must appear in catalog list');
+  assert.ok(found.is_service, 'is_service must be truthy for renderer filters');
+  assert.ok(found.units && found.units.length >= 1, 'service must have sell units');
+
+  const servicesOnly = await api.call('pos:products:list', adminSession, { servicesOnly: true });
+  assert.ok(servicesOnly.every((p) => p.is_service), 'servicesOnly returns only services');
+  assert.ok(servicesOnly.find((p) => p.id === created.id), 'new service visible in servicesOnly list');
+
+  // POS products tab must not include services when includeServices is false
+  const productsOnly = await api.call('pos:products:list', adminSession, { includeServices: false });
+  assert.ok(!productsOnly.find((p) => p.id === created.id));
   t.api.close();
 });
 

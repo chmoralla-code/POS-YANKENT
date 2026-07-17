@@ -29,6 +29,12 @@ function buildReceipt(db, saleId) {
     const r = db.prepare('SELECT value FROM settings WHERE key=?').get(k);
     return r ? r.value : d;
   };
+  const configuredVatRate = Number(s('vat_rate', '12')) || 0;
+  // Use the rate embodied in this sale's stored VAT split. Reprints must not
+  // relabel historical receipts if the store changes its configured rate.
+  const storedVatRate = Number(sale.subtotal) > 0
+    ? Number(((Number(sale.vat) / Number(sale.subtotal)) * 100).toFixed(2))
+    : configuredVatRate;
 
   return {
     storeName: s('store_name', 'YANKENT POS'),
@@ -60,7 +66,7 @@ function buildReceipt(db, saleId) {
     reference: sale.reference || '',
     footer: s('receipt_footer', 'Thank you!'),
     symbol,
-    vatRate: Number(s('vat_rate', '12')) || 0,
+    vatRate: Number.isFinite(storedVatRate) ? storedVatRate : configuredVatRate,
   };
 }
 
@@ -178,7 +184,7 @@ function receiptPlainText(receipt, width = 32) {
   if (receipt.discount) lines.push(padLine('Discount', '-' + formatMoney(receipt.discount, sym), width));
   lines.push(sep);
   lines.push(padLine('Subtotal', formatMoney(receipt.subtotal, sym), width));
-  if (receipt.vatRate > 0) lines.push(padLine(`VAT ${receipt.vatRate}%`, '+' + formatMoney(receipt.vat, sym), width));
+  if (receipt.vatRate > 0) lines.push(padLine(`VAT ${receipt.vatRate}% incl.`, formatMoney(receipt.vat, sym), width));
   lines.push(padLine('TOTAL', formatMoney(receipt.total, sym), width));
   if (receipt.paymentMethod === 'cash') {
     lines.push(padLine('Cash', formatMoney(receipt.tendered, sym), width));

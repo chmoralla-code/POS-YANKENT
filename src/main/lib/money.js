@@ -3,11 +3,12 @@
 /**
  * Money & VAT calculation utilities (pure, unit-tested).
  *
- * YANKENT POS uses VAT-EXCLUSIVE pricing: the item price is the NET price
- * (no VAT).  VAT is ADDED on top of the subtotal at checkout.
- *   subtotal = gross − discount + deliveryFee   (net amounts)
- *   vat      = subtotal × vatRate / 100
- *   total    = subtotal + vat                   (what the customer pays)
+ * YANKENT POS uses VAT-INCLUSIVE pricing: the item price is what the
+ * customer pays. VAT is split out for receipts and reporting; it is never
+ * added on top at checkout.
+ *   total    = gross − discount + deliveryFee
+ *   subtotal = total / (1 + vatRate / 100)
+ *   vat      = total − subtotal
  */
 
 function round2(n) {
@@ -24,16 +25,21 @@ function computeTotals(items, opts = {}) {
   const discount = Number(opts.discount ?? 0);
   const deliveryFee = Number(opts.deliveryFee ?? 0);
 
+  if (!Number.isFinite(vatRate) || vatRate < 0 || vatRate > 100) throw new Error('Invalid VAT rate');
+  if (!Number.isFinite(discount) || discount < 0) throw new Error('Invalid discount');
+  if (!Number.isFinite(deliveryFee) || deliveryFee < 0) throw new Error('Invalid delivery fee');
+
   const gross = items.reduce((s, i) => {
     const line = i.amount != null ? Number(i.amount) : round2(Number(i.qty) * Number(i.unit_price));
+    if (!Number.isFinite(line) || line < 0) throw new Error('Invalid line amount');
     return s + line;
   }, 0);
 
-  // Net subtotal = item gross − discount + delivery fee.  VAT is added on
-  // top of this net amount to produce the total the customer pays.
-  const subtotal = round2(Math.max(0, gross + deliveryFee - discount));
-  const vat = round2(subtotal * vatRate / 100);
-  const total = round2(subtotal + vat);
+  // Catalog prices already include VAT. Split the final amount into its net
+  // and VAT components without changing what the customer pays.
+  const total = round2(Math.max(0, gross + deliveryFee - discount));
+  const subtotal = round2(total / (1 + vatRate / 100));
+  const vat = round2(total - subtotal);
 
   return { gross: round2(gross), discount: round2(discount), deliveryFee: round2(deliveryFee), subtotal, vat, total };
 }

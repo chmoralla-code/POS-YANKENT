@@ -28,7 +28,7 @@ test.describe('Startup & Login', () => {
     try {
       await login(page, 'cashier', 'cashier123');
       await expect(page.locator('#app:not(.hidden)')).toBeVisible();
-      await expect(page.locator('#navRole')).toHaveText('cashier');
+      await expect(page.locator('#navRole')).toHaveText('Cashier');
     } finally { await electron.close(); }
   });
 

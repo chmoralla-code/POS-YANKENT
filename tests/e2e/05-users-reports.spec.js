@@ -40,32 +40,55 @@ test.describe('Reports (admin)', () => {
     try {
       await login(page, 'admin', 'admin123');
       await navigate(page, 'reports');
-      await page.waitForTimeout(800);
-      const text = await page.locator('#view').textContent();
-      // Look for expected summary labels
-      expect(text).toMatch(/Today|Yesterday|Month|Year/i);
+      await expect(page.getByRole('heading', { name: 'Sales performance' })).toBeVisible();
+      await expect(page.locator('#rStats .report-stat')).toHaveCount(4);
+      await expect(page.locator('#rSections .collapse-toggle')).toHaveCount(7);
+      await expect(page.locator('#rSections .collapse-toggle[aria-expanded="true"]')).toHaveCount(1);
+
+      // Report tabs work with the keyboard and load a consistent stock view.
+      await page.locator('#rTabSales').focus();
+      await page.keyboard.press('ArrowRight');
+      await expect(page.locator('#rTabDelivery')).toHaveAttribute('aria-selected', 'true');
+      await expect(page.getByRole('heading', { name: 'Stock & restock history' })).toBeVisible();
+      await expect(page.locator('#dStats .report-stat')).toHaveCount(4);
     } finally { await electron.close(); }
   });
 
-  test('date filter present', async () => {
+  test('date filter is labelled and rejects an inverted range', async () => {
     const { electron, page } = await launchApp();
     try {
       await login(page, 'admin', 'admin123');
       await navigate(page, 'reports');
-      // Look for From/To date inputs
-      const dateInputs = await page.locator('input[type="date"]').count();
-      expect(dateInputs).toBeGreaterThanOrEqual(0);
+      await expect(page.locator('#rSales input[type="date"]')).toHaveCount(2);
+      await expect(page.locator('#rSales').getByLabel('From', { exact: true })).toBeVisible();
+      await expect(page.locator('#rSales').getByLabel('To', { exact: true })).toBeVisible();
+
+      await page.locator('#rFrom').evaluate((el) => { el.value = '2026-07-20'; });
+      await page.locator('#rTo').evaluate((el) => { el.value = '2026-07-10'; });
+      await page.locator('#rGo').click();
+      await expect(page.locator('#toast')).toContainText('From date must be earlier');
+      await expect(page.locator('#rFrom')).toBeFocused();
     } finally { await electron.close(); }
   });
 
-  test('CSV export buttons present', async () => {
+  test('CSV export is a separate action and does not toggle its section', async () => {
     const { electron, page } = await launchApp();
     try {
       await login(page, 'admin', 'admin123');
       await navigate(page, 'reports');
-      await page.waitForTimeout(500);
-      const text = await page.locator('#view').textContent();
-      expect(text).toMatch(/CSV|Export|Best Selling/i);
+      const section = page.locator('.collapse-section[data-key="products"]');
+      const exportButton = section.locator('[data-x="bestSelling"]');
+      await expect(exportButton).toHaveText('Export CSV');
+      const wasOpen = await section.evaluate((el) => el.classList.contains('open'));
+
+      // Stub the native save-dialog path so this test only verifies routing.
+      await page.evaluate(() => {
+        window.__reportExportType = '';
+        App.views.reports._csv = (type) => { window.__reportExportType = type; };
+      });
+      await exportButton.click();
+      expect(await page.evaluate(() => window.__reportExportType)).toBe('bestSelling');
+      expect(await section.evaluate((el) => el.classList.contains('open'))).toBe(wasOpen);
     } finally { await electron.close(); }
   });
 });

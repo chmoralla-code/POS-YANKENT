@@ -158,7 +158,7 @@ function encodeReceipt(receipt, width = 32) {
   if (receipt.discount) e.row('Discount', '-' + formatMoney(receipt.discount, sym));
   e.separator();
   e.row('Subtotal', formatMoney(receipt.subtotal, sym));
-  if (receipt.vatRate > 0) e.row(`VAT ${receipt.vatRate}%`, '+' + formatMoney(receipt.vat, sym));
+  if (receipt.vatRate > 0) e.row(`VAT ${receipt.vatRate}% incl.`, formatMoney(receipt.vat, sym));
   e.boldLine('');
   e.row('TOTAL', formatMoney(receipt.total, sym));
   e.bold(0);

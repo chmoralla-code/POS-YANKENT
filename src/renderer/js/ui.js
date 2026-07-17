@@ -19,6 +19,13 @@ App.categoryColors = {
 };
 App.catColor = function (cat) { return (App.categoryColors && App.categoryColors[cat]) || '#757575'; };
 
+/** True when a catalog row is a billable service (no stock). SQLite may return 0/1. */
+App.isService = function (p) {
+  if (!p) return false;
+  const v = p.is_service;
+  return v === 1 || v === true || v === '1';
+};
+
 App.ui = {
   esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -48,7 +55,7 @@ App.ui = {
   modal({ title, bodyHtml, footerHtml = '', wide = false, closeOnOverlay = true }) {
     const root = document.getElementById('modal-root');
     const wrap = App.ui.el(`<div class="modal-overlay"><div class="modal" style="${wide ? 'width:680px' : ''}">
-      <div class="modal-h"><span>${App.ui.esc(title)}</span><span class="x">×</span></div>
+      <div class="modal-h"><span>${App.ui.esc(title)}</span><button type="button" class="x" aria-label="Close dialog">×</button></div>
       <div class="modal-b">${bodyHtml}</div>
       ${footerHtml ? `<div class="modal-f">${footerHtml}</div>` : ''}
     </div></div>`);

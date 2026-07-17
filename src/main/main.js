@@ -23,6 +23,16 @@ protocol.registerSchemesAsPrivileged([
 // Allow autoplay of muted videos (login background) without user gesture.
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
+// Performance: force GPU acceleration / rasterization even on low-spec / older
+// integrated GPUs that Chromium would otherwise software-rasterize. These are
+// the single biggest FPS win on cheap machines. If a target machine has a
+// genuinely broken GPU driver and shows a blank screen, drop
+// 'ignore-gpu-blocklist' first — the remaining CSS optimizations still apply.
+app.commandLine.appendSwitch('ignore-gpu-blocklist');
+app.commandLine.appendSwitch('enable-gpu-rasterization');
+// Instant scrolling: avoids extra repaints on scroll for weak GPUs.
+app.commandLine.appendSwitch('disable-smooth-scrolling');
+
 let db;
 let mainWindow;
 let backupTimer = null;
@@ -217,6 +227,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      spellcheck: false,
     },
   });
 
@@ -400,8 +411,19 @@ if (!gotTheLock) {
         await window.pos.settings.getAll();
         const cats = await window.pos.categories.list(); log('categories=' + cats.length);
         const prods = await window.pos.products.list({includeServices:true}); log('products=' + prods.length);
-        const cement = prods.find(p=>p.sku==='CMT-001');
-        const cut = prods.find(p=>p.sku==='SVC-CUT');
+        // Production catalog data is intentionally replaceable, so create
+        // deterministic fixtures instead of assuming specific seeded SKUs.
+        const suffix = Date.now();
+        const productRef = await window.pos.products.create({
+          name:'Smoke Product ' + suffix, base_unit:'bag', stock:10, price:280,
+          units:[{unit:'bag',factor:1,price:280}]
+        });
+        const serviceRef = await window.pos.products.create({
+          name:'Smoke Service ' + suffix, base_unit:'job', stock:0, price:25, is_service:true,
+          units:[{unit:'job',factor:1,price:25}]
+        });
+        const cement = await window.pos.products.get(productRef.id);
+        const cut = await window.pos.products.get(serviceRef.id);
         const sale = await window.pos.sales.create({
           items:[
             {productId:cement.id,sku:cement.sku,name:cement.name,unit:'bag',qty:2,unitPrice:280,factor:1,lineType:'product'},
@@ -412,23 +434,34 @@ if (!gotTheLock) {
         log('sale ' + sale.txnId + ' total=' + sale.receipt.total + ' change=' + sale.receipt.change);
         const enc = await window.pos.printer.encodeReceipt(sale.txnId);
         log('receipt bytes=' + enc.bytesBase64.length + ' text=' + enc.text.length);
+        await window.pos.sales.commit(sale.txnId);
+        log('committed ' + sale.txnId);
         const sum = await window.pos.reports.summary();
         log('today=' + sum.today.total + '/' + sum.today.tx + ' best=' + (sum.bestDay ? sum.bestDay.label : 'none'));
         const best = await window.pos.reports.bestSelling({});
         log('bestSelling rows=' + best.length);
-        const np = await window.pos.products.create({ name:'Smoke Test Item', base_unit:'pc', stock:5, price:50, units:[{unit:'pc',factor:1,price:50}] });
-        log('created product id=' + np.id);
         const tg = await window.pos.telegram.sendReport();
         log('telegram: ' + (tg.ok ? 'sent' : tg.error));
         log('SMOKE OK');
-      } catch (e) { log('SMOKE FAIL: ' + (e && e.message)); }
+        return true;
+      } catch (e) { log('SMOKE FAIL: ' + (e && e.message)); return false; }
     })();`;
+    const smokeWatchdog = setTimeout(() => {
+      console.error('[smoke] timed out');
+      app.exit(1);
+    }, 30000);
     mainWindow.webContents.once('did-finish-load', () => {
-      mainWindow.webContents.executeJavaScript(seq).catch((e) => console.log('[smoke] exec error', e.message));
+      mainWindow.webContents.executeJavaScript(seq).then((ok) => {
+        clearTimeout(smokeWatchdog);
+        app.exit(ok ? 0 : 1);
+      }).catch((e) => {
+        clearTimeout(smokeWatchdog);
+        console.error('[smoke] exec error', e.message);
+        app.exit(1);
+      });
     });
     mainWindow.webContents.on('console-message', (_e, level, message) => console.log('[renderer]', message));
     mainWindow.webContents.on('render-process-gone', (_e, d) => console.log('[smoke] render gone', d.reason));
-    setTimeout(() => app.quit(), 15000);
   }
 
   app.on('activate', () => {

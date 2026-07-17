@@ -1,114 +1,240 @@
 'use strict';
 
-// Lazily acquire the electron-updater autoUpdater so this module is safe to
-// require outside Electron (e.g. in unit tests). electron-updater reads
-// app.getVersion() at import time, which throws in plain Node.
+const AUTO_CHECK_DELAY_MS = 30 * 1000;
+const AUTO_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+// Lazy dependencies keep this module safe to load in plain Node unit tests.
 let _autoUpdater = null;
+let _electronApp = null;
+let mainWindowRef = null;
+let initialized = false;
+let checkPromise = null;
+let downloadPromise = null;
+let autoCheckTimer = null;
+let autoCheckInterval = null;
+
+const state = {
+  status: 'idle',
+  currentVersion: null,
+  availableVersion: null,
+  downloadedVersion: null,
+  lastCheckedAt: null,
+  lastError: null,
+};
+
+function app() {
+  if (!_electronApp) _electronApp = require('electron').app;
+  return _electronApp;
+}
+
 function autoUpdater() {
   if (!_autoUpdater) {
-    const { autoUpdater: au } = require('electron-updater');
-    au.autoDownload = false;
-    au.allowPrerelease = false;
-    _autoUpdater = au;
+    _autoUpdater = require('electron-updater').autoUpdater;
   }
+  _autoUpdater.autoDownload = false;
+  _autoUpdater.allowPrerelease = false;
   return _autoUpdater;
 }
 
-let checkPromise = null;
-
-/**
- * Compare two semver-ish version strings.
- * Returns 1 if a > b, -1 if a < b, 0 if equal.
- */
-function compareVersions(a, b) {
-  const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0);
-  const pb = String(b).split('.').map((n) => parseInt(n, 10) || 0);
-  const len = Math.max(pa.length, pb.length);
-  for (let i = 0; i < len; i++) {
-    const da = pa[i] || 0;
-    const db = pb[i] || 0;
-    if (da > db) return 1;
-    if (da < db) return -1;
-  }
-  return 0;
+function snapshot() {
+  return { ...state };
 }
 
-/**
- * Initialize the auto-updater.
- * Call once after the main window is created to start checking in background.
- */
-function initUpdater(mainWindow) {
-  const au = autoUpdater();
-  au.logger = null;
-
-  // Forward events to renderer
-  au.on('update-available', (info) => {
-    mainWindow.webContents.send('pos:update:available', info);
-  });
-
-  au.on('update-not-available', () => {
-    mainWindow.webContents.send('pos:update:not-available');
-  });
-
-  au.on('download-progress', (progress) => {
-    mainWindow.webContents.send('pos:update:download-progress', progress);
-  });
-
-  au.on('update-downloaded', () => {
-    mainWindow.webContents.send('pos:update:downloaded');
-  });
-
-  au.on('error', (err) => {
-    mainWindow.webContents.send('pos:update:error', err.message);
-  });
+function safeSend(channel, data) {
+  try {
+    if (!mainWindowRef || mainWindowRef.isDestroyed()) return;
+    if (!mainWindowRef.webContents || mainWindowRef.webContents.isDestroyed()) return;
+    mainWindowRef.webContents.send(channel, data);
+  } catch {}
 }
 
-/**
- * Check for updates. Returns { available, version, releaseNotes, currentVersion }.
- * If not packaged, returns { available: false, devMode: true }.
- */
-async function checkForUpdates() {
-  if (!checkPromise) {
-    if (!require('electron').app.isPackaged) {
-      return { devMode: true, available: false, currentVersion: require('electron').app.getVersion() };
-    }
-    checkPromise = autoUpdater().checkForUpdates().then((result) => {
-      checkPromise = null;
-      const currentVersion = require('electron').app.getVersion();
-      if (result && result.updateInfo) {
-        const remoteVersion = result.updateInfo.version;
-        // Only treat as available when the remote version is strictly newer.
-        if (compareVersions(remoteVersion, currentVersion) > 0) {
-          return {
-            available: true,
-            version: remoteVersion,
-            releaseNotes: result.updateInfo.releaseNotes || '',
-            currentVersion,
-          };
-        }
-        return { available: false, currentVersion };
-      }
-      return { available: false, currentVersion };
-    }).catch((err) => {
-      checkPromise = null;
-      throw err;
+function setState(patch) {
+  Object.assign(state, patch);
+  safeSend('pos:update:state', snapshot());
+}
+
+function messageOf(error) {
+  return error && error.message ? error.message : String(error || 'Unknown update error');
+}
+
+function recordError(error) {
+  const message = messageOf(error);
+  setState({ status: 'error', lastError: message });
+  return message;
+}
+
+function scheduleAutomaticChecks() {
+  if (!app().isPackaged || autoCheckTimer || autoCheckInterval) return;
+  const check = () => {
+    checkForUpdates().catch((error) => {
+      console.warn('[updater] Automatic check failed:', messageOf(error));
     });
+  };
+  autoCheckTimer = setTimeout(check, AUTO_CHECK_DELAY_MS);
+  autoCheckInterval = setInterval(check, AUTO_CHECK_INTERVAL_MS);
+  if (autoCheckTimer.unref) autoCheckTimer.unref();
+  if (autoCheckInterval.unref) autoCheckInterval.unref();
+}
+
+/** Attach updater events once and begin quiet background checks for packaged clients. */
+function initUpdater(mainWindow, options = {}) {
+  mainWindowRef = mainWindow;
+  if (initialized) return;
+  initialized = true;
+
+  const au = autoUpdater();
+  au.logger = console;
+  state.currentVersion = app().getVersion();
+
+  au.on('checking-for-update', () => {
+    setState({ status: 'checking', lastError: null });
+  });
+  au.on('update-available', (info) => {
+    setState({ status: 'available', availableVersion: info && info.version || null, lastError: null });
+    safeSend('pos:update:available', info);
+  });
+  au.on('update-not-available', () => {
+    setState({ status: 'idle', availableVersion: null, lastError: null });
+    safeSend('pos:update:not-available');
+  });
+  au.on('download-progress', (progress) => {
+    setState({ status: 'downloading', lastError: null });
+    safeSend('pos:update:download-progress', progress);
+  });
+  au.on('update-downloaded', (info) => {
+    const version = info && info.version || state.availableVersion;
+    setState({ status: 'downloaded', downloadedVersion: version || null, lastError: null });
+    safeSend('pos:update:downloaded', info || null);
+  });
+  au.on('error', (error) => {
+    safeSend('pos:update:error', recordError(error));
+  });
+
+  if (options.schedule !== false) scheduleAutomaticChecks();
+}
+
+/** Check GitHub Releases while respecting electron-updater rollout/support decisions. */
+async function checkForUpdates() {
+  const electronApp = app();
+  if (!electronApp.isPackaged) {
+    return { devMode: true, available: false, currentVersion: electronApp.getVersion() };
   }
+  if (checkPromise) return checkPromise;
+
+  setState({ status: 'checking', currentVersion: electronApp.getVersion(), lastError: null });
+  checkPromise = (async () => {
+    try {
+      const result = await autoUpdater().checkForUpdates();
+      const currentVersion = electronApp.getVersion();
+      const checkedAt = new Date().toISOString();
+      if (result && result.isUpdateAvailable === true && result.updateInfo) {
+        const info = result.updateInfo;
+        setState({
+          status: 'available',
+          currentVersion,
+          availableVersion: info.version || null,
+          lastCheckedAt: checkedAt,
+          lastError: null,
+        });
+        return {
+          available: true,
+          version: info.version,
+          releaseNotes: info.releaseNotes || '',
+          currentVersion,
+        };
+      }
+      setState({
+        status: 'idle',
+        currentVersion,
+        availableVersion: null,
+        lastCheckedAt: checkedAt,
+        lastError: null,
+      });
+      return { available: false, currentVersion };
+    } catch (error) {
+      recordError(error);
+      throw error;
+    } finally {
+      checkPromise = null;
+    }
+  })();
   return checkPromise;
 }
 
-/**
- * Start downloading the update in the background.
- */
-function downloadUpdate() {
-  autoUpdater().downloadUpdate();
+/** Download only an update that electron-updater has already approved. */
+async function downloadUpdate() {
+  if (state.status === 'downloaded') {
+    return { downloaded: true, version: state.downloadedVersion, cached: true };
+  }
+  if (downloadPromise) return downloadPromise;
+  if (state.status !== 'available' && state.status !== 'downloading') {
+    throw new Error('Check for updates before starting a download.');
+  }
+
+  setState({ status: 'downloading', lastError: null });
+  downloadPromise = (async () => {
+    try {
+      await autoUpdater().downloadUpdate();
+      if (state.status !== 'downloaded') {
+        setState({ status: 'downloaded', downloadedVersion: state.availableVersion, lastError: null });
+      }
+      return { downloaded: true, version: state.downloadedVersion || state.availableVersion };
+    } catch (error) {
+      recordError(error);
+      throw error;
+    } finally {
+      downloadPromise = null;
+    }
+  })();
+  return downloadPromise;
 }
 
-/**
- * Quit and install the downloaded update.
- */
+/** Install only after the verified download has completed. */
 function installUpdate() {
-  autoUpdater().quitAndInstall();
+  if (state.status !== 'downloaded') {
+    throw new Error('The update is not downloaded yet.');
+  }
+  setState({ status: 'installing', lastError: null });
+  autoUpdater().quitAndInstall(false, true);
+  // NSIS launch failures can be emitted synchronously instead of thrown.
+  if (state.status === 'error') {
+    throw new Error(state.lastError || 'Could not start the update installer.');
+  }
+  return true;
 }
 
-module.exports = { initUpdater, checkForUpdates, downloadUpdate, installUpdate };
+function getState() {
+  if (!state.currentVersion) state.currentVersion = app().getVersion();
+  return snapshot();
+}
+
+// Narrow test seam; never exposed through preload/IPC.
+function _setTestDependencies(dependencies) {
+  _autoUpdater = dependencies.autoUpdater;
+  _electronApp = dependencies.app;
+  mainWindowRef = null;
+  initialized = false;
+  checkPromise = null;
+  downloadPromise = null;
+  if (autoCheckTimer) clearTimeout(autoCheckTimer);
+  if (autoCheckInterval) clearInterval(autoCheckInterval);
+  autoCheckTimer = null;
+  autoCheckInterval = null;
+  Object.assign(state, {
+    status: 'idle',
+    currentVersion: null,
+    availableVersion: null,
+    downloadedVersion: null,
+    lastCheckedAt: null,
+    lastError: null,
+  });
+}
+
+module.exports = {
+  initUpdater,
+  checkForUpdates,
+  downloadUpdate,
+  installUpdate,
+  getState,
+  _setTestDependencies,
+};

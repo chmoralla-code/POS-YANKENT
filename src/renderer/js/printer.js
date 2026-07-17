@@ -19,8 +19,8 @@ App.printer = {
   _uuids() {
     const s = App.settingsCache || {};
     return {
-      service: (s.printer_service_uuid || '000018f0-0000-1000-8000-00805f9b34fb').toLowerCase(),
-      char: (s.printer_char_uuid || '00002af1-0000-1000-8000-00805f9b34fb').toLowerCase(),
+      service: String(s.printer_service_uuid || '').trim().toLowerCase(),
+      char: String(s.printer_char_uuid || '').trim().toLowerCase(),
     };
   },
 
@@ -30,6 +30,7 @@ App.printer = {
   async pair() {
     if (!this.available()) throw new Error('Web Bluetooth not available on this device. Use the system print fallback instead.');
     const { service, char } = this._uuids();
+    if (!service || !char) throw new Error('Configure the printer service and characteristic UUIDs in Settings first.');
     let device;
     try {
       device = await navigator.bluetooth.requestDevice({ filters: [{ services: [service] }], optionalServices: [service] });
@@ -63,6 +64,7 @@ App.printer = {
     if (!navigator.bluetooth || typeof navigator.bluetooth.getDevices !== 'function') return false;
     try {
       const { service, char } = this._uuids();
+      if (!service || !char) return false;
       const devices = await navigator.bluetooth.getDevices();
       const dev = devices.find((d) => d.name === name);
       if (!dev) return false;
@@ -126,8 +128,11 @@ App.printer = {
    *  Bluetooth device is paired.  Returns { via: 'bluetooth' } or
    *  { via: 'windows' }. */
   async ensureConnected() {
-    if (this._characteristic) return { via: 'bluetooth' };
     const s = App.settingsCache || {};
+    const type = s.printer_type || 'bluetooth';
+    if (type === 'none') throw new Error('Printing is disabled in Settings');
+    if (type === 'system') return { via: 'windows' };
+    if (this._characteristic) return { via: 'bluetooth' };
     // Try Bluetooth first (only if the user actually paired a device).
     if (s.printer_device_name && this.available()) {
       const ok = await this.reconnectWithRetry();
@@ -220,7 +225,7 @@ App.printer = {
   /** Called after a completed sale; respects the auto-print setting. */
   async autoPrint(txnId) {
     const s = App.settingsCache || {};
-    if (s.printer_auto_print !== '1') return { skipped: true };
+    if (s.printer_auto_print !== '1' || s.printer_type === 'none') return { skipped: true };
     // ensureConnected retries Bluetooth, then falls back to the named
     // Windows thermal printer (POS-58) — the proven path the startup
     // auto test-print uses, so sale receipts print to a USB POS-58.

@@ -130,27 +130,281 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
   }
 
+  App._renderPrinterHealth = function (info) {
+    const health = info || {};
+    const state = health.status || (health.printerConnected ? 'ready' : 'offline');
+    const barState = document.getElementById('printerStatusBarState');
+    const appButton = document.getElementById('printerRecoveryBtn');
+    const appLabel = document.getElementById('printerRecoveryBtnState');
+    let dot = 'off';
+    let barText = 'Printer not connected';
+    let buttonText = 'Printer offline';
+
+    if (state === 'ready') {
+      dot = 'on';
+      barText = 'Printer ready';
+      buttonText = 'Printer ready';
+    } else if (state === 'repair-available') {
+      barText = 'Replacement found · click to fix';
+      buttonText = 'Fix printer';
+    } else if (state === 'needs-selection') {
+      barText = 'Choose a printer';
+      buttonText = 'Choose printer';
+    } else if (state === 'disabled') {
+      barText = 'Printing disabled';
+      buttonText = 'Printing disabled';
+    } else if (state === 'bluetooth-configured') {
+      const bluetoothReady = App.printer && App.printer.isConnected();
+      if (bluetoothReady) dot = 'on';
+      barText = bluetoothReady ? 'Bluetooth printer ready' : 'Bluetooth printer configured';
+      buttonText = bluetoothReady ? 'Printer ready' : 'Bluetooth configured';
+    } else if (health.driverAvailable === false) {
+      barText = 'Driver not installed';
+    }
+
+    if (barState) barState.innerHTML = '<span class="dot ' + dot + '"></span> ' + App.ui.esc(barText);
+    if (appButton) {
+      appButton.classList.remove('is-ready', 'needs-attention', 'is-checking');
+      appButton.classList.add(dot === 'on' ? 'is-ready' : 'needs-attention');
+      appButton.setAttribute('aria-label', buttonText + '. Open Printer Recovery');
+      appButton.title = buttonText + ' — open Printer Recovery';
+    }
+    if (appLabel) appLabel.textContent = buttonText;
+    App._printerHealth = health;
+  };
+
   // ---- Bottom-left printer status indicator (visible on all pages) -----
   App._checkLoginPrinterStatus = async function () {
-    const statusEl = document.getElementById('printerStatusBarState');
-    if (!statusEl) return;
     // If the startup test print is in flight, don't overwrite the
     // "Testing print..." status — let it show until the test resolves.
     if (App._printerTesting) return;
+    const requestId = App._printerCheckSeq = (App._printerCheckSeq || 0) + 1;
     try {
       const info = await App.pos.printer.checkStatus();
-      if (info.printerConnected) {
-        statusEl.innerHTML = '<span class="dot on"></span> Printer connected';
-      } else if (info.driverAvailable) {
-        statusEl.innerHTML = '<span class="dot off"></span> Printer not connected';
-      } else {
-        statusEl.innerHTML = '<span class="dot off"></span> Driver not installed';
-      }
+      if (requestId === App._printerCheckSeq) App._renderPrinterHealth(info);
     } catch {
-      statusEl.innerHTML = '<span class="dot off"></span> Printer not connected';
+      if (requestId === App._printerCheckSeq) App._renderPrinterHealth({ status: 'offline', ready: false });
     }
   };
   App._checkLoginPrinterStatus();
+  App._showPrinterRecovery = async function () {
+    if (document.getElementById('printerRecoveryDialog')) return;
+    const returnFocus = document.activeElement;
+    const m = App.ui.modal({
+      title: 'Printer Recovery',
+      bodyHtml: '<div class="printer-recovery-loading"><span class="dot checking"></span> Checking Windows printers…</div>',
+      closeOnOverlay: false,
+    });
+    let loadSequence = 0;
+    const backgroundStates = ['app', 'login', 'printerStatusBar']
+      .map((id) => document.getElementById(id))
+      .filter(Boolean)
+      .map((element) => ({ element, inert: element.inert }));
+    backgroundStates.forEach(({ element }) => { element.inert = true; });
+    const dialog = m.el.querySelector('.modal');
+    const title = m.el.querySelector('.modal-h > span:first-child');
+    dialog.id = 'printerRecoveryDialog';
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    dialog.setAttribute('aria-labelledby', 'printerRecoveryTitle');
+    dialog.setAttribute('tabindex', '-1');
+    if (title) title.id = 'printerRecoveryTitle';
+
+    const handleDialogKey = (event) => {
+      const topModal = document.querySelector('#modal-root > .modal-overlay:last-child');
+      if (topModal !== m.el) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        m.close();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = [...m.el.querySelectorAll('button:not([disabled]), select:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+        .filter((element) => element.offsetParent !== null);
+      if (!focusable.length) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleDialogKey);
+    m.onClose = () => {
+      loadSequence += 1;
+      document.removeEventListener('keydown', handleDialogKey);
+      backgroundStates.forEach(({ element, inert }) => { element.inert = inert; });
+      if (returnFocus && typeof returnFocus.focus === 'function') setTimeout(() => returnFocus.focus(), 0);
+    };
+
+    const queueText = (printer) => {
+      if (!printer) return 'None detected';
+      return printer.name + (printer.port ? ' · ' + printer.port : '');
+    };
+
+    const render = (health) => {
+      const status = health.status || 'offline';
+      const selected = health.selected || null;
+      const choices = Array.isArray(health.connectedThermalPrinters) ? health.connectedThermalPrinters : [];
+      const saved = health.configured || 'Not configured';
+      const savedState = health.configuredPrinter && health.configuredPrinter.connected === false ? ' · disconnected' : '';
+      let headline = 'Printer needs attention';
+      let summary = health.message || health.error || 'No connected thermal printer was found.';
+      let tone = 'needs-attention';
+
+      if (status === 'ready') {
+        headline = 'Printer is ready';
+        summary = health.repaired ? health.message : 'Receipts will print to the connected queue below.';
+        tone = 'is-ready';
+      } else if (status === 'repair-available') {
+        headline = 'Replacement printer found';
+        summary = 'Windows kept the old queue, but YANKENT found one safe connected replacement.';
+      } else if (status === 'needs-selection') {
+        headline = 'Choose which printer to use';
+        summary = 'More than one thermal printer is connected, so YANKENT will not guess.';
+      } else if (status === 'disabled') {
+        headline = 'Printing is disabled';
+        summary = 'An administrator disabled receipt printing in Settings. Recovery will not turn it back on.';
+      } else if (status === 'bluetooth-configured') {
+        headline = App.printer && App.printer.isConnected() ? 'Bluetooth printer is ready' : 'Bluetooth printer is configured';
+        summary = health.message || 'Use Printer Settings before switching this register to a Windows printer.';
+        if (App.printer && App.printer.isConnected()) tone = 'is-ready';
+      }
+
+      const choicesHtml = choices.length && !selected
+        ? '<div class="printer-recovery-candidates"><div class="printer-recovery-k">Connected thermal printers</div><ul>' +
+          choices.map((printer) => '<li>' + App.ui.esc(queueText(printer)) + '</li>').join('') +
+          '</ul></div>'
+        : '';
+      const activeLabel = selected
+        ? (status === 'repair-available' ? 'Safe replacement' : (status === 'ready' ? 'Active printer' : 'Detected Windows printer'))
+        : 'Connected printer';
+      const canOpenSettings = App.current.user && App.current.user.role === 'admin';
+
+      m.body.innerHTML =
+        '<div id="printerRecovery" class="printer-recovery">' +
+          '<section class="printer-recovery-summary ' + tone + '" role="status" aria-live="polite">' +
+            '<span class="printer-recovery-summary-icon" aria-hidden="true">🖨</span>' +
+            '<div><h3>' + App.ui.esc(headline) + '</h3><p>' + App.ui.esc(summary) + '</p></div>' +
+          '</section>' +
+          '<div class="printer-recovery-route">' +
+            '<div class="printer-recovery-row"><span class="printer-recovery-k">Saved printer</span><span class="printer-recovery-v">' + App.ui.esc(saved + savedState) + '</span></div>' +
+            '<div class="printer-recovery-arrow" aria-hidden="true">↓</div>' +
+            '<div class="printer-recovery-row"><span class="printer-recovery-k">' + App.ui.esc(activeLabel) + '</span><span class="printer-recovery-v">' + App.ui.esc(queueText(selected)) + '</span></div>' +
+          '</div>' +
+          choicesHtml +
+          '<div id="printerRecoveryFeedback" class="printer-recovery-feedback" aria-live="polite"></div>' +
+          '<div class="printer-recovery-actions">' +
+            (health.canAutoRecover ? '<button type="button" class="btn btn-primary" id="printerRecoveryRepair">Use Connected Printer</button>' : '') +
+            (health.ready && App.current.user ? '<button type="button" class="btn btn-primary" id="printerRecoveryTest">Run Test Print</button>' : '') +
+            '<button type="button" class="btn btn-ghost" id="printerRecoveryRefresh">Refresh</button>' +
+            (canOpenSettings ? '<button type="button" class="btn btn-ghost" id="printerRecoverySettings">Printer Settings</button>' : '') +
+          '</div>' +
+          (!canOpenSettings && status !== 'ready' && status !== 'repair-available'
+            ? '<p class="printer-recovery-guidance">Ask an administrator to select the correct queue in Settings.</p>'
+            : '') +
+          '<p class="printer-recovery-note">Recovery changes only where new receipts are sent. It never clears old queued print jobs and never prints a test automatically.</p>' +
+        '</div>';
+
+      const refreshButton = m.el.querySelector('#printerRecoveryRefresh');
+      if (refreshButton) refreshButton.onclick = () => load();
+
+      const repairButton = m.el.querySelector('#printerRecoveryRepair');
+      if (repairButton) {
+        repairButton.onclick = async () => {
+          repairButton.disabled = true;
+          repairButton.setAttribute('aria-busy', 'true');
+          repairButton.textContent = 'Repairing…';
+          try {
+            const result = await App.pos.printer.autoRecover();
+            loadSequence += 1;
+            App._printerCheckSeq = (App._printerCheckSeq || 0) + 1;
+            if (result.repaired && App.current.user) {
+              try {
+                const persisted = await App.pos.settings.getAll();
+                App.settingsCache = persisted;
+                if (App.views && App.views.settings) App.views.settings.s = persisted;
+                const typeField = document.getElementById('s_printer_type');
+                const printerField = document.getElementById('sStartupPrinter');
+                const routeField = document.getElementById('sPrinterRoute');
+                if (typeField) typeField.value = persisted.printer_type || 'system';
+                if (printerField) printerField.value = persisted.startup_test_printer || '';
+                if (routeField && result.selected) routeField.textContent = 'Ready: ' + queueText(result.selected);
+              } catch {
+                // The main process already saved the repair; settings reload can retry later.
+              }
+            }
+            App._renderPrinterHealth(result);
+            render(result);
+            App.ui.toast(result.repaired ? 'Printer route repaired ✓' : (result.message || 'Printer route unchanged'), result.repaired ? 'ok' : 'err');
+          } catch (error) {
+            const feedback = m.el.querySelector('#printerRecoveryFeedback');
+            if (feedback) feedback.textContent = 'Recovery failed: ' + error.message;
+            repairButton.disabled = false;
+            repairButton.removeAttribute('aria-busy');
+            repairButton.textContent = 'Try Recovery Again';
+          }
+        };
+      }
+
+      const testButton = m.el.querySelector('#printerRecoveryTest');
+      if (testButton) {
+        testButton.onclick = async () => {
+          testButton.disabled = true;
+          testButton.setAttribute('aria-busy', 'true');
+          testButton.textContent = 'Sending test…';
+          const feedback = m.el.querySelector('#printerRecoveryFeedback');
+          try {
+            const result = await App.pos.printer.startupTest();
+            if (feedback) feedback.textContent = 'Test print sent to ' + result.printer + '.';
+            App.ui.toast('Test print sent to "' + result.printer + '" ✓', 'ok');
+          } catch (error) {
+            if (feedback) feedback.textContent = 'Test print failed: ' + error.message;
+          } finally {
+            testButton.disabled = false;
+            testButton.removeAttribute('aria-busy');
+            testButton.textContent = 'Run Test Print';
+          }
+        };
+      }
+
+      const settingsButton = m.el.querySelector('#printerRecoverySettings');
+      if (settingsButton) settingsButton.onclick = () => { m.close(); App._navigate('settings'); };
+
+      const primary = m.el.querySelector('#printerRecoveryRepair, #printerRecoveryTest, #printerRecoveryRefresh');
+      if (primary) setTimeout(() => primary.focus(), 0);
+    };
+
+    const load = async () => {
+      const requestId = ++loadSequence;
+      m.body.innerHTML = '<div class="printer-recovery-loading"><span class="dot checking"></span> Checking Windows printers…</div>';
+      try {
+        const health = await App.pos.printer.windowsStatus();
+        if (requestId !== loadSequence || !m.el.isConnected) return;
+        App._renderPrinterHealth(health);
+        render(health);
+      } catch (error) {
+        if (requestId !== loadSequence || !m.el.isConnected) return;
+        render({ status: 'offline', ready: false, message: 'Printer discovery failed: ' + error.message, connectedThermalPrinters: [] });
+      }
+    };
+
+    dialog.focus();
+    await load();
+  };
+
+  ['printerStatusBar', 'printerRecoveryBtn'].forEach((id) => {
+    const trigger = document.getElementById(id);
+    if (trigger) trigger.addEventListener('click', () => App._showPrinterRecovery());
+  });
+
 
   // ---- Startup test-print status (login printer status bar) --------------
   // While the main process runs the startup auto test-print to the POS-58,
@@ -160,11 +414,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   // status via _checkLoginPrinterStatus().
   App._setPrinterTestStatus = function (data) {
     const statusEl = document.getElementById('printerStatusBarState');
+    const appButton = document.getElementById('printerRecoveryBtn');
+    const appLabel = document.getElementById('printerRecoveryBtnState');
     if (!statusEl) return;
     const state = data && data.state;
     if (state === 'testing') {
       App._printerTesting = true;
       statusEl.innerHTML = '<span class="dot checking"></span><span class="testing-txt">Testing print<span class="chk-ellipsis"></span></span>';
+      if (appButton) {
+        appButton.classList.remove('is-ready', 'needs-attention');
+        appButton.classList.add('is-checking');
+      }
+      if (appLabel) appLabel.textContent = 'Testing printer…';
     } else {
       App._printerTesting = false;
       // Briefly show the result, then revert to the normal status check.
@@ -174,6 +435,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         statusEl.innerHTML = '<span class="dot off"></span> Printer not connected';
       }
       // After a moment, run the full status check for an accurate reading.
+      if (appButton) {
+        appButton.classList.remove('is-checking');
+        appButton.classList.add(state === 'done' ? 'is-ready' : 'needs-attention');
+      }
+      if (appLabel) appLabel.textContent = state === 'done' ? 'Printer ready' : 'Printer offline';
       setTimeout(() => App._checkLoginPrinterStatus(), 800);
     }
   };
@@ -266,13 +532,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   // "Send Report" button — available to all roles (cashier + admin).
   document.getElementById('sendReportBtn').addEventListener('click', async () => {
     const btn = document.getElementById('sendReportBtn');
-    btn.disabled = true; btn.textContent = '📨 Sending…';
+    const label = btn.querySelector('.nav-label');
+    btn.disabled = true; btn.setAttribute('aria-busy', 'true');
+    if (label) label.textContent = 'Sending…';
     try {
       const r = await App.pos.telegram.sendReport();
       if (r.ok) App.ui.toast(r.warning ? ('Report sent, backup failed: ' + r.warning) : 'Report + backup sent to owner ✓', r.warning ? 'err' : 'ok');
       else App.ui.toast(r.error || 'Failed to send', 'err');
     } catch (e) { App.ui.toast(e.message, 'err'); }
-    btn.disabled = false; btn.textContent = '📨 Send Report';
+    btn.disabled = false; btn.setAttribute('aria-busy', 'false');
+    if (label) label.textContent = 'Send report';
   });
 
   // Theme toggle (dark / light). Persists in localStorage; respects system
@@ -309,6 +578,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       App._clock();
       App._clockTimer = setTimeout(clockTick, 1000 - (Date.now() % 1000));
     }
+    if (!document.hidden) App._checkLoginPrinterStatus();
   });
 
   // ---- Power resume / wake — reconnect the printer proactively ----------
@@ -333,7 +603,10 @@ App._handlePowerResume = async function () {
   // reporting isConnected()=true but throw on every write.
   App.printer._characteristic = null;
   const s = App.settingsCache || {};
-  if (!s.printer_device_name) return; // nothing to reconnect (system printer has no GATT state)
+  if (!s.printer_device_name) {
+    await App._checkLoginPrinterStatus();
+    return; // system printer has no GATT state to reconnect
+  }
   const ok = await App.printer.reconnectWithRetry();
   if (ok) {
     App.ui.toast('Printer reconnected after wake ✓', 'ok');
@@ -341,6 +614,7 @@ App._handlePowerResume = async function () {
     // Only warn when there's no system-printer fallback to save the next sale.
     App.ui.toast('Printer lost after wake — re-pair in Settings, or set Printer type to System printer', 'err');
   }
+  await App._checkLoginPrinterStatus();
 };
 
 App._start = async function () {
@@ -368,14 +642,15 @@ App._start = async function () {
 
   const u = App.current.user;
   document.getElementById('navUser').textContent = u.full_name;
-  document.getElementById('navRole').textContent = u.role;
+  document.getElementById('navRole').textContent = u.role === 'admin' ? 'Administrator' : 'Cashier';
   const isAdmin = u.role === 'admin';
-  document.querySelectorAll('.nav-item.admin-only').forEach((n) => n.classList.toggle('hidden', !isAdmin));
+  document.querySelectorAll('.admin-only').forEach((n) => n.classList.toggle('hidden', !isAdmin));
 
   document.getElementById('login').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
   const printerBar = document.getElementById('printerStatusBar');
   if (printerBar) printerBar.classList.add('hidden');
+  App._checkLoginPrinterStatus();
   App._navigate(isAdmin ? 'pos' : 'pos');
 
   // ---- Idle timeout --------------------------------------------------
@@ -453,11 +728,21 @@ App._start = async function () {
 App._navigate = async function (name) {
   if (!App.views[name]) return;
   // Role guard: cashiers cannot open admin views.
-  if (App.views[name].title && ['Products & Inventory', 'Users & Roles', 'Reports & Stock', 'Settings'].includes(App.views[name].title) && App.current.user.role !== 'admin') {
+  const adminOnlyViews = new Set(['products', 'users', 'reports', 'settings']);
+  if (adminOnlyViews.has(name) && App.current.user.role !== 'admin') {
     App.ui.toast('Administrator access required', 'err'); return;
   }
+  // Tear down the current view (disconnect observers, etc.) before swapping.
+  if (App.current.view && App.views[App.current.view] && typeof App.views[App.current.view].destroy === 'function') {
+    try { App.views[App.current.view].destroy(); } catch (e) { /* ignore teardown errors */ }
+  }
   App.current.view = name;
-  document.querySelectorAll('.nav-item[data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === name));
+  document.querySelectorAll('.nav-item[data-view]').forEach((b) => {
+    const active = b.dataset.view === name;
+    b.classList.toggle('active', active);
+    if (active) b.setAttribute('aria-current', 'page');
+    else b.removeAttribute('aria-current');
+  });
   const view = document.getElementById('view');
   view.classList.remove('view-pos');
   document.getElementById('viewTitle').textContent = App.views[name].title;
@@ -573,32 +858,54 @@ App._loginVersion = async function () {
     const ver = await App.pos.update.getVersion();
     document.getElementById('loginVersion').textContent = 'v' + ver;
   } catch {}
-  document.getElementById('loginCheckUpdates').onclick = async (e) => {
+  const updateLink = document.getElementById('loginCheckUpdates');
+  updateLink.onclick = (e) => {
     e.preventDefault();
     App._checkUpdates();
   };
+
+  // One app-lifetime listener is enough. Automatic background checks use it
+  // to make an available update visible without interrupting the cashier.
+  if (!App._updateAvailableSubscription) {
+    App._updateAvailableSubscription = App.pos.update.onUpdateAvailable((info) => {
+      const version = info && info.version ? String(info.version) : '';
+      updateLink.textContent = version ? `Update v${version} available` : 'Update available';
+      App.ui.toast(version ? `YANKENT POS v${version} is available` : 'A YANKENT POS update is available', 'ok');
+    });
+  }
 };
 
-App._checkUpdates = async function () {
+App._checkUpdates = function () {
+  if (App._updateCheckPromise) return App._updateCheckPromise;
+
   const el = document.getElementById('loginCheckUpdates');
   const orig = el.textContent;
+  el.setAttribute('aria-disabled', 'true');
   el.textContent = 'Checking…';
-  try {
+  App._updateCheckPromise = (async () => {
+    try {
     const r = await App.pos.update.check();
     if (r.devMode) {
       App.ui.toast('Dev mode — publish a GitHub Release to test updates', 'ok');
     } else if (r.available && App._isNewer(r.version, r.currentVersion)) {
       const ok = await App._showWhatsNew(r);
-      if (!ok) return;
-      await App._showDownloadProgress(r);
+      if (!ok) return false;
+      return App._showDownloadProgress(r);
     } else {
       App._showUpToDate(r.currentVersion);
     }
-  } catch (e) {
-    App.ui.toast(e.message, 'err');
-  } finally {
+    return true;
+    } catch (e) {
+      App.ui.toast(e.message, 'err');
+      return false;
+    }
+  })().finally(() => {
     el.textContent = orig;
-  }
+    el.removeAttribute('aria-disabled');
+    App._updateCheckPromise = null;
+  });
+
+  return App._updateCheckPromise;
 };
 
 // ---- "What's New" modal ------------------------------------------------
@@ -681,8 +988,16 @@ App._showWhatsNew = function (r) {
       footerHtml: `<button class="btn btn-ghost" data-a="no">Later</button>
         <button class="btn btn-primary" data-a="yes">Download &amp; Install</button>`,
     });
-    m.el.querySelector('[data-a="yes"]').onclick = () => { m.close(); resolve(true); };
-    m.el.querySelector('[data-a="no"]').onclick = () => { m.close(); resolve(false); };
+    let settled = false;
+    const finish = (choice, close = true) => {
+      if (settled) return;
+      settled = true;
+      if (close) m.close();
+      resolve(choice);
+    };
+    m.el.querySelector('[data-a="yes"]').onclick = () => finish(true);
+    m.el.querySelector('[data-a="no"]').onclick = () => finish(false);
+    m.onClose = () => finish(false, false);
   });
 };
 
@@ -734,6 +1049,21 @@ App._showDownloadProgress = function (r) {
     let done = false;
     let stallTimer = null;
     let lastPct = -1;
+    let subscriptionIds = [];
+    const cleanup = () => {
+      subscriptionIds.forEach((id) => {
+        try { App.pos.update.off(id); } catch {}
+      });
+      subscriptionIds = [];
+    };
+    const finish = (success) => {
+      if (done) return false;
+      done = true;
+      clearTimeout(stallTimer);
+      cleanup();
+      resolve(success);
+      return true;
+    };
     const setPct = (pct) => {
       const p = Math.max(0, Math.min(100, pct));
       const bar = root.querySelector('#dlBar');
@@ -744,12 +1074,13 @@ App._showDownloadProgress = function (r) {
 
     const armStallWatchdog = () => {
       clearTimeout(stallTimer);
-      // If no progress event arrives within 20s, the download was silently
-      // refused (e.g. a downgrade) or the network is blocked. Surface it.
+      // Surface a clear failure if the download never starts or stops making
+      // progress for 90 seconds, including when the modal is hidden.
       stallTimer = setTimeout(() => {
         if (done) return;
         if (lastPct < 0) onError('Download did not start — this version may be older than the one you are running, or the network is blocking GitHub.');
-      }, 20000);
+        if (lastPct >= 0) onError('Download stalled. Check your internet connection and try again.');
+      }, 90000);
     };
 
     const onProgress = (p) => {
@@ -767,8 +1098,7 @@ App._showDownloadProgress = function (r) {
       if (sub) sub.textContent = pct >= 100 ? 'Finalizing…' : 'Downloading…';
     };
     const onDownloaded = () => {
-      done = true;
-      clearTimeout(stallTimer);
+      if (!finish(true)) return;
       setPct(100);
       const stat = root.querySelector('#dlStat');
       const sub = root.querySelector('#dlSub');
@@ -777,14 +1107,36 @@ App._showDownloadProgress = function (r) {
       m.body.innerHTML = `<div class="dl-done"><div class="dl-ok-badge">✓</div><div class="dl-ver" style="margin-top:10px"><span class="dl-to">v${App.ui.esc(to)}</span></div><div class="dl-caption">Update ready. Restart to finish installing.</div></div>`;
       // Replace footer with Install button
       m.el.querySelector('.modal-f').innerHTML = `<button class="btn btn-primary" data-a="install">Restart & Install</button>`;
-      m.el.querySelector('[data-a="install"]').onclick = () => { m.close(); App.pos.update.install(); };
+      m.el.querySelector('[data-a="install"]').onclick = async (event) => {
+        const button = event.currentTarget;
+        button.disabled = true;
+        let installFailed = false;
+        let installErrorId = null;
+        const stopListening = () => {
+          if (installErrorId === null) return;
+          App.pos.update.off(installErrorId);
+          installErrorId = null;
+        };
+        installErrorId = App.pos.update.onError((message) => {
+          installFailed = true;
+          button.disabled = false;
+          stopListening();
+          App.ui.toast('Could not start the installer: ' + (message || 'unknown error'), 'err');
+        });
+        try {
+          await App.pos.update.install();
+          if (!installFailed) m.close();
+          setTimeout(stopListening, 10000);
+        } catch (e) {
+          stopListening();
+          button.disabled = false;
+          App.ui.toast('Could not start the installer: ' + e.message, 'err');
+        }
+      };
       App.ui.toast('Update ready — install on restart', 'ok');
-      resolve();
     };
     const onError = (msg) => {
-      if (done) return;
-      done = true;
-      clearTimeout(stallTimer);
+      if (!finish(false)) return;
       const sub = root.querySelector('#dlSub');
       if (sub) { sub.textContent = 'Error: ' + (msg || 'download failed'); sub.style.color = 'var(--danger)'; }
       const isDowngrade = !App._isNewer(to, from);
@@ -792,7 +1144,7 @@ App._showDownloadProgress = function (r) {
         ? `You are running v${App.ui.esc(from)}, which is newer than the available v${App.ui.esc(to)}. Auto-update cannot downgrade. To install v${App.ui.esc(to)}, run its setup.exe manually.`
         : 'Check your internet connection and try again. If GitHub is blocked on your network, download the installer directly from the release page.';
       m.el.querySelector('.modal-f').innerHTML = `<button class="btn btn-primary" data-a="close">Close</button>`;
-      m.el.querySelector('[data-a="close"]').onclick = () => { m.close(); resolve(); };
+      m.el.querySelector('[data-a="close"]').onclick = () => m.close();
       App.ui.toast('Update download failed: ' + (msg || 'error'), 'err');
       // Show a clear hint in the body
       const stat = root.querySelector('#dlStat');
@@ -807,14 +1159,16 @@ App._showDownloadProgress = function (r) {
       return;
     }
 
-    App.pos.update.onDownloadProgress(onProgress);
-    App.pos.update.onDownloaded(onDownloaded);
-    App.pos.update.onError(onError);
-    m.el.querySelector('[data-a="hide"]').onclick = () => { m.close(); /* download continues; listeners remain */ };
+    subscriptionIds = [
+      App.pos.update.onDownloadProgress(onProgress),
+      App.pos.update.onDownloaded(onDownloaded),
+      App.pos.update.onError(onError),
+    ];
+    m.el.querySelector('[data-a="hide"]').onclick = () => { m.close(); };
 
     // Kick off the download now that listeners are attached.
     armStallWatchdog();
-    App.pos.update.download().catch((e) => onError(e.message));
+    App.pos.update.download().then(onDownloaded).catch((e) => onError(e.message));
   });
 };
 

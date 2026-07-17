@@ -22,6 +22,25 @@ async function call(channel, ...args) {
   throw err;
 }
 
+const updateSubscriptions = new Map();
+let nextUpdateSubscriptionId = 1;
+
+function subscribeUpdate(channel, callback) {
+  const id = nextUpdateSubscriptionId++;
+  const listener = (_event, ...args) => callback(...args);
+  ipcRenderer.on(channel, listener);
+  updateSubscriptions.set(id, { channel, listener });
+  return id;
+}
+
+function unsubscribeUpdate(id) {
+  const subscription = updateSubscriptions.get(id);
+  if (!subscription) return false;
+  ipcRenderer.removeListener(subscription.channel, subscription.listener);
+  updateSubscriptions.delete(id);
+  return true;
+}
+
 contextBridge.exposeInMainWorld('pos', {
   // ---- Auth ----
   async login(username, password) {
@@ -89,7 +108,7 @@ contextBridge.exposeInMainWorld('pos', {
 
   refunds: {
     lookup: (txn) => call('pos:refunds:lookup', txn),
-    verifyAdmin: (pin) => call('pos:refunds:verifyAdmin', pin),
+    verifyAdmin: (pin, txnId) => call('pos:refunds:verifyAdmin', pin, txnId),
     process: (p) => call('pos:refunds:process', p),
     list: (f) => call('pos:refunds:list', f || {}),
     summary: () => call('pos:refunds:summary'),
@@ -113,13 +132,16 @@ contextBridge.exposeInMainWorld('pos', {
   // ---- Auto-update (electron-updater via GitHub Releases) ----------------
   update: {
     getVersion: () => ipcRenderer.invoke('pos:update:getVersion'),
+    state: () => call('pos:update:state'),
     check: () => { const r = ipcRenderer.invoke('pos:update:check'); return r.then((x) => x.ok ? x.data : (() => { throw new Error(x.error); })()); },
     download: () => call('pos:update:download'),
     install: () => call('pos:update:install'),
-    onUpdateAvailable: (cb) => ipcRenderer.on('pos:update:available', (_e, info) => cb(info)),
-    onDownloadProgress: (cb) => ipcRenderer.on('pos:update:download-progress', (_e, p) => cb(p)),
-    onDownloaded: (cb) => ipcRenderer.on('pos:update:downloaded', () => cb()),
-    onError: (cb) => ipcRenderer.on('pos:update:error', (_e, msg) => cb(msg)),
+    onUpdateAvailable: (cb) => subscribeUpdate('pos:update:available', cb),
+    onDownloadProgress: (cb) => subscribeUpdate('pos:update:download-progress', cb),
+    onDownloaded: (cb) => subscribeUpdate('pos:update:downloaded', cb),
+    onError: (cb) => subscribeUpdate('pos:update:error', cb),
+    onState: (cb) => subscribeUpdate('pos:update:state', cb),
+    off: (id) => unsubscribeUpdate(id),
   },
 
   // ---- Reports ----
@@ -145,12 +167,16 @@ contextBridge.exposeInMainWorld('pos', {
     printHtml: (html) => call('pos:printer:printHtml', html),
     printReceiptRaw: (txn) => call('pos:printer:printReceiptRaw', txn),
     installDriver: () => call('pos:printer:installDriver'),
-    checkStatus: () => { const r = ipcRenderer.invoke('pos:printer:checkStatus'); return r.then((x) => x.ok ? x.data : { driverAvailable: false, installedPrinters: [], printerConnected: false }); },
+    checkStatus: () => { const r = ipcRenderer.invoke('pos:printer:checkStatus'); return r.then((x) => x.ok ? x.data : { driverAvailable: false, installedPrinters: [], printerConnected: false, status: 'offline', ready: false, canAutoRecover: false }); },
     setupFromLogin: () => { const r = ipcRenderer.invoke('pos:printer:setupFromLogin'); return r.then((x) => x.ok ? x.data : (() => { throw new Error(x.error || 'Setup failed'); })()); },
     // List installed Windows printer names (for the startup-test dropdown).
     listWindowsPrinters: () => { const r = ipcRenderer.invoke('pos:printer:listWindowsPrinters'); return r.then((x) => x.ok ? x.data : []); },
+    // Queue/port/connection details and the printer YANKENT will route to.
+    windowsStatus: () => { const r = ipcRenderer.invoke('pos:printer:windowsStatus'); return r.then((x) => x.ok ? x.data : { configured: '', printers: [], selected: null, autoSelected: false, code: 'error', status: 'offline', ready: false, canAutoRecover: false, error: x.error || 'Printer discovery failed', message: x.error || 'Printer discovery failed' }); },
+    // Safe public recovery: no printer name is accepted; main chooses only one unambiguous connected thermal queue.
+    autoRecover: () => { const r = ipcRenderer.invoke('pos:printer:autoRecover'); return r.then((x) => x.ok ? x.data : (() => { throw new Error(x.error || 'Printer recovery failed'); })()); },
     // Manually trigger the startup test print to the configured Windows printer.
-    startupTest: () => { const r = ipcRenderer.invoke('pos:printer:startupTest'); return r.then((x) => x.ok ? x.data : (() => { throw new Error(x.error || 'Test print failed'); })()); },
+    startupTest: () => call('pos:printer:startupTest'),
   },
 
   // ---- Telegram ----
