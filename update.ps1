@@ -524,7 +524,8 @@ try {
           if ([string]::IsNullOrWhiteSpace($runJson)) {
             $runs = @()
           } else {
-            $runs = @($runJson | ConvertFrom-Json)
+            $runResponse = $runJson | ConvertFrom-Json
+            $runs = @($runResponse | ForEach-Object { $_ })
           }
           $matchingRuns = @(
             $runs |
