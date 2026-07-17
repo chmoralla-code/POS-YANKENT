@@ -1,4 +1,5 @@
 name: Release Windows
+run-name: Release ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
 
 on:
   push:
@@ -98,6 +99,8 @@ jobs:
           } finally {
             $ErrorActionPreference = $savedPreference
           }
+          # A no-match result is expected and must not become the step's exit code.
+          $global:LASTEXITCODE = 0
 
           if ($grepExit -gt 1) {
             throw "Could not scan tracked files for Telegram bot tokens (git grep exit $grepExit)."
@@ -133,7 +136,7 @@ jobs:
 
           $head = (git rev-parse HEAD).Trim()
           if ($LASTEXITCODE -ne 0) { throw "Could not identify the release commit." }
-          $commits = @(git rev-list --all)
+          $commits = @(git rev-list HEAD)
           if ($LASTEXITCODE -ne 0) { throw "Could not inspect Git history." }
 
           $historicalPackageVersions = @(

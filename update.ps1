@@ -471,6 +471,7 @@ try {
   if (-not $tagCommit) { Fail "Could not resolve $tag to a commit." }
 
   Step 5 'Push main and tag atomically'
+  $releasePushStartedAt = [DateTime]::UtcNow
   try {
     Push-ReleaseRefs $tag
     $releasePushed = $true
@@ -512,9 +513,8 @@ try {
         'run', 'list',
         '--repo', "$owner/$repo",
         '--workflow', 'release.yml',
-        '--event', 'push',
         '--limit', '100',
-        '--json', 'databaseId,headSha,status,conclusion,createdAt,url'
+        '--json', 'databaseId,event,displayTitle,headSha,status,conclusion,createdAt,url'
       )
       $runExit = $runResult.ExitCode
       $runJson = ($runResult.Output | Out-String).Trim()
@@ -528,7 +528,15 @@ try {
           }
           $matchingRuns = @(
             $runs |
-              Where-Object { [string]$_.headSha -eq $tagCommit } |
+              Where-Object {
+                $runCreatedAt = [DateTimeOffset]::Parse([string]$_.createdAt).UtcDateTime
+                $event = [string]$_.event
+                $sameRelease = [string]$_.displayTitle -eq "Release $tag"
+                $freshRun = $runCreatedAt -ge $releasePushStartedAt.AddSeconds(-10)
+                $validEvent = ($event -eq 'push' -and [string]$_.headSha -eq $tagCommit) -or
+                  $event -eq 'workflow_dispatch'
+                $sameRelease -and $freshRun -and $validEvent
+              } |
               Sort-Object -Property createdAt -Descending
           )
           if ($matchingRuns.Count -gt 0) {
