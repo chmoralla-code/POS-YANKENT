@@ -77,6 +77,65 @@ function migrate(db) {
   if (sa && sa.value === '123 Maharlika Hwy, Cabanatuan City') {
     upd.run('store_address', 'YANKENT HARDWARE / CONSTRUCTION Tagbilaran North Road, Cortez, 6300 Bohol');
   }
+
+  // ---- Utang customer profiles + per-sale Loan ledger ------------------
+  // Existing databases keep their original customers/sales table shape when
+  // schema.sql runs CREATE TABLE IF NOT EXISTS. Add every new field
+  // independently so interrupted upgrades are safe to retry.
+  const addColumn = (table, column, definition) => {
+    const columns = db.prepare(`PRAGMA table_info(${table})`).all();
+    if (!columns.some((entry) => entry.name === column)) {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+    }
+  };
+  addColumn('customers', 'entity_kind', "TEXT NOT NULL DEFAULT 'individual'");
+  addColumn('customers', 'contact_person', 'TEXT');
+  addColumn('customers', 'email', 'TEXT');
+  addColumn('customers', 'address', 'TEXT');
+  addColumn('customers', 'notes', 'TEXT');
+  addColumn('customers', 'active', 'INTEGER NOT NULL DEFAULT 1');
+  // SQLite does not permit a non-constant datetime() default in ALTER TABLE,
+  // so older databases receive a nullable column and are backfilled here.
+  addColumn('customers', 'updated_at', 'TEXT');
+  db.exec("UPDATE customers SET updated_at=COALESCE(updated_at,created_at,datetime('now'))");
+  addColumn('sales', 'due_date', 'TEXT');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_customers_credit_active ON customers(type,active,name)');
+
+  // ---- loan_reminders: terminal delivery-uncertain state ---------------
+  // Graceful shutdown can begin after Telegram accepted a request but before
+  // its response arrives. Preserve that ambiguity durably and never retry the
+  // same Loan/day, which could otherwise send a duplicate reminder.
+  const reminderSchema = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='loan_reminders'").all()[0];
+  if (reminderSchema && reminderSchema.sql && !reminderSchema.sql.includes("'uncertain'")) {
+    db.transaction(() => {
+      db.exec('ALTER TABLE loan_reminders RENAME TO loan_reminders_old');
+      db.exec(`CREATE TABLE loan_reminders (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        loan_id             INTEGER NOT NULL REFERENCES loans(id),
+        reminder_date       TEXT NOT NULL,
+        state               TEXT NOT NULL DEFAULT 'pending' CHECK (state IN ('pending','sent','failed','uncertain')),
+        attempt_count       INTEGER NOT NULL DEFAULT 0,
+        last_error          TEXT,
+        telegram_message_id TEXT,
+        created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+        sent_at             TEXT,
+        UNIQUE (loan_id, reminder_date)
+      )`);
+      db.exec(`INSERT INTO loan_reminders(
+        id,loan_id,reminder_date,state,attempt_count,last_error,
+        telegram_message_id,created_at,sent_at
+      ) SELECT id,loan_id,reminder_date,state,attempt_count,last_error,
+        telegram_message_id,created_at,sent_at FROM loan_reminders_old`);
+      db.exec('DROP TABLE loan_reminders_old');
+      db.exec('CREATE INDEX IF NOT EXISTS idx_loan_reminders_date_state ON loan_reminders(reminder_date,state)');
+    })();
+  }
+
+  // Preserve aggregate credit from pre-Ledger installs without guessing a
+  // due date. This helper is idempotent: it only creates an opening balance
+  // when a customer has credit_used > 0 and no Loan row at all.
+  const { migrateLegacyBalances } = require('../lib/loans');
+  migrateLegacyBalances(db);
 }
 
 /**

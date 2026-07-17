@@ -27,7 +27,7 @@ function makeGuard({ getSession, requireRole, touchSession, isSessionExpired, ge
         }
         if (opts && opts.admin) requireRole(session, 'admin');
         else if (opts && opts.auth) requireRole(session, null); // any logged-in user
-        const data = await handler({ event, session }, ...args);
+        const data = await handler({ event, session, token }, ...args);
         return { ok: true, data };
       } catch (e) {
         return { ok: false, error: e.message, code: e.code || 'ERROR' };
@@ -51,6 +51,10 @@ function registerAll(ipcMain, ctx) {
   const pendingResets = new Map();
   let tgOffset = 0;
   let webhookCleared = false;
+  // sales.register() installs this after all auth handlers are declared.
+  // The closure is invoked at request time, so logout can safely discard
+  // every uncommitted sale owned by the session that is ending.
+  let discardPendingSalesForToken = () => 0;
 
   // ---- Auth --------------------------------------------------------------
   ipcMain.handle('pos:auth:login', async (_e, { username, password }) => {
@@ -62,7 +66,16 @@ function registerAll(ipcMain, ctx) {
     return { ok: true, data: { token: session.token, user: { id: user.id, username: user.username, full_name: user.full_name, role: user.role } } };
   });
 
-  ipcMain.handle('pos:auth:logout', async (_e, token) => { logout(token); return { ok: true, data: true }; });
+  ipcMain.handle('pos:auth:logout', async (_e, token) => {
+    try {
+      discardPendingSalesForToken(token);
+    } catch (error) {
+      console.error('[ipc] Could not discard pending sales during logout:', error.message);
+    } finally {
+      logout(token);
+    }
+    return { ok: true, data: true };
+  });
 
   // ---- Session heartbeat (idle timeout) ---------------------------------
   // The renderer calls this on every user activity (mouse/keyboard) to
@@ -189,8 +202,9 @@ function registerAll(ipcMain, ctx) {
     return true;
   });
 
-  // Delete a user.  Hard-deletes when the user has no sales/refund/movement
-  // history; otherwise soft-deletes (sets active=0) to preserve audit trails.
+  // Delete a user. Hard-delete only when no operational or financial
+  // history references the account; otherwise deactivate it so every audit
+  // name/id remains attributable.
   guard(ipcMain, 'pos:users:delete', { admin: true }, (_c, id) => {
     if (!id) throw new Error('User id is required');
     const target = db.prepare('SELECT username, role FROM users WHERE id=?').get(id);
@@ -206,11 +220,14 @@ function registerAll(ipcMain, ctx) {
     const hasHistory =
       db.prepare('SELECT 1 FROM sales WHERE cashier_id=? LIMIT 1').get(id) ||
       db.prepare('SELECT 1 FROM refunds WHERE cashier_id=? OR admin_id=? LIMIT 1').get(id, id) ||
-      db.prepare('SELECT 1 FROM stock_movements WHERE user_id=? LIMIT 1').get(id);
+      db.prepare('SELECT 1 FROM stock_movements WHERE user_id=? LIMIT 1').get(id) ||
+      db.prepare('SELECT 1 FROM loans WHERE created_by=? LIMIT 1').get(id) ||
+      db.prepare('SELECT 1 FROM loan_payments WHERE received_by=? OR reversed_by=? LIMIT 1').get(id, id) ||
+      db.prepare('SELECT 1 FROM loan_events WHERE actor_id=? LIMIT 1').get(id);
     if (hasHistory) {
       // Soft delete — preserves audit trail integrity.
       db.prepare('UPDATE users SET active=0 WHERE id=?').run(id);
-      return { deleted: false, deactivated: true, reason: 'User has sales/movement history — deactivated instead' };
+      return { deleted: false, deactivated: true, reason: 'User has operational or financial history — deactivated instead' };
     }
     db.prepare('DELETE FROM users WHERE id=?').run(id);
     return { deleted: true, deactivated: false };
@@ -233,10 +250,15 @@ function registerAll(ipcMain, ctx) {
     return true;
   });
 
-  // Register the remaining modules.
-  require('./catalog').register(ipcMain, { ...ctx, guard });
-  require('./sales').register(ipcMain, { ...ctx, guard });
-  require('./integrations').register(ipcMain, { ...ctx, guard });
+  // Register the remaining modules against one shared context so destructive
+  // operations can invalidate pending-sale ownership after sales registers.
+  const moduleCtx = { ...ctx, guard };
+  require('./catalog').register(ipcMain, moduleCtx);
+  const salesRegistration = require('./sales').register(ipcMain, moduleCtx) || {};
+  discardPendingSalesForToken = salesRegistration.discardPendingSalesForToken || discardPendingSalesForToken;
+  moduleCtx.clearPendingSaleOwners = salesRegistration.clearPendingSaleOwners || (() => {});
+  require('./loans').register(ipcMain, moduleCtx);
+  require('./integrations').register(ipcMain, moduleCtx);
 
   const { shell } = require('electron');
   ipcMain.handle('pos:openExternal', async (_e, url) => {

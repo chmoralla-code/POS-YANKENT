@@ -7,7 +7,7 @@ App.cart = App.cart || [];
 App.views.pos = {
   title: 'Point of Sale',
   cache: { products: [], categories: [], customers: [] },
-  state: { tab: 'products', cat: 'all', q: '', customer: null, pay: 'cash', discountOn: false, chipsOpen: false },
+  state: { tab: 'products', cat: 'all', q: '', customer: null, pay: 'cash', dueDate: '', discountOn: false, chipsOpen: false },
   // Lazy grid: render the first batch, append more as the cashier scrolls.
   _gridList: [],
   _gridShown: 0,
@@ -15,17 +15,24 @@ App.views.pos = {
   _gridObserver: null,
 
   async render(view) {
+    const generation = App.captureSessionGeneration();
     this.viewEl = view;
     view.classList.add('view-pos');
     // Always fetch fresh data so admin changes (price, stock, categories) sync immediately.
     const [products, categories, customers] = await Promise.all([
       App.pos.products.list({ includeServices: true }),
       App.pos.categories.list(),
-      App.pos.customers.list(),
+      App.pos.loans.listCustomers({ activeOnly: true }),
     ]);
+    if (!App.isSessionGenerationCurrent(generation) || this.viewEl !== view) return;
     this.cache = { products, categories, customers };
+    if (this.state.customer) {
+      this.state.customer = customers.find((customer) => customer.id === this.state.customer.id) || null;
+    }
+    if (this.state.pay === 'account' && !this.state.customer) this.state.pay = 'cash';
     const productsActive = this.state.tab !== 'services';
     const payment = this.state.pay || 'cash';
+    const customerOptions = customers.map((customer) => `<option value="${customer.id}" ${this.state.customer && this.state.customer.id === customer.id ? 'selected' : ''}>${App.ui.esc(customer.name)} — ${App.ui.money(customer.available_credit)} available</option>`).join('');
     view.innerHTML = `
       <div class="pos-grid">
         <div class="pos-left">
@@ -51,6 +58,21 @@ App.views.pos = {
             <div class="panel-h">Current Sale <small><span id="posCount" aria-live="polite">0</span> lines</small></div>
             <div class="cart" id="posCart"></div>
             <div class="totals" id="posTotals"></div>
+            <div class="pos-credit-select" aria-label="Credit customer">
+              <div class="pos-credit-row">
+                <label for="posCustomer">Customer / Company</label>
+                <button type="button" class="btn btn-sm btn-ghost" id="posAddCustomer">Add</button>
+              </div>
+              <select id="posCustomer">
+                <option value="">Walk-in Customer</option>
+                ${customerOptions}
+              </select>
+              <div class="pos-credit-meta" id="posCreditMeta"></div>
+              <div class="pos-due-field" id="posDueField" hidden>
+                <label for="posDueDate">Loan due date</label>
+                <input id="posDueDate" type="date" min="${App.ui.todayISO()}" value="${App.ui.esc(this.state.dueDate || '')}">
+              </div>
+            </div>
             <div class="pay-grid" id="posPay" role="group" aria-label="Payment method">
               <button type="button" class="${payment === 'cash' ? 'active' : ''}" data-pay="cash" aria-pressed="${payment === 'cash'}">Cash</button>
               <button type="button" class="${payment === 'card' ? 'active' : ''}" data-pay="card" aria-pressed="${payment === 'card'}">Card</button>
@@ -71,6 +93,7 @@ App.views.pos = {
     this._renderChips();
     this._renderGrid();
     this._renderCart();
+    this._renderCustomerCredit();
   },
 
   _wire() {
@@ -105,6 +128,31 @@ App.views.pos = {
     });
     const toggle = v.querySelector('#posChipsToggle');
     if (toggle) toggle.onclick = () => { this.state.chipsOpen = !this.state.chipsOpen; this._renderChips(); };
+    const customerSelect = v.querySelector('#posCustomer');
+    customerSelect.onchange = () => {
+      const previousCustomerId = this.state.customer ? this.state.customer.id : null;
+      const id = Number(customerSelect.value);
+      this.state.customer = this.cache.customers.find((customer) => customer.id === id) || null;
+      const nextCustomerId = this.state.customer ? this.state.customer.id : null;
+      if (previousCustomerId !== nextCustomerId) this.state.dueDate = '';
+      if (!this.state.customer && this.state.pay === 'account') this._setPay('cash');
+      this._renderCustomerCredit();
+    };
+    v.querySelector('#posAddCustomer').onclick = () => {
+      if (!App.views.utang || typeof App.views.utang._profileForm !== 'function') return;
+      const generation = App.captureSessionGeneration();
+      App.views.utang._profileForm(null, async (customer) => {
+        if (!App.isSessionGenerationCurrent(generation)) return;
+        const customers = await App.pos.loans.listCustomers({ activeOnly: true });
+        if (!App.isSessionGenerationCurrent(generation) || this.viewEl !== v || !customerSelect.isConnected) return;
+        this.cache.customers = customers;
+        this.state.customer = this.cache.customers.find((entry) => entry.id === customer.id) || null;
+        this.state.dueDate = '';
+        customerSelect.innerHTML = '<option value="">Walk-in Customer</option>' + this.cache.customers.map((entry) => `<option value="${entry.id}">${App.ui.esc(entry.name)} — ${App.ui.money(entry.available_credit)} available</option>`).join('');
+        this._renderCustomerCredit();
+      });
+    };
+    v.querySelector('#posDueDate').onchange = (event) => { this.state.dueDate = event.target.value; };
     v.querySelectorAll('#posPay button').forEach((b) => b.onclick = () => this._setPay(b.dataset.pay));
     v.querySelector('#posVoid').onclick = () => this._void();
     v.querySelector('#posDiscount').onclick = () => {
@@ -257,6 +305,18 @@ App.views.pos = {
     if (el) { const s = el.querySelector('.grid-sentinel'); if (s) s.remove(); }
   },
 
+  resetSessionState() {
+    App.cart = [];
+    this.state = {
+      tab: 'products', cat: 'all', q: '', customer: null, pay: 'cash',
+      dueDate: '', discountOn: false, chipsOpen: false,
+    };
+    this.cache = { products: [], categories: [], customers: [] };
+    this._gridList = [];
+    this._gridShown = 0;
+    this._stopGridObserver();
+  },
+
   destroy() { this._stopGridObserver(); },
 
   _add(id) {
@@ -393,9 +453,30 @@ App.views.pos = {
     this.viewEl.querySelector('#posCharge').textContent = 'Charge ' + App.ui.money(total);
   },
 
+  _renderCustomerCredit() {
+    if (!this.viewEl) return;
+    const select = this.viewEl.querySelector('#posCustomer');
+    const meta = this.viewEl.querySelector('#posCreditMeta');
+    const dueField = this.viewEl.querySelector('#posDueField');
+    const dueInput = this.viewEl.querySelector('#posDueDate');
+    const customer = this.state.customer;
+    if (select) select.value = customer ? String(customer.id) : '';
+    if (meta) {
+      meta.innerHTML = customer
+        ? `<span>Outstanding <b>${App.ui.money(customer.outstanding)}</b></span><span>Available <b>${App.ui.money(customer.available_credit)}</b></span>`
+        : '<span>Select a credit customer to use On-Account.</span>';
+    }
+    const account = this.state.pay === 'account';
+    if (dueField) dueField.hidden = !account;
+    if (dueInput) {
+      dueInput.required = account;
+      dueInput.value = this.state.dueDate || '';
+    }
+  },
+
   _setPay(p) {
-    if (p === 'account' && !(this.state.customer && this.state.customer.type === 'contractor')) {
-      App.ui.toast('On-Account requires a contractor customer', 'err'); return;
+    if (p === 'account' && !(this.state.customer && this.state.customer.type === 'contractor' && this.state.customer.active)) {
+      App.ui.toast('On-Account requires an active credit customer', 'err'); return;
     }
     this.state.pay = p;
     this.viewEl.querySelectorAll('#posPay button').forEach((b) => {
@@ -403,11 +484,17 @@ App.views.pos = {
       b.classList.toggle('active', active);
       b.setAttribute('aria-pressed', String(active));
     });
+    this._renderCustomerCredit();
   },
 
   _void() {
     if (!App.cart.length) return;
-    App.ui.confirm('Void the entire current sale?').then((ok) => { if (ok) { App.cart = []; this._renderCart(); App.ui.toast('Sale voided'); } });
+    App.ui.confirm('Void the entire current sale?').then((ok) => {
+      if (ok) {
+        this._resetCartState();
+        App.ui.toast('Sale voided');
+      }
+    });
   },
 
   _checkout() {
@@ -419,6 +506,13 @@ App.views.pos = {
     const total = Math.max(0, gross - gross * discPct / 100);
     const pay = this.state.pay;
     const cust = this.state.customer;
+    const dueDate = pay === 'account' ? String(this.state.dueDate || '') : '';
+    if (pay === 'account' && !dueDate) {
+      App.ui.toast('Select a loan due date before checkout', 'err');
+      const input = this.viewEl.querySelector('#posDueDate');
+      if (input) input.focus();
+      return;
+    }
     let cashHtml = '', refHtml = '';
     if (pay === 'cash') cashHtml = `<div class="field"><label class="fl">Cash Received</label><input id="payCash" type="number" step="0.01" value="${total.toFixed(2)}" autofocus></div><div id="changeBox" class="credit-info"></div>`;
     if (pay === 'card' || pay === 'ewallet') refHtml = `<div class="field"><label class="fl">Reference No.</label><input id="payRef" placeholder="Transaction ref (optional)"></div>`;
@@ -427,6 +521,7 @@ App.views.pos = {
       title: 'Complete Payment', wide: false, closeOnOverlay: false,
       bodyHtml: `<div class="field"><label class="fl">Amount Due (incl. VAT ${vatRate}%)</label><input value="${App.ui.money(total)}" readonly></div>
         <div class="row gap" style="margin-bottom:10px"><span class="badge ${pay}">${pay.toUpperCase()}</span><span class="muted">${App.ui.esc(custName)}</span></div>
+        ${pay === 'account' ? `<div class="credit-info">Loan due date: <b>${App.ui.esc(dueDate)}</b></div>` : ''}
         ${cashHtml}${refHtml}`,
       footerHtml: `<button class="btn btn-ghost" data-a="cancel">Cancel</button><button class="btn btn-primary" data-a="ok">Confirm &amp; Print</button>`,
     });
@@ -435,7 +530,7 @@ App.views.pos = {
       const btn = e.currentTarget;
       btn.disabled = true; btn.textContent = 'Processing…'; btn.classList.add('is-printing');
       m.close();
-      this._confirm(total, pay, cust);
+      this._confirm(total, pay, cust, dueDate);
     };
     if (pay === 'cash') {
       const cash = m.el.querySelector('#payCash');
@@ -448,7 +543,8 @@ App.views.pos = {
     }
   },
 
-  async _confirm(total, pay, cust) {
+  async _confirm(total, pay, cust, dueDate) {
+    const generation = App.captureSessionGeneration();
     const gross = App.cart.reduce((s, i) => s + i.qty * i.unitPrice, 0);
     const discPct = this.state.discountOn ? (parseFloat((App.settingsCache || {}).discount_percent) || 0) : 0;
     const discAmt = gross * discPct / 100;
@@ -461,6 +557,7 @@ App.views.pos = {
       customerId: cust ? cust.id : null,
       customerName: cust ? cust.name : 'Walk-in Customer',
       paymentMethod: pay,
+      dueDate: pay === 'account' ? dueDate : null,
       amountTendered: pay === 'cash' ? total : 0,
       discount: discAmt,
       reference: '',
@@ -470,16 +567,18 @@ App.views.pos = {
       // only committed (stock deducted) when the cashier clicks PRINT on
       // the receipt modal.  Closing the modal without printing voids it.
       const res = await App.pos.sales.create(payload);
+      if (!App.isSessionGenerationCurrent(generation)) return;
       App.ui.toast(`Sale ${res.txnId} — click PRINT to complete`, 'ok');
-      await this._showReceipt(res.txnId, res.receipt);
+      await this._showReceipt(res.txnId, res.receipt, generation);
     } catch (e) {
-      App.ui.toast(e.message, 'err');
+      if (App.isSessionGenerationCurrent(generation)) App.ui.toast(e.message, 'err');
     }
   },
 
   _resetCartState() {
     App.cart = [];
     this.state.customer = null;
+    this.state.dueDate = '';
     this.state.discountOn = false;
     const dBtn = this.viewEl.querySelector('#posDiscount');
     if (dBtn) { dBtn.classList.remove('btn-primary'); dBtn.classList.add('btn-ghost'); dBtn.textContent = 'Discount'; }
@@ -516,8 +615,9 @@ App.views.pos = {
     }
   },
 
-  async _showReceipt(txnId, receipt) {
+  async _showReceipt(txnId, receipt, generation = App.captureSessionGeneration()) {
     const text = receipt ? null : (await App.pos.printer.encodeReceipt(txnId)).text;
+    if (!App.isSessionGenerationCurrent(generation)) return;
     const body = (receipt && receipt.items) ? this._receiptHtml(receipt) : `<pre class="receipt">${App.ui.esc(text)}</pre>`;
     const m = App.ui.modal({
       title: 'Receipt · ' + txnId, wide: true, closeOnOverlay: false,
@@ -542,18 +642,27 @@ App.views.pos = {
         // would throw a swallowed error and show a false "voided" toast,
         // tempting the cashier to re-charge → double deduction).
         committed = true;
+        if (!App.isSessionGenerationCurrent(generation)) return;
         // 2. Print the receipt — Bluetooth if connected, else system printer.
         //    _printWithRetry auto-reconnects once if the printer dropped
         //    (e.g. USB cable was unplugged and re-plugged).
         await this._printWithRetry(txnId);
+        if (!App.isSessionGenerationCurrent(generation)) return;
         App.ui.toast('Sale completed ✓', 'ok');
-        // 3. Refresh cached product stock (now that stock is deducted).
-        this.cache.products = await App.pos.products.list({ includeServices: true });
-        this.cache.customers = await App.pos.customers.list();
+        // 3. Refresh cached product stock and customer credit now that the
+        //    commit is durable, but never write the response into a new session.
+        const [products, customers] = await Promise.all([
+          App.pos.products.list({ includeServices: true }),
+          App.pos.loans.listCustomers({ activeOnly: true }),
+        ]);
+        if (!App.isSessionGenerationCurrent(generation)) return;
+        this.cache.products = products;
+        this.cache.customers = customers;
         // 4. Close modal + reset cart for the next sale.
         m.close();
         this._resetCartState();
       } catch (err) {
+        if (!App.isSessionGenerationCurrent(generation)) return;
         // If commit succeeded but print failed, the sale is already
         // completed — offer a reprint rather than leaving the cashier
         // stuck on a disabled PRINT button.
@@ -561,13 +670,15 @@ App.views.pos = {
           App.ui.toast('Sale completed but printing failed — click PRINT again to reprint', 'err');
           btn.textContent = 'REPRINT'; btn.classList.remove('is-printing');
           // On a successful reprint, close + reset cart.
-          btn.onclick = async (ev2) => {
+          btn.onclick = async () => {
             btn.disabled = true; btn.textContent = 'Printing…'; btn.classList.add('is-printing');
             try {
               await this._printWithRetry(txnId);
+              if (!App.isSessionGenerationCurrent(generation)) return;
               App.ui.toast('Reprinted ✓', 'ok');
               m.close(); this._resetCartState();
             } catch (e2) {
+              if (!App.isSessionGenerationCurrent(generation)) return;
               App.ui.toast('Reprint failed: ' + e2.message, 'err');
               btn.disabled = false; btn.textContent = 'REPRINT'; btn.classList.remove('is-printing');
             }
@@ -588,9 +699,11 @@ App.views.pos = {
       if (committed) return; // sale was committed via PRINT — nothing to void
       try {
         await App.pos.sales.void(txnId);
+        if (!App.isSessionGenerationCurrent(generation)) return;
         // Reset sale-specific state (keep cart items for retry).
         this.state.discountOn = false;
         this.state.customer = null;
+        this.state.dueDate = '';
         this._setPay('cash');
         const dBtn = this.viewEl.querySelector('#posDiscount');
         if (dBtn) { dBtn.classList.remove('btn-primary'); dBtn.classList.add('btn-ghost'); dBtn.textContent = 'Discount'; }
@@ -613,6 +726,7 @@ App.views.pos = {
       <div class="r"><span>Cashier</span><span>${App.ui.esc(r.cashier)}</span></div>
       <div class="r"><span>Customer</span><span>${App.ui.esc(r.customer)}</span></div>
       <div class="r"><span>Pay</span><span>${App.ui.esc(r.paymentMethod.toUpperCase())}</span></div>
+      ${r.paymentMethod === 'account' && r.dueDate ? `<div class="r"><span>Due</span><span>${App.ui.esc(r.dueDate)}</span></div>` : ''}
       <hr style="border:none;border-top:1px dashed #ccc;margin:8px 0">
       ${lines}
       <hr style="border:none;border-top:1px dashed #ccc;margin:8px 0">

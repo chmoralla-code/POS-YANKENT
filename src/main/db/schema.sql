@@ -42,8 +42,8 @@ CREATE TABLE IF NOT EXISTS products (
   price              REAL NOT NULL DEFAULT 0,        -- default unit price
   low_stock_threshold REAL NOT NULL DEFAULT 10,
   is_service         INTEGER NOT NULL DEFAULT 0,
-  active             INTEGER NOT NULL DEFAULT 1,
-  created_at         TEXT NOT NULL DEFAULT (datetime('now'))
+  active              INTEGER NOT NULL DEFAULT 1,
+  created_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS product_units (
@@ -59,13 +59,20 @@ CREATE TABLE IF NOT EXISTS product_units (
 -- Customers / contractor credit accounts
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS customers (
-  id           INTEGER PRIMARY KEY AUTOINCREMENT,
-  name         TEXT NOT NULL,
-  type         TEXT NOT NULL DEFAULT 'walkin' CHECK (type IN ('walkin','contractor')),
-  phone        TEXT,
-  credit_limit REAL NOT NULL DEFAULT 0,
-  credit_used  REAL NOT NULL DEFAULT 0,
-  created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  name           TEXT NOT NULL,
+  type           TEXT NOT NULL DEFAULT 'walkin' CHECK (type IN ('walkin','contractor')),
+  entity_kind    TEXT NOT NULL DEFAULT 'individual' CHECK (entity_kind IN ('individual','company')),
+  contact_person TEXT,
+  phone          TEXT,
+  email          TEXT,
+  address        TEXT,
+  notes          TEXT,
+  credit_limit   REAL NOT NULL DEFAULT 0,
+  credit_used    REAL NOT NULL DEFAULT 0,
+  active         INTEGER NOT NULL DEFAULT 1,
+  created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 -- -----------------------------------------------------------------------------
@@ -95,6 +102,7 @@ CREATE TABLE IF NOT EXISTS sales (
   amount_tendered REAL NOT NULL DEFAULT 0,
   change          REAL NOT NULL DEFAULT 0,
   reference       TEXT,
+  due_date        TEXT,
   status          TEXT NOT NULL DEFAULT 'completed',
   note            TEXT
 );
@@ -127,19 +135,90 @@ CREATE TABLE IF NOT EXISTS stock_movements (
 
 -- Refunds (linked to original sale, with admin approver)
 CREATE TABLE IF NOT EXISTS refunds (
-  id            INTEGER PRIMARY KEY AUTOINCREMENT,
-  original_txn_id TEXT NOT NULL,
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  original_txn_id  TEXT NOT NULL,
   original_sale_id INTEGER NOT NULL REFERENCES sales(id),
-  refund_txn_id TEXT NOT NULL UNIQUE,
-  datetime      TEXT NOT NULL DEFAULT (datetime('now')),
-  cashier_id    INTEGER REFERENCES users(id),
-  cashier_name  TEXT NOT NULL,
-  admin_id      INTEGER REFERENCES users(id),
-  admin_name    TEXT NOT NULL,
-  customer_name TEXT,
-  total         REAL NOT NULL,
-  reason        TEXT,
-  items_json    TEXT
+  refund_txn_id    TEXT NOT NULL UNIQUE,
+  datetime         TEXT NOT NULL DEFAULT (datetime('now')),
+  cashier_id       INTEGER REFERENCES users(id),
+  cashier_name     TEXT NOT NULL,
+  admin_id         INTEGER REFERENCES users(id),
+  admin_name       TEXT NOT NULL,
+  customer_name    TEXT,
+  total            REAL NOT NULL,
+  reason           TEXT,
+  items_json       TEXT
+);
+
+-- -----------------------------------------------------------------------------
+-- Utang / customer loan ledger
+-- One Loan is created for every committed On-Account sale. Existing aggregate
+-- customer balances are preserved as one undated source='legacy' Loan.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS loans (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  loan_number     TEXT NOT NULL UNIQUE,
+  customer_id     INTEGER NOT NULL REFERENCES customers(id),
+  sale_id         INTEGER UNIQUE REFERENCES sales(id),
+  source          TEXT NOT NULL DEFAULT 'sale' CHECK (source IN ('sale','legacy','adjustment')),
+  principal       REAL NOT NULL DEFAULT 0 CHECK (principal >= 0),
+  balance         REAL NOT NULL DEFAULT 0 CHECK (balance >= 0),
+  due_date        TEXT,
+  state           TEXT NOT NULL DEFAULT 'open' CHECK (state IN ('open','paid','cancelled')),
+  note            TEXT,
+  created_by      INTEGER REFERENCES users(id),
+  created_by_name TEXT,
+  created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
+  paid_at         TEXT,
+  cancelled_at    TEXT
+);
+
+CREATE TABLE IF NOT EXISTS loan_payments (
+  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+  loan_id            INTEGER NOT NULL REFERENCES loans(id),
+  customer_id        INTEGER NOT NULL REFERENCES customers(id),
+  amount             REAL NOT NULL CHECK (amount > 0),
+  payment_method     TEXT NOT NULL CHECK (payment_method IN ('cash','card','ewallet','bank','other')),
+  reference          TEXT,
+  note               TEXT,
+  received_by        INTEGER REFERENCES users(id),
+  received_by_name   TEXT NOT NULL,
+  paid_at            TEXT NOT NULL DEFAULT (datetime('now')),
+  reversed_at        TEXT,
+  reversed_by        INTEGER REFERENCES users(id),
+  reversed_by_name   TEXT,
+  reversal_reason    TEXT
+);
+
+CREATE TABLE IF NOT EXISTS loan_events (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  loan_id         INTEGER NOT NULL REFERENCES loans(id),
+  customer_id     INTEGER NOT NULL REFERENCES customers(id),
+  event_type      TEXT NOT NULL CHECK (event_type IN (
+                    'created','legacy_created','due_date_changed','balance_adjusted',
+                    'payment_reversed','sale_refunded','cancelled','reactivated'
+                  )),
+  amount_delta    REAL,
+  old_due_date    TEXT,
+  new_due_date    TEXT,
+  reason          TEXT,
+  actor_id        INTEGER REFERENCES users(id),
+  actor_name      TEXT,
+  created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS loan_reminders (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  loan_id         INTEGER NOT NULL REFERENCES loans(id),
+  reminder_date   TEXT NOT NULL,
+  state           TEXT NOT NULL DEFAULT 'pending' CHECK (state IN ('pending','sent','failed','uncertain')),
+  attempt_count   INTEGER NOT NULL DEFAULT 0,
+  last_error      TEXT,
+  telegram_message_id TEXT,
+  created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+  sent_at         TEXT,
+  UNIQUE (loan_id, reminder_date)
 );
 
 -- Key/value store for store info, printer config, telegram config, etc.
@@ -157,3 +236,9 @@ CREATE INDEX IF NOT EXISTS idx_sale_items_product ON sale_items(product_id);
 CREATE INDEX IF NOT EXISTS idx_sale_items_sale ON sale_items(sale_id);
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_stock_movements_product ON stock_movements(product_id);
+CREATE INDEX IF NOT EXISTS idx_loans_customer_state ON loans(customer_id, state);
+CREATE INDEX IF NOT EXISTS idx_loans_due_state ON loans(due_date, state);
+CREATE INDEX IF NOT EXISTS idx_loans_sale ON loans(sale_id);
+CREATE INDEX IF NOT EXISTS idx_loan_payments_loan_date ON loan_payments(loan_id, paid_at);
+CREATE INDEX IF NOT EXISTS idx_loan_events_loan_date ON loan_events(loan_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_loan_reminders_date_state ON loan_reminders(reminder_date, state);

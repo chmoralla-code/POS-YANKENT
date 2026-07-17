@@ -128,7 +128,8 @@ App.views.settings = {
             <div class="row gap" style="margin-bottom:10px"><span id="sNet" class="pill">checking…</span><div class="fill"></div></div>
             ${this._row('BotFather token', 'telegram_token', this.s.telegram_token || '', 'password')}
             ${this._row('Chat ID', 'telegram_chat_id', this.s.telegram_chat_id || '')}
-            <div class="hint">Token &amp; chat ID are stored only on this laptop. Reports are sent only when online; the POS works offline regardless.</div>
+            <label class="row gap-sm"><input type="checkbox" id="sTgEnabled" ${this.s.telegram_enabled === '1' ? 'checked' : ''}> Enable automatic daily Utang reminders beginning 15 days before each due date</label>
+            <div class="hint">Token &amp; chat ID are stored only on this laptop. When reminders are enabled, the customer/company name, contact details, loan amounts, due date, sale reference, and purchased-item summary are sent to the configured owner Telegram chat. Reports and reminders are sent only when online; the POS works offline regardless.</div>
             <div class="row gap" style="margin:10px 0">
               <button class="btn btn-primary btn-sm" id="sSaveTg">Save</button>
               <button class="btn btn-ghost btn-sm" id="sTgTest">Send test message</button>
@@ -253,7 +254,25 @@ App.views.settings = {
       }
       App.ui.toast('Printer settings saved ✓', 'ok'); this._updatePreview('printer');
     };
-    v.querySelector('#sSaveTg').onclick = async () => { await save(['telegram_token','telegram_chat_id']); App.ui.toast('Telegram settings saved ✓', 'ok'); this._updatePreview('telegram'); };
+    v.querySelector('#sSaveTg').onclick = async () => {
+      const enabled = v.querySelector('#sTgEnabled').checked ? '1' : '0';
+      // Disable first so an in-flight scheduler recheck cannot send customer
+      // data to a partially updated or previous Telegram destination.
+      await App.pos.settings.set('telegram_enabled', '0');
+      App.settingsCache.telegram_enabled = '0';
+      this.s.telegram_enabled = '0';
+      try {
+        await save(['telegram_token','telegram_chat_id']);
+        await App.pos.settings.set('telegram_enabled', enabled);
+        App.settingsCache.telegram_enabled = enabled;
+        this.s.telegram_enabled = enabled;
+        App.ui.toast('Telegram settings saved ✓', 'ok');
+        this._updatePreview('telegram');
+      } catch (error) {
+        v.querySelector('#sTgEnabled').checked = false;
+        App.ui.toast('Telegram settings were left disabled: ' + error.message, 'err');
+      }
+    };
     v.querySelector('#sSaveAutoStart').onclick = async () => {
       try {
         const enabled = v.querySelector('#sAutoStart').checked;

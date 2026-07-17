@@ -10,6 +10,7 @@ const { getSession, requireRole, logout } = require('./lib/auth');
 const { registerAll } = require('./ipc');
 const { initUpdater } = require('./updater');
 const { exportAll } = require('./backup');
+const { startLoanReminderScheduler, DEFAULT_DRAIN_TIMEOUT_MS } = require('./lib/loan-reminders');
 const os = require('os');
 
 const RENDERER_DIR = path.join(__dirname, '..', 'renderer');
@@ -36,7 +37,11 @@ app.commandLine.appendSwitch('disable-smooth-scrolling');
 let db;
 let mainWindow;
 let backupTimer = null;
+let loanReminderScheduler = null;
 let isQuitting = false;
+let shutdownPromise = null;
+let shutdownComplete = false;
+let shutdownWatchdog = null;
 
 // Catch any uncaught error during shutdown so the main process never
 // crashes with "JavaScript error occurred in the main process" and
@@ -390,6 +395,16 @@ if (!gotTheLock) {
   // ---- Auto-backup every 5 minutes ----------------------------------
   backupTimer = setInterval(doAutoBackup, BACKUP_INTERVAL_MS);
 
+  // ---- Daily Utang Telegram reminders --------------------------------
+  // This scheduler is independent of renderer login state. It starts after
+  // the local DB is ready, retries every 30 minutes while the app is open,
+  // and records successful Loan/date pairs to prevent duplicate messages.
+  // Network work is skipped in smoke/e2e runs so validation never contacts
+  // an installation's real Telegram account.
+  if (!process.env.YANKENT_SMOKE && !process.env.YANKENT_E2E) {
+    loanReminderScheduler = startLoanReminderScheduler({ db, getSetting });
+  }
+
   // ---- Startup auto test-print (once per OS boot) --------------------
   // Sends a test print to the Windows "POS-58" printer the first time the
   // POS opens after the laptop is powered on.  Skipped during smoke/e2e
@@ -495,17 +510,81 @@ app.on('window-all-closed', () => {
     // don't become zombie processes that hold the single-instance lock.
     BrowserWindow.getAllWindows().forEach((w) => { try { w.destroy(); } catch {} });
     app.quit();
-    // Force-exit after 2 seconds if app.quit() stalls (a pending IPC or
-    // timer can keep the event loop alive, leaving the process as a zombie).
-    setTimeout(() => process.exit(0), 2000);
   }
 });
 
-app.on('before-quit', () => {
+async function prepareForShutdown() {
+  if (backupTimer) {
+    clearInterval(backupTimer);
+    backupTimer = null;
+  }
+  const scheduler = loanReminderScheduler;
+  if (scheduler) {
+    try {
+      const drain = await scheduler.stop(DEFAULT_DRAIN_TIMEOUT_MS);
+      if (drain && drain.timedOut) {
+        console.warn('[main] Loan reminder shutdown drain timed out; delivery remains marked uncertain.');
+      }
+      if (!drain || drain.safeToClose !== true) {
+        console.error('[main] Shutdown cancelled: Telegram delivery state was not durably saved.');
+        return false;
+      }
+      loanReminderScheduler = null;
+    } catch (error) {
+      console.error('[main] Loan reminder shutdown error:', error.message);
+      return false;
+    }
+  }
+
+  // Final backup occurs only after the reminder run drained or its active
+  // delivery was durably marked uncertain, so no async code can race DB close.
+  try { doAutoBackup(); } catch (error) { console.error('[main] Final backup error:', error.message); }
+  if (db) {
+    try { db.close({ flush: false }); } catch (error) { console.error('[main] DB close error:', error.message); }
+    db = null;
+  }
+  return true;
+}
+
+function cancelUnsafeShutdown(error) {
+  if (shutdownWatchdog) clearTimeout(shutdownWatchdog);
+  shutdownWatchdog = null;
+  shutdownPromise = null;
+  isQuitting = false;
+  if (db && !backupTimer) backupTimer = setInterval(doAutoBackup, BACKUP_INTERVAL_MS);
+  if (db && !process.env.YANKENT_SMOKE && !process.env.YANKENT_E2E) {
+    loanReminderScheduler = startLoanReminderScheduler({ db, getSetting });
+  }
+  const detail = error && error.message ? error.message : String(error || 'Telegram delivery state could not be saved');
+  try {
+    dialog.showErrorBox(
+      'YANKENT POS could not close safely',
+      `A Telegram reminder may still be in delivery and its status could not be saved. The POS will remain open to prevent a duplicate reminder.\n\n${detail}`
+    );
+  } catch {}
+  if (BrowserWindow.getAllWindows().length === 0) createWindow();
+}
+
+app.on('before-quit', (event) => {
+  if (shutdownComplete) return;
+  event.preventDefault();
   isQuitting = true;
-  if (backupTimer) clearInterval(backupTimer);
-  // Final backup — wrapped so any DB error doesn't crash the process
-  // during shutdown (which would orphan the single-instance lock).
-  try { doAutoBackup(); } catch (e) { console.error('[main] Final backup error:', e.message); }
-  if (db) { try { db.close(); } catch (e) { console.error('[main] DB close error:', e.message); } }
+  if (shutdownPromise) return;
+
+  // The Telegram request timeout is 15 seconds. Allow a bounded 16-second
+  // drain plus a small margin for the final backup/close, then force-exit only
+  // as a last resort so the single-instance lock cannot become orphaned.
+  shutdownWatchdog = setTimeout(() => process.exit(0), DEFAULT_DRAIN_TIMEOUT_MS + 5000);
+  shutdownPromise = prepareForShutdown().then((safeToClose) => {
+    if (!safeToClose) {
+      cancelUnsafeShutdown(new Error('The reminder idempotency marker was not durably written.'));
+      return;
+    }
+    shutdownComplete = true;
+    if (shutdownWatchdog) clearTimeout(shutdownWatchdog);
+    shutdownWatchdog = setTimeout(() => process.exit(0), 2000);
+    app.quit();
+  }).catch((error) => {
+    cancelUnsafeShutdown(error);
+  });
 });

@@ -213,6 +213,7 @@ test('on-account credit is rechecked when a pending sale is committed', async ()
   const res = await api.call('pos:sales:create', cashierSession, {
     items: [{ productId: cement.id, unit: 'bag', qty: 1, unitPrice: 280 }],
     customerId: contractor.id, paymentMethod: 'account', amountTendered: 0,
+    dueDate: '2099-12-31',
   });
   api.db.prepare('UPDATE customers SET credit_used=? WHERE id=?').run(contractor.credit_limit - 100, contractor.id);
   await assert.rejects(() => api.call('pos:sales:commit', cashierSession, res.txnId), /Exceeds credit limit/);

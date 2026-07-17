@@ -61,6 +61,7 @@ function buildReceipt(db, saleId) {
     deliveryFee: sale.delivery_fee,
     total: sale.total,
     paymentMethod: sale.payment_method,
+    dueDate: sale.due_date || '',
     tendered: sale.amount_tendered,
     change: sale.change,
     reference: sale.reference || '',
@@ -176,6 +177,9 @@ function receiptPlainText(receipt, width = 32) {
   if (receipt.project) lines.push(padLine('Project:', truncate(receipt.project, width - 9), width), );
   if (receipt.poNumber) lines.push(padLine('PO:', receipt.poNumber, width));
   lines.push(padLine('Pay:', receipt.paymentMethod.toUpperCase() + (receipt.reference ? ' ' + receipt.reference : ''), width));
+  if (receipt.paymentMethod === 'account' && receipt.dueDate) {
+    lines.push(padLine('Due:', receipt.dueDate, width));
+  }
   lines.push(sep);
   for (const i of receipt.items) {
     lines.push(fmtLine(receipt, i.name, i.qty, i.unit, i.unitPrice, i.amount, width));

@@ -716,8 +716,9 @@ function register(ipcMain, ctx) {
     let data;
     try { data = JSON.parse(raw); } catch { throw new Error('Backup file is not valid JSON'); }
     importAll(db, data);
+    if (typeof ctx.clearPendingSaleOwners === 'function') ctx.clearPendingSaleOwners();
     const counts = {};
-    for (const t of ['users','categories','products','product_units','customers','sales','sale_items','stock_movements','settings']) {
+    for (const t of ['users','categories','products','product_units','customers','sales','sale_items','stock_movements','loans','loan_payments','loan_events','loan_reminders','settings']) {
       counts[t] = db.prepare(`SELECT COUNT(*) AS c FROM ${t}`).get().c;
     }
     return { path: file, tables: counts };

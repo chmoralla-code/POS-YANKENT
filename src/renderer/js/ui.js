@@ -27,6 +27,7 @@ App.isService = function (p) {
 };
 
 App.ui = {
+  _modals: new Set(),
   esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   },
@@ -61,13 +62,30 @@ App.ui = {
     </div></div>`);
     root.appendChild(wrap);
     let onClose = null;
-    const close = () => { if (onClose) onClose(); wrap.remove(); };
+    let closed = false;
+    let controller;
+    const close = async () => {
+      if (closed) return;
+      closed = true;
+      try {
+        if (onClose) await onClose();
+      } finally {
+        wrap.remove();
+        App.ui._modals.delete(controller);
+      }
+    };
+    controller = { el: wrap, close, body: wrap.querySelector('.modal-b'), set onClose(fn) { onClose = fn; } };
+    App.ui._modals.add(controller);
     wrap.querySelector('.x').onclick = close;
     // Only close on overlay (outside) click when explicitly allowed — form
     // modals like Edit Product / Adjust Stock opt out so an accidental
     // click outside doesn't discard unsaved edits.
     if (closeOnOverlay) wrap.addEventListener('click', (e) => { if (e.target === wrap) close(); });
-    return { el: wrap, close, body: wrap.querySelector('.modal-b'), set onClose(fn) { onClose = fn; } };
+    return controller;
+  },
+  async closeAllModals() {
+    const modals = [...this._modals].reverse();
+    for (const modal of modals) await modal.close();
   },
   confirm(message, opts = {}) {
     return new Promise((resolve) => {

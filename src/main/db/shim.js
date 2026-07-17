@@ -79,11 +79,20 @@ class Database {
     };
   }
   _markDirty() { if (this._inTx === 0) this._flush(); }
-  _flush() {
-    if (!this.filePath) return;
-    try { fs.writeFileSync(this.filePath, Buffer.from(this._raw.export())); } catch {}
+  flush() {
+    if (!this.filePath) return true;
+    fs.writeFileSync(this.filePath, Buffer.from(this._raw.export()));
+    return true;
   }
-  close() { try { this._flush(); } catch {} try { this._raw.close(); } catch {} }
+  _flush() {
+    try { this.flush(); } catch {}
+  }
+  close(options = {}) {
+    if (options.flush !== false) {
+      try { this._flush(); } catch {}
+    }
+    try { this._raw.close(); } catch {}
+  }
   getRowsModified() { return this._raw.getRowsModified(); }
 }
 

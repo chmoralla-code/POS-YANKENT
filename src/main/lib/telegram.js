@@ -59,7 +59,7 @@ function sendMessage(token, chatId, text) {
       }
     );
     req.on('error', (e) => resolve({ ok: false, error: e.message }));
-    req.on('timeout', () => { req.destroy(); resolve({ ok: false, error: 'timeout' }); });
+    req.on('timeout', () => { req.destroy(); resolve({ ok: false, error: 'timeout', deliveryUncertain: true }); });
     req.write(body);
     req.end();
   });
@@ -113,7 +113,7 @@ function sendDocument(token, chatId, filename, buffer, caption) {
       }
     );
     req.on('error', (e) => resolve({ ok: false, error: e.message }));
-    req.on('timeout', () => { req.destroy(); resolve({ ok: false, error: 'timeout' }); });
+    req.on('timeout', () => { req.destroy(); resolve({ ok: false, error: 'timeout', deliveryUncertain: true }); });
     req.write(body);
     req.end();
   });
@@ -138,7 +138,7 @@ function callApi(token, method, payload) {
       }
     );
     req.on('error', (e) => resolve({ ok: false, error: e.message }));
-    req.on('timeout', () => { req.destroy(); resolve({ ok: false, error: 'timeout' }); });
+    req.on('timeout', () => { req.destroy(); resolve({ ok: false, error: 'timeout', deliveryUncertain: true }); });
     req.write(body);
     req.end();
   });

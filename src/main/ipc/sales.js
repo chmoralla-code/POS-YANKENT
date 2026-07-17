@@ -4,6 +4,12 @@ const { randomUUID } = require('crypto');
 const { computeTotals, round2 } = require('../lib/money');
 const { buildReceipt } = require('../lib/receipt');
 const { buildAnalytics } = require('../lib/telegram');
+const {
+  validateNewDueDate,
+  createSaleLoan,
+  reconcileCustomerCredit,
+  cancelSaleLoan,
+} = require('../lib/loans');
 
 function placeholders(n) { return Array(n).fill('?').join(','); }
 
@@ -31,13 +37,50 @@ function register(ipcMain, ctx) {
   const refundApprovals = new Map();
   const refundApprovalTtlMs = 2 * 60 * 1000;
 
+  // A pending sale may only be completed or voided by the exact authenticated
+  // session that created it. This prevents a delayed renderer continuation
+  // from a logged-out cashier being resumed under the next cashier's token.
+  const pendingSaleOwners = new Map();
+  const assertPendingSaleOwner = (txnId, token) => {
+    const owner = pendingSaleOwners.get(txnId);
+    if (!owner || owner !== token) {
+      const error = new Error('This pending sale belongs to a different or expired session');
+      error.code = 'PENDING_SALE_SESSION';
+      throw error;
+    }
+  };
+  const clearPendingSaleOwners = () => pendingSaleOwners.clear();
+  const discardPendingSalesForToken = (token) => {
+    if (!token) return 0;
+    const txnIds = [...pendingSaleOwners.entries()]
+      .filter(([, owner]) => owner === token)
+      .map(([txnId]) => txnId);
+    if (!txnIds.length) return 0;
+    let removed = 0;
+    db.transaction(() => {
+      const getSale = db.prepare("SELECT id,status FROM sales WHERE txn_id=?");
+      const deleteItems = db.prepare('DELETE FROM sale_items WHERE sale_id=?');
+      const deleteSale = db.prepare('DELETE FROM sales WHERE id=?');
+      for (const txnId of txnIds) {
+        const sale = getSale.get(txnId);
+        if (sale && sale.status === 'pending') {
+          deleteItems.run(sale.id);
+          deleteSale.run(sale.id);
+          removed++;
+        }
+      }
+    })();
+    for (const txnId of txnIds) pendingSaleOwners.delete(txnId);
+    return removed;
+  };
+
   // ---- Create a sale (PENDING — stock not yet deducted) -----------------
   // The sale is recorded with status='pending'.  Stock is NOT deducted,
   // no stock movements are written, and contractor credit is NOT increased
   // until the cashier clicks PRINT on the receipt modal (pos:sales:commit).
   // If the receipt modal is closed without printing, the pending sale is
   // voided (pos:sales:void) and removed entirely.
-  guard(ipcMain, 'pos:sales:create', { auth: true }, ({ session }, payload) => {
+  guard(ipcMain, 'pos:sales:create', { auth: true }, ({ session, token }, payload) => {
     const p = payload || {};
     const items = p.items || [];
     if (!items.length) throw new Error('Cart is empty');
@@ -104,13 +147,20 @@ function register(ipcMain, ctx) {
     }
     const change = paymentMethod === 'cash' ? round2(tendered - totals.total) : 0;
 
-    // Customer / on-account credit
+    // Customer / On-Account credit. A date-only Due Date is persisted on
+    // the pending sale so the Loan can be created atomically at commit time.
     let customer = null;
     if (p.customerId) customer = db.prepare('SELECT * FROM customers WHERE id=?').get(p.customerId);
     const customerName = customer ? customer.name : (p.customerName || 'Walk-in Customer');
+    let dueDate = null;
     if (paymentMethod === 'account') {
-      if (!customer || customer.type !== 'contractor') throw new Error('On-account requires a contractor customer');
-      if (customer.credit_used + totals.total > customer.credit_limit + 1e-9) throw new Error('Exceeds credit limit');
+      if (!customer || customer.type !== 'contractor' || !Number(customer.active)) {
+        throw new Error('On-account requires an active credit customer');
+      }
+      dueDate = validateNewDueDate(p.dueDate);
+      if (Number(customer.credit_used) + totals.total > Number(customer.credit_limit) + 1e-9) {
+        throw new Error('Exceeds credit limit');
+      }
     }
 
     // Stock validation (check sufficient stock up front so the cashier
@@ -140,11 +190,11 @@ function register(ipcMain, ctx) {
 
       const cols = ['txn_id','seq','datetime','cashier_id','cashier_name','customer_id','customer_name',
         'project','po_number','subtotal','vat','discount','delivery_fee','total','payment_method',
-        'amount_tendered','change','reference','status'];
+        'amount_tendered','change','reference','due_date','status'];
       const args = ['PENDING', 0, datetime, session.id, session.full_name, p.customerId || null, customerName,
         p.project || null, p.poNumber || null, totals.subtotal, totals.vat, discount,
         deliveryFee, totals.total, paymentMethod, tendered, change, p.reference || null,
-        'pending'];
+        dueDate, 'pending'];
       const info = db.prepare(`INSERT INTO sales (${cols.join(',')}) VALUES (${placeholders(cols.length)})`).run(...args);
       const saleId = info.lastInsertRowid;
       const seq = saleId;
@@ -161,6 +211,7 @@ function register(ipcMain, ctx) {
       return { saleId, txnId };
     })();
 
+    pendingSaleOwners.set(result.txnId, token);
     const receipt = buildReceipt(db, result.saleId);
     return { ...result, receipt };
   });
@@ -168,10 +219,11 @@ function register(ipcMain, ctx) {
   // ---- Commit a pending sale (PRINT clicked → deduct stock) -------------
   // Deducts stock, writes stock movements, updates contractor credit, and
   // marks the sale status='completed'.  Throws if the sale is not pending.
-  guard(ipcMain, 'pos:sales:commit', { auth: true }, ({ session }, txnId) => {
+  guard(ipcMain, 'pos:sales:commit', { auth: true }, ({ session, token }, txnId) => {
     const sale = db.prepare('SELECT * FROM sales WHERE txn_id=?').get(txnId);
     if (!sale) throw new Error('Sale not found: ' + txnId);
     if (sale.status !== 'pending') throw new Error('Sale is not pending (already ' + sale.status + ')');
+    assertPendingSaleOwner(txnId, token);
     const items = db.prepare('SELECT * FROM sale_items WHERE sale_id=? ORDER BY id').all(sale.id);
 
     // Re-validate stock at commit time — another sale may have been
@@ -189,9 +241,13 @@ function register(ipcMain, ctx) {
       // Credit may have changed after this pending sale was created. Check it
       // again at commit time before stock or balances are mutated.
       if (sale.payment_method === 'account') {
-        const customer = db.prepare('SELECT type, credit_limit, credit_used FROM customers WHERE id=?').get(sale.customer_id);
-        if (!customer || customer.type !== 'contractor') throw new Error('On-account customer is no longer available');
-        if (customer.credit_used + sale.total > customer.credit_limit + 1e-9) throw new Error('Exceeds credit limit');
+        const customer = db.prepare('SELECT type,active,credit_limit,credit_used FROM customers WHERE id=?').get(sale.customer_id);
+        if (!customer || customer.type !== 'contractor' || !Number(customer.active)) {
+          throw new Error('On-account customer is no longer available');
+        }
+        if (Number(customer.credit_used) + Number(sale.total) > Number(customer.credit_limit) + 1e-9) {
+          throw new Error('Exceeds credit limit');
+        }
       }
       const decStock = db.prepare('UPDATE products SET stock = stock - ? WHERE id=?');
       const movStmt = db.prepare('INSERT INTO stock_movements(product_id,movement,qty_change,reason,user_id) VALUES(?,?,?,?,?)');
@@ -200,12 +256,14 @@ function register(ipcMain, ctx) {
         decStock.run(it.stock_consumed, it.product_id);
         movStmt.run(it.product_id, 'sale', -it.stock_consumed, 'Sale ' + txnId, session.id);
       }
-      if (sale.payment_method === 'account' && sale.customer_id) {
-        db.prepare('UPDATE customers SET credit_used = credit_used + ? WHERE id=?').run(sale.total, sale.customer_id);
-      }
       db.prepare("UPDATE sales SET status='completed' WHERE id=?").run(sale.id);
+      if (sale.payment_method === 'account' && sale.customer_id) {
+        createSaleLoan(db, sale, session);
+        reconcileCustomerCredit(db, sale.customer_id);
+      }
     })();
 
+    pendingSaleOwners.delete(txnId);
     return { ok: true, txnId, status: 'completed' };
   });
 
@@ -213,15 +271,17 @@ function register(ipcMain, ctx) {
   // Deletes the pending sale and its items.  No stock was deducted at
   // create time, so nothing needs to be restocked.  Completed sales cannot
   // be voided (use the refund flow instead).
-  guard(ipcMain, 'pos:sales:void', { auth: true }, (_c, txnId) => {
+  guard(ipcMain, 'pos:sales:void', { auth: true }, ({ token }, txnId) => {
     const sale = db.prepare('SELECT id FROM sales WHERE txn_id=?').get(txnId);
     if (!sale) throw new Error('Sale not found: ' + txnId);
     const cur = db.prepare('SELECT status FROM sales WHERE id=?').get(sale.id);
     if (cur.status !== 'pending') throw new Error('Cannot void a ' + cur.status + ' sale (use refund instead)');
+    assertPendingSaleOwner(txnId, token);
     db.transaction(() => {
       db.prepare('DELETE FROM sale_items WHERE sale_id=?').run(sale.id);
       db.prepare('DELETE FROM sales WHERE id=?').run(sale.id);
     })();
+    pendingSaleOwners.delete(txnId);
     return { ok: true, txnId };
   });
 
@@ -331,13 +391,11 @@ function register(ipcMain, ctx) {
         }
       }
 
-      // If on-account, reduce credit_used — but only if the customer still
-      // exists.  (Edge case: customer deleted between sale and refund.  The
-      // UPDATE matches no row and silently no-ops; log it so it isn't a
-      // silent data inconsistency.)
+      // Cancel only the linked Loan's remaining balance. Prior payments stay
+      // visible for audit, and the customer aggregate is reconciled from all
+      // other open Loans so a refund can never create a negative balance.
       if (sale.payment_method === 'account' && sale.customer_id) {
-        const info = db.prepare('UPDATE customers SET credit_used = MAX(0, credit_used - ?) WHERE id=?').run(sale.total, sale.customer_id);
-        if (info.changes === 0) console.warn('[refund] customer id=' + sale.customer_id + ' not found for credit adjustment on ' + txnId);
+        cancelSaleLoan(db, sale.id, { id: adminId, full_name: adminName }, reason);
       }
 
       // Create refund record — use the autoincrement id for the refund txn id.
@@ -495,32 +553,38 @@ function register(ipcMain, ctx) {
   });
 
   // ---- Reset all sales (admin) -----------------------------------------
-  // Wipes sales, sale_items, refunds, and stock_movements while preserving
-  // users, products, customers, categories, and settings. Recomputes product
-  // stock to zero for stock-bearing products.
+  // Wipes sales and all dependent stock/refund/Loan ledger history while
+  // preserving users, products, customer profiles, categories, and settings.
   guard(ipcMain, 'pos:sales:reset', { admin: true }, () => {
+    // A destructive reset must not remove/reuse Loan ids while an asynchronous
+    // Telegram delivery is in flight; ask the administrator to retry instead.
+    require('../lib/loan-reminders').assertLoanReminderRunIdle('reset sales');
     const tx = db.transaction(() => {
-      // Delete in FK-safe order (children first).
+      // Delete in explicit child-first order because the sql.js shim cannot
+      // be relied on to enforce every foreign-key cascade.
+      db.exec('DELETE FROM loan_reminders;');
+      db.exec('DELETE FROM loan_events;');
+      db.exec('DELETE FROM loan_payments;');
+      db.exec('DELETE FROM loans;');
       db.exec('DELETE FROM sale_items;');
       db.exec('DELETE FROM refunds;');
       db.exec('DELETE FROM stock_movements;');
       db.exec('DELETE FROM sales;');
-      // Reset autoincrement counters for the wiped tables.
-      db.prepare('DELETE FROM sqlite_sequence WHERE name IN (?,?,?,?)')
-        .run('sales', 'sale_items', 'refunds', 'stock_movements');
-      // Recompute product stock: no movements means zero consumed, but stock
-      // is the source-of-truth column on products. Reset stock-bearing products
-      // to 0 since all movements (the audit trail) were wiped.
+      const resetTables = [
+        'loan_reminders','loan_events','loan_payments','loans',
+        'sales','sale_items','refunds','stock_movements',
+      ];
+      db.prepare(`DELETE FROM sqlite_sequence WHERE name IN (${resetTables.map(() => '?').join(',')})`)
+        .run(...resetTables);
       db.prepare("UPDATE products SET stock = 0 WHERE is_service = 0 OR is_service IS NULL").run();
-      // Reset contractor credit accounts — all sales that generated
-      // credit_used were deleted, so the balances are now meaningless.
-      // Without this, contractor "credit used" stays inflated after a wipe
-      // and the available credit is permanently understated.
-      db.prepare("UPDATE customers SET credit_used = 0").run();
+      db.prepare("UPDATE customers SET credit_used = 0,updated_at=datetime('now')").run();
     });
     tx();
+    clearPendingSaleOwners();
     return { ok: true };
   });
+
+  return { discardPendingSalesForToken, clearPendingSaleOwners };
 }
 
 function lowerFirst(s) {
