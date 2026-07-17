@@ -246,9 +246,10 @@ function Get-PublishedStableReleaseVersions([string]$Owner, [string]$Repository)
     if ($page -gt 1000) { Fail 'GitHub release pagination exceeded its safety limit.' }
     $uri = "https://api.github.com/repos/$safeOwner/$safeRepo/releases?per_page=100&page=$page"
     try {
-      $releases = @(
-        Invoke-RestMethod -Method Get -Uri $uri -Headers $headers -UseBasicParsing -TimeoutSec 30 -ErrorAction Stop
-      )
+      $releaseResponse = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers -UseBasicParsing -TimeoutSec 30 -ErrorAction Stop
+      # Windows PowerShell 5.1 can preserve the REST response as one nested
+      # Object[] here. Force pipeline enumeration so each release is checked.
+      $releases = @($releaseResponse | ForEach-Object { $_ })
     } catch {
       Fail "Could not query all stable GitHub releases from the public REST API. Refusing to release without a monotonic version check. $($_.Exception.Message)"
     }
