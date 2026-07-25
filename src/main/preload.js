@@ -167,7 +167,6 @@ contextBridge.exposeInMainWorld('pos', {
     byCashier: (f) => call('pos:reports:byCashier', f || {}),
     salesByDay: (f) => call('pos:reports:salesByDay', f || {}),
     analytics: () => call('pos:reports:analytics'),
-    expensesRoi: (f) => call('pos:reports:expensesRoi', f || {}),
     exportCSV: (type, f) => call('pos:reports:exportCSV', type, f || {}),
   },
 

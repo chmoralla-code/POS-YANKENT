@@ -754,7 +754,7 @@ App._start = async function () {
 App._navigate = async function (name) {
   if (!App.views[name]) return;
   // Role guard: cashiers cannot open admin views.
-  const adminOnlyViews = new Set(['products', 'users', 'reports', 'expenses', 'settings']);
+  const adminOnlyViews = new Set(['products', 'users', 'reports', 'earnings', 'settings']);
   if (adminOnlyViews.has(name) && App.current.user.role !== 'admin') {
     App.ui.toast('Administrator access required', 'err'); return;
   }

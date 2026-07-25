@@ -101,6 +101,20 @@ function migrate(db) {
   addColumn('sales', 'due_date', 'TEXT');
   db.exec('CREATE INDEX IF NOT EXISTS idx_customers_credit_active ON customers(type,active,name)');
 
+  // Early releases shipped example customer accounts. Remove only untouched
+  // seed signatures before aggregate balances are converted into Loan rows;
+  // genuine client activity causes the cleanup helper to preserve the row.
+  const { removeLegacyDemoCustomers } = require('./seed');
+  const demoCleanup = removeLegacyDemoCustomers(db);
+  if (demoCleanup.snapshotError) {
+    console.warn(`[db] Legacy demo customer cleanup skipped: ${demoCleanup.snapshotError}`);
+  } else if (demoCleanup.persistenceError) {
+    console.warn(`[db] Legacy demo customer cleanup was not durably saved: ${demoCleanup.persistenceError}`);
+  } else if (demoCleanup.removed) {
+    const backupNote = demoCleanup.backupPath ? ` Backup: ${demoCleanup.backupPath}` : '';
+    console.log(`[db] Removed ${demoCleanup.removed} legacy demo customer account(s).${backupNote}`);
+  }
+
   // ---- loan_reminders: terminal delivery-uncertain state ---------------
   // Graceful shutdown can begin after Telegram accepted a request but before
   // its response arrives. Preserve that ambiguity durably and never retry the
@@ -169,6 +183,9 @@ const SETTINGS_DEFAULTS = {
   telegram_token: '',
   telegram_chat_id: '',
   telegram_enabled: '0',
+  // Owner-entered store expenses for the simple Analytics earnings card.
+  // Earnings = this month's sales − this value (beginner-friendly, one blank).
+  analytics_total_expenses: '0',
   app_version: '1',
   session_idle_timeout: '15', // minutes; 0 = disabled (not recommended)
 };

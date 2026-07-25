@@ -100,6 +100,12 @@ function importAll(db, data) {
       }
     }
 
+    // Old backups can contain the customer examples shipped by the original
+    // release. Remove untouched examples before preserving imported balances;
+    // restored client-created profiles and any real account activity remain.
+    const { removeLegacyDemoCustomers } = require('./db/seed');
+    removeLegacyDemoCustomers(db, { transactional: false, snapshot: false });
+
     // Keep restore, legacy migration, and aggregate reconciliation in one
     // transaction. Any validation/migration failure therefore rolls the
     // destructive wipe back to the exact pre-import database.
@@ -107,6 +113,9 @@ function importAll(db, data) {
   });
   try {
     tx();
+    // The shim's transaction flush is intentionally best-effort. Verify the
+    // restored database reached disk before reporting import success.
+    db.flush();
   } finally {
     db.pragma('foreign_keys = ON');
   }
