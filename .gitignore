@@ -5,6 +5,7 @@ data/**/*.sqlite
 data/**/*.sqlite-shm
 data/**/*.sqlite-wal
 data/**/*.yankent
+data/**/*.xlsx
 data/backups/
 *.bak
 *.log
