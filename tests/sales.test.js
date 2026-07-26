@@ -315,6 +315,41 @@ test('sale lines use authoritative catalog price, unit factor, and product type'
   t.api.close();
 });
 
+test('open-price catalog items accept cashier unitPrice; fixed prices stay locked', async () => {
+  const t = await setup();
+  const { api, cashierSession } = t;
+  const catId = api.db.prepare('SELECT id FROM categories ORDER BY id LIMIT 1').get().id;
+  const openId = Number(api.db.prepare(
+    `INSERT INTO products(sku,name,category_id,base_unit,stock,cost,price,low_stock_threshold,is_service,active)
+     VALUES(?,?,?,?,?,?,?,?,0,1)`
+  ).run('OPEN-001', 'Open Price Pipe', catId, 'pcs', 50, 0, 0, 5).lastInsertRowid);
+  api.db.prepare('INSERT INTO product_units(product_id,unit,factor,price) VALUES(?,?,?,?)')
+    .run(openId, 'pcs', 1, 0);
+
+  const res = await api.call('pos:sales:create', cashierSession, {
+    items: [{ productId: openId, unit: 'pcs', qty: 2, unitPrice: 175 }],
+    paymentMethod: 'cash', amountTendered: 350,
+  });
+  const item = api.db.prepare('SELECT * FROM sale_items WHERE sale_id=?').get(res.saleId);
+  assert.equal(item.unit_price, 175);
+  assert.equal(item.amount, 350);
+  assert.equal(res.receipt.total, 350);
+
+  await assert.rejects(() => api.call('pos:sales:create', cashierSession, {
+    items: [{ productId: openId, unit: 'pcs', qty: 1, unitPrice: 0 }],
+    paymentMethod: 'cash', amountTendered: 1,
+  }), /Enter a price/);
+
+  const cement = api.db.prepare('SELECT * FROM products WHERE sku=?').get('CMT-001');
+  const locked = await api.call('pos:sales:create', cashierSession, {
+    items: [{ productId: cement.id, unit: 'bag', qty: 1, unitPrice: 1 }],
+    paymentMethod: 'cash', amountTendered: 280,
+  });
+  const lockedItem = api.db.prepare('SELECT * FROM sale_items WHERE sale_id=?').get(locked.saleId);
+  assert.equal(lockedItem.unit_price, 280);
+  t.api.close();
+});
+
 test('on-account credit is rechecked when a pending sale is committed', async () => {
   const t = await setup();
   const { api, cement, contractor, cashierSession } = t;

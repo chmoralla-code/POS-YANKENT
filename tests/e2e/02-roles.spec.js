@@ -4,7 +4,7 @@ const { test, expect } = require('@playwright/test');
 const { launchApp, login } = require('./helpers');
 
 test.describe('Role-Based Access', () => {
-  test('cashier sees only POS and Analytics', async () => {
+  test('cashier sees POS, Analytics, and restricted Products & Inventory', async () => {
     const { electron, page } = await launchApp();
     try {
       await login(page, 'cashier', 'cashier123');
@@ -15,8 +15,10 @@ test.describe('Role-Based Access', () => {
       await expect(page.locator('#navRole')).toHaveText('Cashier');
       // Analytics visible
       await expect(page.locator('.nav-item[data-view="analytics"]')).toBeVisible();
+      // Products & Inventory is available in its cashier-safe mode.
+      await expect(page.locator('.nav-item[data-view="products"]')).toBeVisible();
+      await expect(page.locator('.nav-item[data-view="products"]')).not.toHaveClass(/hidden/);
       // Admin items hidden
-      await expect(page.locator('.nav-item[data-view="products"]')).toHaveClass(/hidden/);
       await expect(page.locator('.nav-item[data-view="users"]')).toHaveClass(/hidden/);
       await expect(page.locator('.nav-item[data-view="reports"]')).toHaveClass(/hidden/);
       await expect(page.locator('.nav-item[data-view="settings"]')).toHaveClass(/hidden/);

@@ -148,7 +148,16 @@ function register(ipcMain, ctx) {
       const requestedUnit = String(i.unit || product.base_unit || '').trim();
       const sellUnit = unitStmt.get(productId, requestedUnit);
       if (!sellUnit) throw new Error(`Invalid unit for ${product.name}: ${requestedUnit || '(empty)'}`);
-      const unitPrice = nonNegativeNumber(sellUnit.price, 'unit price');
+      const catalogPrice = nonNegativeNumber(sellUnit.price, 'unit price');
+      // Open-price items (catalog price ₱0) may be priced by the cashier at
+      // sale time. Fixed catalog prices stay authoritative.
+      let unitPrice = catalogPrice;
+      if (catalogPrice === 0) {
+        unitPrice = nonNegativeNumber(i.unitPrice ?? 0, 'unit price');
+        if (!(unitPrice > 0)) {
+          throw new Error(`Enter a price for ${product.name}`);
+        }
+      }
       const factor = Number(sellUnit.factor);
       if (!Number.isFinite(factor) || factor <= 0) throw new Error(`Invalid stock factor for ${product.name}`);
       const isService = !!product.is_service;

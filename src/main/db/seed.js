@@ -7,8 +7,11 @@ const LEGACY_DEMO_CLEANUP_SETTING = 'legacy_demo_customers_removed_v1';
 const NEWLY_ADDED_ITEMS_CATEGORY = 'Newly Added Items';
 // Bump when a new handwritten inventory page is added so existing DBs re-run
 // the inserter (it skips names already present in this category).
-const NEWLY_ADDED_ITEMS_SETTING = 'newly_added_items_catalog_v2';
-const NEWLY_ADDED_ITEMS_COUNT = 46;
+const NEWLY_ADDED_ITEMS_SETTING = 'newly_added_items_catalog_v20';
+const NEWLY_ADDED_ITEMS_COUNT = 1592;
+const NEWLY_ADDED_ITEMS_UNIT_PRICE_FIX = 'newly_added_items_unit_price_v1';
+const NEWLY_ADDED_ITEMS_NOTEBOOK1_REMOVED = 'newly_added_items_notebook1_removed_v1';
+const NEWLY_ADDED_ITEMS_RECOUNT_V1 = 'newly_added_items_recount_v9';
 const PRODUCT_CATALOG_PATH = path.join(
   __dirname,
   '..',
@@ -97,12 +100,236 @@ function getNewlyAddedItems(catalog = readProductCatalog()) {
 }
 
 /**
- * Add the July 2026 inventory batch to an existing database exactly once.
+ * Soft-delete notebook folder "1" inventory (NAI-071+) from existing installs.
+ */
+function removeNotebook1NewlyAddedItems(db) {
+  const marker = db.prepare('SELECT value FROM settings WHERE key=?')
+    .get(NEWLY_ADDED_ITEMS_NOTEBOOK1_REMOVED);
+  if (marker) return { removed: 0, alreadyRun: true };
+
+  let removed = 0;
+  db.transaction(() => {
+    const rows = db.prepare('SELECT id, sku FROM products WHERE active=1').all()
+      .filter((row) => {
+        const m = /^NAI-(\d+)$/.exec(String(row.sku || ''));
+        return m && Number(m[1]) >= 71;
+      });
+    const soft = db.prepare('UPDATE products SET active=0 WHERE id=?');
+    for (const row of rows) {
+      soft.run(row.id);
+      removed++;
+    }
+    db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)')
+      .run(NEWLY_ADDED_ITEMS_NOTEBOOK1_REMOVED, '1');
+  })();
+  return { removed, alreadyRun: false };
+}
+
+/**
+ * Apply later notebook recounts to items already present under the same name.
+ * Runs once even when the main catalog marker already applied.
+ */
+function applyNewlyAddedRecount(db) {
+  const marker = db.prepare('SELECT value FROM settings WHERE key=?').get(NEWLY_ADDED_ITEMS_RECOUNT_V1);
+  if (marker) return { applied: false, alreadyRun: true };
+
+  const fixes = [
+    { sku: 'NAI-289', stock: 18, price: 95 },
+    { sku: 'NAI-295', stock: 136, price: 56 },
+    { sku: 'NAI-557', stock: 50, price: 15 },
+    { sku: 'NAI-377', stock: 16, price: 130 },
+    { sku: 'NAI-013', stock: 28, price: 60 },
+    { sku: 'NAI-016', stock: 26, price: 50 },
+    { sku: 'NAI-015', stock: 5, price: 25 },
+    { sku: 'NAI-014', stock: 15, price: 35 },
+    { sku: 'NAI-035', stock: 1, price: 995 },
+    { sku: 'NAI-062', stock: 2, price: 0 },
+    { sku: 'NAI-026', stock: 1, price: 165 },
+    { sku: 'NAI-025', stock: 3, price: 242 },
+    { sku: 'NAI-024', stock: 5, price: 198 },
+    { sku: 'NAI-027', stock: 5, price: 523 },
+    { sku: 'NAI-030', stock: 1, price: 325 },
+    { sku: 'NAI-032', stock: 4, price: 265 },
+    { sku: 'NAI-031', stock: 6, price: 310 },
+    { sku: 'NAI-029', stock: 6, price: 215 },
+    { sku: 'NAI-022', stock: 5, price: 145 },
+    { sku: 'NAI-021', stock: 24, price: 245 },
+    { sku: 'NAI-039', stock: 207, price: 35 },
+    { sku: 'NAI-041', stock: 13, price: 30 },
+    { sku: 'NAI-006', stock: 2, price: 50 },
+    { sku: 'NAI-068', stock: 18, price: 0 },
+    { sku: 'NAI-070', stock: 16, price: 0 },
+    { sku: 'NAI-069', stock: 2, price: 0 },
+    { sku: 'NAI-045', stock: 2, price: 720 },
+    { sku: 'NAI-001', stock: 12, price: 75 },
+    { sku: 'NAI-050', stock: 24, price: 5 },
+    { sku: 'NAI-051', stock: 24, price: 3 },
+    { sku: 'NAI-049', stock: 24, price: 8 },
+    { sku: 'NAI-023', stock: 12, price: 60 },
+    { sku: 'NAI-011', stock: 1, price: 85 },
+    { sku: 'NAI-004', stock: 2, price: 140 },
+    { sku: 'NAI-005', stock: 7, price: 41 },
+    { sku: 'NAI-028', stock: 2, price: 250 },
+    { sku: 'NAI-040', stock: 8, price: 35 },
+    { sku: 'NAI-038', stock: 145, price: 50 },
+    { sku: 'NAI-042', stock: 5, price: 900 },
+    { sku: 'NAI-046', stock: 3, price: 720 },
+    { sku: 'NAI-017', stock: 45, price: 40 },
+    { sku: 'NAI-018', stock: 4, price: 25 },
+    { sku: 'NAI-019', stock: 50, price: 30 },
+    { sku: 'NAI-037', stock: 292, price: 2 },
+    { sku: 'NAI-047', stock: 26, price: 20 },
+    { sku: 'NAI-048', stock: 7, price: 25 },
+    { sku: 'NAI-060', stock: 4, price: 0 },
+    { sku: 'NAI-034', stock: 6, price: 250 },
+    { sku: 'NAI-002', stock: 2, price: 105 },
+    { sku: 'NAI-012', stock: 61, price: 180 },
+    { sku: 'NAI-003', stock: 33, price: 120 },
+    { sku: 'NAI-009', stock: 65, price: 180 },
+    { sku: 'NAI-007', stock: 15, price: 80 },
+    { sku: 'NAI-008', stock: 1, price: 90 },
+    { sku: 'NAI-058', stock: 8, price: 85 },
+    { sku: 'NAI-064', stock: 9, price: 285 },
+    { sku: 'NAI-061', stock: 12, price: 0 },
+    { sku: 'NAI-063', stock: 32, price: 285 },
+    { sku: 'NAI-044', stock: 5, price: 360 },
+    { sku: 'NAI-043', stock: 7, price: 470 },
+    { sku: 'NAI-294', stock: 50, price: 45 },
+    { sku: 'NAI-325', stock: 50, price: 0 },
+    { sku: 'NAI-293', stock: 50, price: 0 },
+    { sku: 'NAI-748', stock: 24, price: 35 },
+    { sku: 'NAI-1001', stock: 300, price: 30 },
+    { sku: 'NAI-242', stock: 7, price: 70 },
+    { sku: 'NAI-900', stock: 10, price: 0 },
+    { sku: 'NAI-898', stock: 1, price: 0 },
+    { sku: 'NAI-895', stock: 1, price: 0 },
+    { sku: 'NAI-899', stock: 35, price: 0 },
+    { sku: 'NAI-1261', stock: 8, price: 200 },
+    { sku: 'NAI-1316', stock: 17, price: 85 },
+    { sku: 'NAI-950', stock: 1, price: 55 },
+    { sku: 'NAI-881', stock: 1, price: 15 },
+    { sku: 'NAI-862', stock: 10, price: 0 },
+    { sku: 'NAI-956', stock: 8, price: 185 },
+    { sku: 'NAI-235', stock: 62, price: 25 },
+    { sku: 'NAI-861', stock: 152, price: 0 },
+    { sku: 'NAI-897', stock: 25, price: 0 },
+    { sku: 'NAI-892', stock: 9, price: 0 },
+    // Suspicious overprice / swapped-size corrections (2026 catalog review)
+    { sku: 'NAI-1350', stock: 1400, price: 2 },
+    { sku: 'NAI-1351', stock: 1250, price: 2 },
+    { sku: 'NAI-1737', stock: 12, price: 30 },
+    { sku: 'NAI-1239', stock: 4, price: 105, unit: 'cans' },
+    { sku: 'NAI-1492', stock: 2, price: 60 },
+    { sku: 'NAI-1493', stock: 4, price: 450 },
+    { sku: 'NAI-1460', stock: 4, price: 80 },
+    { sku: 'NAI-1461', stock: 4, price: 50 },
+    { sku: 'NAI-1642', stock: 3, price: 0 },
+    { sku: 'NAI-1424', stock: 12, price: 10 },
+  ];
+
+  let updated = 0;
+  db.transaction(() => {
+    const find = db.prepare('SELECT id, stock FROM products WHERE sku=? AND active=1');
+    const upd = db.prepare('UPDATE products SET stock=?, price=? WHERE id=?');
+    const updWithUnit = db.prepare('UPDATE products SET stock=?, price=?, base_unit=? WHERE id=?');
+    const updUnit = db.prepare('UPDATE product_units SET price=? WHERE product_id=?');
+    const updUnitWithName = db.prepare('UPDATE product_units SET unit=?, price=? WHERE product_id=?');
+    const move = db.prepare(
+      'INSERT INTO stock_movements(product_id,movement,qty_change,reason,user_id) VALUES(?,?,?,?,NULL)'
+    );
+    for (const fix of fixes) {
+      const row = find.get(fix.sku);
+      if (!row) continue;
+      const delta = Number(fix.stock) - Number(row.stock);
+      if (fix.unit) {
+        updWithUnit.run(fix.stock, fix.price, fix.unit, row.id);
+        updUnitWithName.run(fix.unit, fix.price, row.id);
+      } else {
+        upd.run(fix.stock, fix.price, row.id);
+        updUnit.run(fix.price, row.id);
+      }
+      if (delta !== 0) {
+        move.run(row.id, 'adjustment', delta, 'Newly Added Items recount');
+      }
+      updated++;
+    }
+    db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)')
+      .run(NEWLY_ADDED_ITEMS_RECOUNT_V1, '1');
+  })();
+  return { applied: updated > 0, alreadyRun: false, updated };
+}
+
+/**
+ * Convert pack-priced fasteners / tox to ₱1 per piece with piece-level stock.
+ * Runs once even when the main catalog marker already applied.
+ */
+function applyNewlyAddedUnitPriceFix(db) {
+  const marker = db.prepare('SELECT value FROM settings WHERE key=?').get(NEWLY_ADDED_ITEMS_UNIT_PRICE_FIX);
+  if (marker) return { applied: false, alreadyRun: true };
+
+  const fixes = [
+    { sku: 'NAI-207', name: 'Tox 1.00', stock: 0, price: 1 },
+    { sku: 'NAI-208', name: 'Blackscrew Wood', stock: 800, price: 1 },
+    { sku: 'NAI-209', name: 'Blackscrew Wood 1 1/2', stock: 3000, price: 1 },
+    { sku: 'NAI-210', name: 'Black Screw Wood 2', stock: 1000, price: 1 },
+    { sku: 'NAI-211', name: 'Blackscrew 1 Metal', stock: 600, price: 1 },
+    { sku: 'NAI-212', name: 'Blackscrew 1 1/2 Metal', stock: 700, price: 1 },
+    { sku: 'NAI-213', name: 'Fanhead', stock: 700, price: 1 },
+    { sku: 'NAI-214', name: 'Blackscrew Metal 2', stock: 700, price: 1 },
+    { sku: 'NAI-215', name: 'Hardscrew 3/4', stock: 600, price: 1 },
+  ];
+
+  let updated = 0;
+  db.transaction(() => {
+    const find = db.prepare('SELECT id, stock FROM products WHERE sku=?');
+    const upd = db.prepare(
+      'UPDATE products SET name=?, stock=?, price=?, base_unit=? WHERE id=?'
+    );
+    const delUnits = db.prepare('DELETE FROM product_units WHERE product_id=?');
+    const insUnit = db.prepare(
+      'INSERT INTO product_units(product_id,unit,factor,price) VALUES(?,?,?,?)'
+    );
+    const insMovement = db.prepare(
+      'INSERT INTO stock_movements(product_id,movement,qty_change,reason,user_id) VALUES(?,?,?,?,NULL)'
+    );
+
+    for (const fix of fixes) {
+      const row = find.get(fix.sku);
+      if (!row) continue;
+      const previousStock = Number(row.stock) || 0;
+      upd.run(fix.name, fix.stock, fix.price, 'pcs', row.id);
+      delUnits.run(row.id);
+      insUnit.run(row.id, 'pcs', 1, fix.price);
+      const delta = fix.stock - previousStock;
+      if (delta !== 0) {
+        insMovement.run(
+          row.id,
+          delta > 0 ? 'restock' : 'adjust',
+          delta,
+          'Unit price fix: sell per piece at ₱1'
+        );
+      }
+      updated++;
+    }
+
+    db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)')
+      .run(NEWLY_ADDED_ITEMS_UNIT_PRICE_FIX, '1');
+  })();
+
+  return { applied: true, alreadyRun: false, updated };
+}
+
+/**
+ * Add the handwritten inventory batches to an existing database exactly once.
  *
  * Existing names are preserved rather than overwritten, and the settings
  * marker prevents later user edits or deletions from being undone at startup.
  */
 function ensureNewlyAddedItems(db) {
+  applyNewlyAddedUnitPriceFix(db);
+  removeNotebook1NewlyAddedItems(db);
+  applyNewlyAddedRecount(db);
+
   const marker = db.prepare('SELECT value FROM settings WHERE key=?').get(NEWLY_ADDED_ITEMS_SETTING);
   if (marker) return { inserted: 0, skipped: 0, alreadyRun: true };
 
@@ -121,11 +348,13 @@ function ensureNewlyAddedItems(db) {
     }
     categoryId = category.id;
 
-    // Only skip names already in this category so a second inventory page can
-    // still be added even when a similar product exists elsewhere.
+    // Only skip active names already in this category so later inventory pages
+    // can still add an item even when a similar product exists elsewhere.
+    // Soft-deleted rows (e.g. prior notebook cleanup) must not block re-adds.
     const findName = db.prepare(
-      'SELECT id FROM products WHERE category_id=? AND TRIM(name)=? COLLATE NOCASE LIMIT 1'
+      'SELECT id FROM products WHERE category_id=? AND active=1 AND TRIM(name)=? COLLATE NOCASE LIMIT 1'
     );
+    // SKUs are unique across active and inactive rows — always avoid collisions.
     const findSku = db.prepare('SELECT id FROM products WHERE sku=?');
     const insertProduct = db.prepare(
       `INSERT INTO products(sku,name,category_id,base_unit,stock,cost,price,low_stock_threshold,is_service,active)
@@ -453,6 +682,12 @@ function seedDatabase(db) {
 
     db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)')
       .run(NEWLY_ADDED_ITEMS_SETTING, '1');
+    db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)')
+      .run(NEWLY_ADDED_ITEMS_UNIT_PRICE_FIX, '1');
+    db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)')
+      .run(NEWLY_ADDED_ITEMS_NOTEBOOK1_REMOVED, '1');
+    db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)')
+      .run(NEWLY_ADDED_ITEMS_RECOUNT_V1, '1');
   });
 
   tx();
@@ -466,4 +701,8 @@ module.exports = {
   LEGACY_DEMO_CLEANUP_SETTING,
   NEWLY_ADDED_ITEMS_CATEGORY,
   NEWLY_ADDED_ITEMS_SETTING,
+  NEWLY_ADDED_ITEMS_COUNT,
+  NEWLY_ADDED_ITEMS_UNIT_PRICE_FIX,
+  NEWLY_ADDED_ITEMS_NOTEBOOK1_REMOVED,
+  NEWLY_ADDED_ITEMS_RECOUNT_V1,
 };

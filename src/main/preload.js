@@ -114,6 +114,7 @@ contextBridge.exposeInMainWorld('pos', {
     update: (id, p) => call('pos:products:update', id, p),
     setCost: (id, cost) => call('pos:products:setCost', id, cost),
     setStock: (id, stock, reason, date, location) => call('pos:products:setStock', id, stock, reason, date, location),
+    updateOpenDetails: (id, p) => call('pos:products:updateOpenDetails', id, p || {}),
     delete: (id) => call('pos:products:delete', id),
     deleteAll: () => call('pos:products:deleteAll'),
     bulkImport: (items) => call('pos:products:bulkImport', items),

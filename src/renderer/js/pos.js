@@ -206,33 +206,40 @@ App.views.pos = {
     el.hidden = !open;
     if (!open) return;
     const cats = this.cache.categories;
-    const all = `<button type="button" class="chip ${this.state.cat === 'all' ? 'active' : ''}" data-cat="all" aria-pressed="${this.state.cat === 'all'}">All</button>`;
+    const productsOnly = (this.cache.products || []).filter((p) => !App.isService(p));
+    const all = `<button type="button" class="chip ${this.state.cat === 'all' ? 'active' : ''}" data-cat="all" aria-pressed="${this.state.cat === 'all'}">All <span class="muted" style="font-weight:400">(${productsOnly.length})</span></button>`;
     el.innerHTML = all + cats.map((c) => {
       const col = App.catColor(c.name);
       const isActive = this.state.cat === c.name;
-      return `<button type="button" class="chip ${isActive ? 'active' : ''}" data-cat="${App.ui.esc(c.name)}" aria-pressed="${isActive}" style="${isActive ? `background:${col};border-color:${col}` : `border-left:3px solid ${col}`}">${App.ui.esc(c.name)}</button>`;
+      const count = productsOnly.filter((p) => p.category === c.name).length;
+      return `<button type="button" class="chip ${isActive ? 'active' : ''}" data-cat="${App.ui.esc(c.name)}" aria-pressed="${isActive}" style="${isActive ? `background:${col};border-color:${col}` : `border-left:3px solid ${col}`}">${App.ui.esc(c.name)} <span style="font-weight:400;opacity:.7">${count}</span></button>`;
     }).join('');
     el.querySelectorAll('.chip').forEach((ch) => ch.onclick = () => { this.state.cat = ch.dataset.cat; this._renderChips(); this._renderGrid(); });
   },
 
   _cardHtml(p) {
     const def = (p.units && p.units[0]) || { unit: p.base_unit || 'svc', price: p.price, factor: 1 };
+    const openPrice = this._isOpenPrice(p, def.unit);
+    const priceText = openPrice ? 'Set price' : App.ui.money(def.price);
+    const priceAria = openPrice ? 'price set at sale' : `${App.ui.money(def.price)} per ${def.unit}`;
     if (this.state.tab === 'products' && !App.isService(p)) {
       const low = p.stock <= (p.low || 10);
       const out = p.stock <= 0;
       const col = App.catColor(p.category);
+      // Open-price items stay clickable when out of stock so cashiers can set stock.
+      const disabled = out && !openPrice;
       const cls = out ? 'out-of-stock' : 'in-stock';
       const stockLabel = out ? 'out of stock' : `stock ${App.ui.qty(p.stock)} ${p.base_unit}`;
-      return `<button type="button" class="prod-card ${cls}" data-id="${p.id}" style="border-left:4px solid ${col}" title="${App.ui.esc(p.name)}" aria-label="${App.ui.esc(`${p.name}, ${App.ui.money(def.price)} per ${def.unit}, ${stockLabel}`)}"${out ? ' disabled aria-disabled="true"' : ''}>
+      return `<button type="button" class="prod-card ${cls}${openPrice ? ' open-price' : ''}" data-id="${p.id}" style="border-left:4px solid ${col}" title="${App.ui.esc(p.name)}" aria-label="${App.ui.esc(`${p.name}, ${priceAria}, ${stockLabel}`)}"${disabled ? ' disabled aria-disabled="true"' : ''}>
         <div class="nm">${App.ui.esc(p.name)}</div>
-        <div class="pr">${App.ui.money(def.price)} <small>/${App.ui.esc(def.unit)}</small></div>
-        <div class="stk ${out ? 'low' : low ? 'low' : ''}">${out ? 'OUT OF STOCK' : 'Stock: ' + App.ui.qty(p.stock) + ' ' + App.ui.esc(p.base_unit)}${(!out && p.units && p.units.length > 1) ? ' · ' + p.units.length + ' units' : ''}</div>
+        <div class="pr">${priceText} <small>/${App.ui.esc(def.unit)}</small></div>
+        <div class="stk ${out ? 'low' : low ? 'low' : ''}">${out ? (openPrice ? 'SET STOCK' : 'OUT OF STOCK') : 'Stock: ' + App.ui.qty(p.stock) + ' ' + App.ui.esc(p.base_unit)}${(!out && p.units && p.units.length > 1) ? ' · ' + p.units.length + ' units' : ''}</div>
       </button>`;
     }
     // Services: never treat as out-of-stock (stock is always 0 by design).
-    return `<button type="button" class="prod-card svc-card" data-id="${p.id}" title="${App.ui.esc(p.name)}" aria-label="${App.ui.esc(`${p.name}, service, ${App.ui.money(def.price)} per ${def.unit}`)}">
+    return `<button type="button" class="prod-card svc-card" data-id="${p.id}" title="${App.ui.esc(p.name)}" aria-label="${App.ui.esc(`${p.name}, service, ${priceAria}`)}">
       <div class="nm">${App.ui.esc(p.name)}</div>
-      <div class="pr">${App.ui.money(def.price)} <small>/${App.ui.esc(def.unit)}</small></div>
+      <div class="pr">${priceText} <small>/${App.ui.esc(def.unit)}</small></div>
       <div class="stk">Service</div>
     </button>`;
   },
@@ -319,7 +326,80 @@ App.views.pos = {
 
   destroy() { this._stopGridObserver(); },
 
-  _add(id) {
+  _catalogUnitPrice(p, unit) {
+    const units = (p && p.units) || [];
+    const match = unit
+      ? units.find((u) => u.unit === unit)
+      : units[0];
+    const u = match || { price: p && p.price };
+    const price = Number(u && u.price);
+    return Number.isFinite(price) ? price : 0;
+  },
+
+  _isOpenPrice(p, unit) {
+    return this._catalogUnitPrice(p, unit) <= 0;
+  },
+
+  _promptOpenDetails(p) {
+    return new Promise((resolve) => {
+      const unit = (p.units && p.units[0] && p.units[0].unit) || p.base_unit || 'pcs';
+      const stock = Number(p.stock) || 0;
+      const m = App.ui.modal({
+        title: 'Set details — ' + p.name,
+        closeOnOverlay: false,
+        bodyHtml: `
+          <div class="field"><label class="fl">Unit price (₱)</label><input id="openPrice" type="number" min="0.01" step="0.01" value="" autofocus placeholder="Enter price"></div>
+          <div class="field"><label class="fl">Base unit</label><input id="openUnit" type="text" maxlength="32" value="${App.ui.esc(unit)}" placeholder="pcs, kg, box…"></div>
+          <div class="field"><label class="fl">Stock on hand</label><input id="openStock" type="number" min="0" step="0.001" value="${stock}"></div>
+          <div class="hint">No catalog price — set price for this sale, and correct unit/stock if needed.</div>`,
+        footerHtml: `<button class="btn btn-ghost" data-a="cancel">Cancel</button><button class="btn btn-primary" data-a="ok">Add to cart</button>`,
+      });
+      m.el.querySelector('[data-a="cancel"]').onclick = () => { m.close(); resolve(null); };
+      const priceInput = m.el.querySelector('#openPrice');
+      const unitInput = m.el.querySelector('#openUnit');
+      const stockInput = m.el.querySelector('#openStock');
+      priceInput.focus();
+      const submit = () => {
+        const unitPrice = parseFloat(priceInput.value);
+        const baseUnit = String(unitInput.value || '').trim();
+        const nextStock = parseFloat(stockInput.value);
+        if (!Number.isFinite(unitPrice) || unitPrice <= 0) { App.ui.toast('Enter a valid price', 'err'); priceInput.focus(); return; }
+        if (!baseUnit) { App.ui.toast('Enter a base unit', 'err'); unitInput.focus(); return; }
+        if (!Number.isFinite(nextStock) || nextStock < 0) { App.ui.toast('Enter a valid stock', 'err'); stockInput.focus(); return; }
+        if (!(nextStock > 0)) { App.ui.toast('Stock must be greater than zero to sell', 'err'); stockInput.focus(); return; }
+        m.close();
+        resolve({ unitPrice, baseUnit, stock: nextStock });
+      };
+      priceInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') unitInput.focus(); });
+      unitInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') stockInput.focus(); });
+      stockInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+      m.el.querySelector('[data-a="ok"]').onclick = submit;
+    });
+  },
+
+  async _applyOpenDetails(p, details) {
+    const changedUnit = String(details.baseUnit).trim() !== String(p.base_unit || '').trim();
+    const changedStock = Math.abs(Number(details.stock) - Number(p.stock || 0)) > 1e-9;
+    if (!changedUnit && !changedStock) {
+      return {
+        base_unit: p.base_unit,
+        stock: p.stock,
+        units: p.units && p.units.length ? p.units : [{ unit: p.base_unit, factor: 1, price: 0 }],
+      };
+    }
+    const updated = await App.pos.products.updateOpenDetails(p.id, {
+      base_unit: details.baseUnit,
+      stock: details.stock,
+      reason: 'Cashier open-price correction',
+    });
+    p.base_unit = updated.base_unit;
+    p.stock = updated.stock;
+    p.price = 0;
+    p.units = updated.units;
+    return updated;
+  },
+
+  async _add(id) {
     const p = this.cache.products.find((x) => x.id === id);
     if (!p) return;
     if (App.isService(p)) {
@@ -327,34 +407,107 @@ App.views.pos = {
       // native prompt is theme-inconsistent and can be disabled by sandbox
       // configs, which would silently break adding services to the cart.
       const units = (p.units && p.units.length) ? p.units : [{ unit: p.base_unit || 'svc', factor: 1, price: p.price }];
+      const openPrice = this._isOpenPrice(p, (units[0] || {}).unit);
       const m = App.ui.modal({
-        title: 'Quantity — ' + p.name, closeOnOverlay: false,
-        bodyHtml: `<div class="field"><label class="fl">Quantity (${App.ui.esc((units[0] || {}).unit || p.base_unit || 'svc')})</label><input id="svcQty" type="number" step="0.01" value="1" autofocus></div>`,
+        title: (openPrice ? 'Price & quantity — ' : 'Quantity — ') + p.name, closeOnOverlay: false,
+        bodyHtml: `${openPrice ? `<div class="field"><label class="fl">Unit price (₱)</label><input id="svcPrice" type="number" min="0.01" step="0.01" autofocus placeholder="Enter price"></div>
+          <div class="field"><label class="fl">Unit</label><input id="svcUnit" type="text" maxlength="32" value="${App.ui.esc((units[0] || {}).unit || p.base_unit || 'svc')}"></div>` : ''}
+          <div class="field"><label class="fl">Quantity (${App.ui.esc((units[0] || {}).unit || p.base_unit || 'svc')})</label><input id="svcQty" type="number" step="0.01" value="1"${openPrice ? '' : ' autofocus'}></div>`,
         footerHtml: `<button class="btn btn-ghost" data-a="cancel">Cancel</button><button class="btn btn-primary" data-a="ok">Add to cart</button>`,
       });
       m.el.querySelector('[data-a="cancel"]').onclick = () => m.close();
-      const input = m.el.querySelector('#svcQty');
-      input.focus(); input.select();
-      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') m.el.querySelector('[data-a="ok"]').click(); });
-      m.el.querySelector('[data-a="ok"]').onclick = () => {
-        const n = parseFloat(input.value);
+      const qtyInput = m.el.querySelector('#svcQty');
+      const priceInput = m.el.querySelector('#svcPrice');
+      const unitInput = m.el.querySelector('#svcUnit');
+      (priceInput || qtyInput).focus();
+      if (!priceInput) qtyInput.select();
+      const submit = async () => {
+        const n = parseFloat(qtyInput.value);
         if (!n || n <= 0) { App.ui.toast('Invalid quantity', 'err'); return; }
         const u = units[0] || { unit: p.base_unit || 'svc', factor: 1, price: p.price };
-        App.cart.push({ productId: p.id, sku: p.sku, name: p.name, unit: u.unit, factor: u.factor || 1, unitPrice: u.price, qty: n, isService: true, lineType: 'service', units, base_unit: p.base_unit || 'svc' });
+        let unitPrice = Number(u.price) || 0;
+        let priceEditable = false;
+        let sellUnit = u.unit;
+        if (openPrice) {
+          unitPrice = parseFloat(priceInput.value);
+          if (!Number.isFinite(unitPrice) || unitPrice <= 0) { App.ui.toast('Enter a valid price', 'err'); return; }
+          sellUnit = String(unitInput.value || '').trim() || u.unit;
+          if (!sellUnit) { App.ui.toast('Enter a unit', 'err'); return; }
+          priceEditable = true;
+          if (sellUnit !== String(u.unit || '').trim()) {
+            try {
+              const updated = await App.pos.products.updateOpenDetails(p.id, {
+                base_unit: sellUnit,
+                reason: 'Cashier open-price unit correction',
+              });
+              p.base_unit = updated.base_unit;
+              p.units = updated.units;
+              p.price = 0;
+              sellUnit = updated.base_unit;
+            } catch (e) {
+              App.ui.toast(e.message || 'Could not update unit', 'err');
+              return;
+            }
+          }
+        }
+        App.cart.push({
+          productId: p.id, sku: p.sku, name: p.name, unit: sellUnit, factor: 1,
+          unitPrice, qty: n, isService: true, lineType: 'service',
+          units: [{ unit: sellUnit, factor: 1, price: openPrice ? 0 : unitPrice }],
+          base_unit: sellUnit, priceEditable,
+        });
         m.close();
         this._renderCart();
       };
-    } else {
-      if (p.stock <= 0) { App.ui.toast(p.name + ' is out of stock', 'err'); return; }
-      const ex = App.cart.find((i) => i.productId === id && !i.isService);
-      const u = (p.units && p.units[0]) || { unit: p.base_unit, factor: 1, price: p.price };
-      if (ex) {
-        const newConsumed = (ex.qty + 1) * ex.factor;
-        if (newConsumed > p.stock + 1e-9) { App.ui.toast('Not enough stock for ' + p.name, 'err'); return; }
-        ex.qty++;
-      } else {
-        App.cart.push({ productId: p.id, sku: p.sku, name: p.name, unit: u.unit, factor: u.factor, unitPrice: u.price, qty: 1, isService: false, lineType: 'product', units: p.units, base_unit: p.base_unit, stock: p.stock });
+      qtyInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+      if (priceInput) priceInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') (unitInput || qtyInput).focus(); });
+      if (unitInput) unitInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') qtyInput.focus(); });
+      m.el.querySelector('[data-a="ok"]').onclick = submit;
+      return;
+    }
+
+    const u = (p.units && p.units[0]) || { unit: p.base_unit, factor: 1, price: p.price };
+    const openPrice = this._isOpenPrice(p, u.unit);
+    let unitPrice = Number(u.price) || 0;
+    let priceEditable = false;
+    let sellUnit = u.unit;
+    let factor = u.factor || 1;
+
+    if (openPrice) {
+      const entered = await this._promptOpenDetails(p);
+      if (entered == null) return;
+      try {
+        const updated = await this._applyOpenDetails(p, entered);
+        sellUnit = updated.base_unit;
+        factor = 1;
+        unitPrice = entered.unitPrice;
+        priceEditable = true;
+        this._renderGrid();
+      } catch (e) {
+        App.ui.toast(e.message || 'Could not update item', 'err');
+        return;
       }
+    } else if (p.stock <= 0) {
+      App.ui.toast(p.name + ' is out of stock', 'err');
+      return;
+    }
+
+    if (p.stock <= 0) { App.ui.toast(p.name + ' is out of stock', 'err'); return; }
+
+    const existing = priceEditable
+      ? App.cart.find((i) => i.productId === id && !i.isService && i.priceEditable && Number(i.unitPrice) === unitPrice && i.unit === sellUnit)
+      : App.cart.find((i) => i.productId === id && !i.isService && !i.priceEditable);
+    if (existing) {
+      const newConsumed = (existing.qty + 1) * existing.factor;
+      if (newConsumed > p.stock + 1e-9) { App.ui.toast('Not enough stock for ' + p.name, 'err'); return; }
+      existing.qty++;
+    } else {
+      App.cart.push({
+        productId: p.id, sku: p.sku, name: p.name, unit: sellUnit, factor,
+        unitPrice, qty: 1, isService: false, lineType: 'product',
+        units: priceEditable ? [{ unit: sellUnit, factor: 1, price: 0 }] : p.units,
+        base_unit: sellUnit, stock: p.stock, priceEditable,
+      });
     }
     this._renderCart();
   },
@@ -373,6 +526,8 @@ App.views.pos = {
     const i = +row.dataset.idx;
     if (e.target.dataset.field === 'qty') { this._setQty(i, e.target.value); }
     else if (e.target.dataset.field === 'unit') { this._setUnit(i, e.target.value); }
+    else if (e.target.dataset.field === 'price') { this._setPrice(i, e.target.value); }
+    else if (e.target.dataset.field === 'openUnit') { this._setOpenUnit(i, e.target.value); }
   },
   _adjQty(i, d) {
     const it = App.cart[i]; if (!it) return;
@@ -395,7 +550,54 @@ App.views.pos = {
   _setUnit(i, unit) {
     const it = App.cart[i]; if (!it) return;
     const u = (it.units || []).find((x) => x.unit === unit) || { unit, factor: 1, price: it.unitPrice };
-    it.unit = u.unit; it.factor = u.factor; it.unitPrice = u.price; this._renderCart();
+    it.unit = u.unit; it.factor = u.factor;
+    const catalogPrice = Number(u.price) || 0;
+    if (catalogPrice > 0) {
+      it.unitPrice = catalogPrice;
+      it.priceEditable = false;
+    } else {
+      it.priceEditable = true;
+      // Keep the cashier-entered price when switching among open-price units.
+    }
+    this._renderCart();
+  },
+  async _setOpenUnit(i, value) {
+    const it = App.cart[i]; if (!it || !it.priceEditable || it.isService) return;
+    const baseUnit = String(value || '').trim();
+    if (!baseUnit) { this._renderCart(); return; }
+    if (baseUnit === it.unit) return;
+    try {
+      const p = this.cache.products.find((x) => x.id === it.productId);
+      const stock = p ? Number(p.stock) : Number(it.stock) || 0;
+      const updated = await App.pos.products.updateOpenDetails(it.productId, {
+        base_unit: baseUnit,
+        stock,
+        reason: 'Cashier open-price unit correction',
+      });
+      if (p) {
+        p.base_unit = updated.base_unit;
+        p.stock = updated.stock;
+        p.units = updated.units;
+        p.price = 0;
+      }
+      it.unit = updated.base_unit;
+      it.base_unit = updated.base_unit;
+      it.factor = 1;
+      it.units = updated.units;
+      it.stock = updated.stock;
+      this._renderGrid();
+      this._renderCart();
+    } catch (e) {
+      App.ui.toast(e.message || 'Could not update unit', 'err');
+      this._renderCart();
+    }
+  },
+  _setPrice(i, v) {
+    const it = App.cart[i]; if (!it || !it.priceEditable) return;
+    const n = parseFloat(v);
+    if (!Number.isFinite(n) || n < 0) { this._renderCart(); return; }
+    it.unitPrice = n;
+    this._compute();
   },
 
   _renderCart() {
@@ -404,13 +606,21 @@ App.views.pos = {
     else {
       el.innerHTML = App.cart.map((i, idx) => {
         const amt = i.qty * i.unitPrice;
-        const unitSel = (i.units && i.units.length > 1)
-          ? `<select data-field="unit" aria-label="Unit for ${App.ui.esc(i.name)}">${i.units.map((u) => `<option ${u.unit === i.unit ? 'selected' : ''}>${App.ui.esc(u.unit)}</option>`).join('')}</select>`
-          : `<span class="muted">${App.ui.esc(i.unit)}</span>`;
-        return `<div class="cart-row ${i.isService ? 'svc' : ''}" data-idx="${idx}">
+        let unitSel;
+        if (i.priceEditable && !i.isService) {
+          unitSel = `<input data-field="openUnit" type="text" maxlength="32" value="${App.ui.esc(i.unit)}" aria-label="Base unit for ${App.ui.esc(i.name)}" title="Edit base unit">`;
+        } else if (i.units && i.units.length > 1) {
+          unitSel = `<select data-field="unit" aria-label="Unit for ${App.ui.esc(i.name)}">${i.units.map((u) => `<option ${u.unit === i.unit ? 'selected' : ''}>${App.ui.esc(u.unit)}</option>`).join('')}</select>`;
+        } else {
+          unitSel = `<span class="muted">${App.ui.esc(i.unit)}</span>`;
+        }
+        const priceMeta = i.priceEditable
+          ? `<label class="cart-price-edit">₱ <input data-field="price" type="number" min="0.01" step="0.01" value="${Number(i.unitPrice) || ''}" aria-label="Price for ${App.ui.esc(i.name)}"></label> <span class="muted">/ ${App.ui.esc(i.unit)}</span>`
+          : `${App.ui.money(i.unitPrice)} / ${App.ui.esc(i.unit)}`;
+        return `<div class="cart-row ${i.isService ? 'svc' : ''}${i.priceEditable ? ' open-price' : ''}" data-idx="${idx}">
           <div>
-            <div class="nm">${App.ui.esc(i.name)}${i.isService ? ' <span class="badge svc">svc</span>' : ''}</div>
-            <div class="meta">${App.ui.money(i.unitPrice)} / ${App.ui.esc(i.unit)}</div>
+            <div class="nm">${App.ui.esc(i.name)}${i.isService ? ' <span class="badge svc">svc</span>' : ''}${i.priceEditable ? ' <span class="badge">set price</span>' : ''}</div>
+            <div class="meta">${priceMeta}</div>
           </div>
           <div class="qty">
             <button type="button" data-act="minus" aria-label="Decrease quantity for ${App.ui.esc(i.name)}">−</button>
@@ -499,6 +709,11 @@ App.views.pos = {
 
   _checkout() {
     if (!App.cart.length) { App.ui.toast('Cart is empty', 'err'); return; }
+    const needsPrice = App.cart.find((i) => i.priceEditable && !(Number(i.unitPrice) > 0));
+    if (needsPrice) {
+      App.ui.toast('Enter a price for ' + needsPrice.name, 'err');
+      return;
+    }
     const gross = App.cart.reduce((s, i) => s + i.qty * i.unitPrice, 0);
     const vatRate = parseFloat((App.settingsCache || {}).vat_rate) || 12;
     const discPct = this.state.discountOn ? (parseFloat((App.settingsCache || {}).discount_percent) || 0) : 0;
