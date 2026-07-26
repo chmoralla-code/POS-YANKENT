@@ -7,8 +7,11 @@ const LEGACY_DEMO_CLEANUP_SETTING = 'legacy_demo_customers_removed_v1';
 const NEWLY_ADDED_ITEMS_CATEGORY = 'Newly Added Items';
 // Bump when a new handwritten inventory page is added so existing DBs re-run
 // the inserter (it skips names already present in this category).
-const NEWLY_ADDED_ITEMS_SETTING = 'newly_added_items_catalog_v2';
-const NEWLY_ADDED_ITEMS_COUNT = 46;
+const NEWLY_ADDED_ITEMS_SETTING = 'newly_added_items_catalog_v20';
+const NEWLY_ADDED_ITEMS_COUNT = 1592;
+const NEWLY_ADDED_ITEMS_UNIT_PRICE_FIX = 'newly_added_items_unit_price_v1';
+const NEWLY_ADDED_ITEMS_NOTEBOOK1_REMOVED = 'newly_added_items_notebook1_removed_v1';
+const NEWLY_ADDED_ITEMS_RECOUNT_V1 = 'newly_added_items_recount_v9';
 const PRODUCT_CATALOG_PATH = path.join(
   __dirname,
   '..',
@@ -96,13 +99,169 @@ function getNewlyAddedItems(catalog = readProductCatalog()) {
   return items;
 }
 
+function isRetiredNotebook1Sku(sku) {
+  const match = /^NAI-(\d+)$/.exec(String(sku || ''));
+  if (!match) return false;
+  const number = Number(match[1]);
+  return number >= 71 && number <= 215;
+}
+
 /**
- * Add the July 2026 inventory batch to an existing database exactly once.
+ * Soft-delete notebook folder "1" inventory (NAI-071 through NAI-215)
+ * from existing installs.
+ */
+function removeNotebook1NewlyAddedItems(db) {
+  const marker = db.prepare('SELECT value FROM settings WHERE key=?')
+    .get(NEWLY_ADDED_ITEMS_NOTEBOOK1_REMOVED);
+  if (marker) return { removed: 0, alreadyRun: true };
+
+  let removed = 0;
+  db.transaction(() => {
+    const rows = db.prepare('SELECT id, sku FROM products WHERE active=1').all()
+      .filter((row) => isRetiredNotebook1Sku(row.sku));
+    const soft = db.prepare('UPDATE products SET active=0 WHERE id=?');
+    for (const row of rows) {
+      soft.run(row.id);
+      removed++;
+    }
+    db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)')
+      .run(NEWLY_ADDED_ITEMS_NOTEBOOK1_REMOVED, '1');
+  })();
+  return { removed, alreadyRun: false };
+}
+
+/**
+ * Apply later notebook recounts to items already present under the same name.
+ * Runs once even when the main catalog marker already applied.
+ */
+function applyNewlyAddedRecount(db) {
+  const marker = db.prepare('SELECT value FROM settings WHERE key=?').get(NEWLY_ADDED_ITEMS_RECOUNT_V1);
+  if (marker) return { applied: false, alreadyRun: true };
+
+  // v2.2.14 shipped 46 Newly Added Items. Only these five stock baselines
+  // changed afterward; every later SKU is inserted from the current catalog.
+  // Apply the baseline difference to live stock so sales, refunds, and manual
+  // restocks made since installation remain intact.
+  const fixes = [
+    { sku: 'NAI-007', stockDelta: 10 },
+    { sku: 'NAI-009', stockDelta: 36 },
+    {
+      sku: 'NAI-021',
+      stockDelta: 18,
+      oldPrice: 265,
+      newPrice: 245,
+      oldUnit: 'pcs',
+    },
+    { sku: 'NAI-037', stockDelta: 37 },
+    { sku: 'NAI-045', stockDelta: 1 },
+  ];
+
+  let updated = 0;
+  db.transaction(() => {
+    const find = db.prepare('SELECT id FROM products WHERE sku=? AND active=1');
+    const addStock = db.prepare('UPDATE products SET stock=stock+? WHERE id=?');
+    const updateProductPrice = db.prepare(
+      'UPDATE products SET price=? WHERE id=? AND base_unit=? AND price=?'
+    );
+    const updateUnitPrice = db.prepare(
+      'UPDATE product_units SET price=? WHERE product_id=? AND unit=? AND factor=1 AND price=?'
+    );
+    const move = db.prepare(
+      'INSERT INTO stock_movements(product_id,movement,qty_change,reason,user_id) VALUES(?,?,?,?,NULL)'
+    );
+    for (const fix of fixes) {
+      const row = find.get(fix.sku);
+      if (!row) continue;
+      addStock.run(fix.stockDelta, row.id);
+      if (fix.oldPrice != null) {
+        updateProductPrice.run(fix.newPrice, row.id, fix.oldUnit, fix.oldPrice);
+        updateUnitPrice.run(fix.newPrice, row.id, fix.oldUnit, fix.oldPrice);
+      }
+      move.run(
+        row.id,
+        'adjustment',
+        fix.stockDelta,
+        'Newly Added Items catalog stock correction'
+      );
+      updated++;
+    }
+    db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)')
+      .run(NEWLY_ADDED_ITEMS_RECOUNT_V1, '1');
+  })();
+  return { applied: updated > 0, alreadyRun: false, updated };
+}
+
+/**
+ * Convert pack-priced fasteners / tox to ₱1 per piece with piece-level stock.
+ * Runs once even when the main catalog marker already applied.
+ */
+function applyNewlyAddedUnitPriceFix(db) {
+  const marker = db.prepare('SELECT value FROM settings WHERE key=?').get(NEWLY_ADDED_ITEMS_UNIT_PRICE_FIX);
+  if (marker) return { applied: false, alreadyRun: true };
+
+  const fixes = [
+    { sku: 'NAI-207', name: 'Tox 1.00', stock: 0, price: 1 },
+    { sku: 'NAI-208', name: 'Blackscrew Wood', stock: 800, price: 1 },
+    { sku: 'NAI-209', name: 'Blackscrew Wood 1 1/2', stock: 3000, price: 1 },
+    { sku: 'NAI-210', name: 'Black Screw Wood 2', stock: 1000, price: 1 },
+    { sku: 'NAI-211', name: 'Blackscrew 1 Metal', stock: 600, price: 1 },
+    { sku: 'NAI-212', name: 'Blackscrew 1 1/2 Metal', stock: 700, price: 1 },
+    { sku: 'NAI-213', name: 'Fanhead', stock: 700, price: 1 },
+    { sku: 'NAI-214', name: 'Blackscrew Metal 2', stock: 700, price: 1 },
+    { sku: 'NAI-215', name: 'Hardscrew 3/4', stock: 600, price: 1 },
+  ];
+
+  let updated = 0;
+  db.transaction(() => {
+    const find = db.prepare('SELECT id, stock FROM products WHERE sku=? AND active=1');
+    const upd = db.prepare(
+      'UPDATE products SET name=?, stock=?, price=?, base_unit=? WHERE id=?'
+    );
+    const delUnits = db.prepare('DELETE FROM product_units WHERE product_id=?');
+    const insUnit = db.prepare(
+      'INSERT INTO product_units(product_id,unit,factor,price) VALUES(?,?,?,?)'
+    );
+    const insMovement = db.prepare(
+      'INSERT INTO stock_movements(product_id,movement,qty_change,reason,user_id) VALUES(?,?,?,?,NULL)'
+    );
+
+    for (const fix of fixes) {
+      const row = find.get(fix.sku);
+      if (!row) continue;
+      const previousStock = Number(row.stock) || 0;
+      upd.run(fix.name, fix.stock, fix.price, 'pcs', row.id);
+      delUnits.run(row.id);
+      insUnit.run(row.id, 'pcs', 1, fix.price);
+      const delta = fix.stock - previousStock;
+      if (delta !== 0) {
+        insMovement.run(
+          row.id,
+          delta > 0 ? 'restock' : 'adjustment',
+          delta,
+          'Unit price fix: sell per piece at ₱1'
+        );
+      }
+      updated++;
+    }
+
+    db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)')
+      .run(NEWLY_ADDED_ITEMS_UNIT_PRICE_FIX, '1');
+  })();
+
+  return { applied: true, alreadyRun: false, updated };
+}
+
+/**
+ * Add the handwritten inventory batches to an existing database exactly once.
  *
  * Existing names are preserved rather than overwritten, and the settings
  * marker prevents later user edits or deletions from being undone at startup.
  */
 function ensureNewlyAddedItems(db) {
+  removeNotebook1NewlyAddedItems(db);
+  applyNewlyAddedUnitPriceFix(db);
+  applyNewlyAddedRecount(db);
+
   const marker = db.prepare('SELECT value FROM settings WHERE key=?').get(NEWLY_ADDED_ITEMS_SETTING);
   if (marker) return { inserted: 0, skipped: 0, alreadyRun: true };
 
@@ -121,12 +280,14 @@ function ensureNewlyAddedItems(db) {
     }
     categoryId = category.id;
 
-    // Only skip names already in this category so a second inventory page can
-    // still be added even when a similar product exists elsewhere.
-    const findName = db.prepare(
-      'SELECT id FROM products WHERE category_id=? AND TRIM(name)=? COLLATE NOCASE LIMIT 1'
+    // Preserve administrator-deactivated products across catalog-marker bumps.
+    // Only rows retired by the notebook cleanup may be ignored so a genuinely
+    // current catalog item with the same name can still be inserted.
+    const findNames = db.prepare(
+      'SELECT id,sku,active FROM products WHERE category_id=? AND TRIM(name)=? COLLATE NOCASE'
     );
-    const findSku = db.prepare('SELECT id FROM products WHERE sku=?');
+    // SKUs are unique across active and inactive rows — always avoid collisions.
+    const findSku = db.prepare('SELECT id,category_id FROM products WHERE sku=?');
     const insertProduct = db.prepare(
       `INSERT INTO products(sku,name,category_id,base_unit,stock,cost,price,low_stock_threshold,is_service,active)
        VALUES(?,?,?,?,?,?,?,10,0,1)`
@@ -140,9 +301,19 @@ function ensureNewlyAddedItems(db) {
 
     for (const item of items) {
       const name = String(item.name).trim();
-      if (findName.get(categoryId, name)) continue;
-
       const preferredSku = String(item.sku).trim();
+      const sameSkuRow = findSku.get(preferredSku);
+      // SKU is the stable identity when an administrator has renamed or
+      // deactivated an item. Do not recreate its former catalog name during
+      // a later marker bump.
+      if (sameSkuRow && Number(sameSkuRow.category_id) === Number(categoryId)) continue;
+
+      const sameNameRows = findNames.all(categoryId, name);
+      const hasBlockingName = sameNameRows.some(
+        (row) => Number(row.active) !== 0 || !isRetiredNotebook1Sku(row.sku)
+      );
+      if (hasBlockingName) continue;
+
       let sku = preferredSku;
       let suffix = 2;
       while (findSku.get(sku)) {
@@ -453,6 +624,12 @@ function seedDatabase(db) {
 
     db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)')
       .run(NEWLY_ADDED_ITEMS_SETTING, '1');
+    db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)')
+      .run(NEWLY_ADDED_ITEMS_UNIT_PRICE_FIX, '1');
+    db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)')
+      .run(NEWLY_ADDED_ITEMS_NOTEBOOK1_REMOVED, '1');
+    db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)')
+      .run(NEWLY_ADDED_ITEMS_RECOUNT_V1, '1');
   });
 
   tx();
@@ -466,4 +643,8 @@ module.exports = {
   LEGACY_DEMO_CLEANUP_SETTING,
   NEWLY_ADDED_ITEMS_CATEGORY,
   NEWLY_ADDED_ITEMS_SETTING,
+  NEWLY_ADDED_ITEMS_COUNT,
+  NEWLY_ADDED_ITEMS_UNIT_PRICE_FIX,
+  NEWLY_ADDED_ITEMS_NOTEBOOK1_REMOVED,
+  NEWLY_ADDED_ITEMS_RECOUNT_V1,
 };

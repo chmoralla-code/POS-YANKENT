@@ -1,7 +1,9 @@
 'use strict';
-/* Admin: product catalog & inventory management. */
+/* Product catalog & inventory management; cashiers get a restricted inventory view. */
 window.App = window.App || {};
 App.views = App.views || {};
+
+const CASHIER_INVENTORY_CATEGORY = 'Newly Added Items';
 
 App.views.products = {
   title: 'Products & Inventory',
@@ -14,26 +16,63 @@ App.views.products = {
   _gridShown: 0,
   _gridBatch: 100,
   _gridObserver: null,
+  _sessionGeneration: null,
+
+  _isAdmin() {
+    return !!(App.current && App.current.user && App.current.user.role === 'admin');
+  },
+
+  _isCashierInventory() {
+    return !this._isAdmin();
+  },
+
+  _isOpenBasePrice(p) {
+    if (!p || Number(p.price) > 0) return false;
+    const baseUnit = String(p.base_unit || '').trim();
+    const units = Array.isArray(p.units) ? p.units : [];
+    const baseRow = units.find(
+      (u) => u.unit === baseUnit && Math.abs(Number(u.factor) - 1) < 1e-9
+    ) || units.find((u) => u.unit === baseUnit);
+    return !baseRow || !(Number(baseRow.price) > 0);
+  },
 
   async render(view) {
+    const generation = App.captureSessionGeneration();
+    const newSession = this._sessionGeneration !== generation;
+    this._sessionGeneration = generation;
     this.viewEl = view;
     this.q = '';
-    this.tab = this.tab === 'services' ? 'services' : 'products';
+    const cashierInventory = this._isCashierInventory();
+    if (cashierInventory) {
+      this.tab = 'products';
+      this.cat = CASHIER_INVENTORY_CATEGORY;
+      this.chipsOpen = true;
+    } else if (newSession) {
+      this.tab = 'products';
+      this.cat = 'all';
+      this.chipsOpen = false;
+    } else {
+      this.tab = this.tab === 'services' ? 'services' : 'products';
+    }
     await this._load();
+    if (!App.isSessionGenerationCurrent(generation) || this.viewEl !== view) return;
     view.innerHTML = `
       <div class="toolbar">
         <input id="pSearch" placeholder="Search name…" class="fill" style="max-width:300px">
         <div class="fill"></div>
-        <button class="btn btn-ghost btn-sm" id="catManage">Manage Categories</button>
-        <button class="btn btn-ghost btn-sm" id="pImportCatalog" title="Bulk-import the saved product catalog">Import Catalog</button>
-        <button class="btn btn-danger btn-sm" id="pDeleteAll" title="Erase ALL products (and their units / stock movements). Category names are preserved.">Delete All Products</button>
-        <button class="btn btn-primary btn-sm" id="pAdd">+ Add Product</button>
-        <button class="btn btn-primary btn-sm" id="pAddSvc" title="Add a service (labor, delivery, etc.) — no stock tracking">+ Add Service</button>
+        ${cashierInventory ? '' : `
+          <button class="btn btn-ghost btn-sm" id="catManage">Manage Categories</button>
+          <button class="btn btn-ghost btn-sm" id="pImportCatalog" title="Bulk-import the saved product catalog">Import Catalog</button>
+          <button class="btn btn-danger btn-sm" id="pDeleteAll" title="Erase ALL products (and their units / stock movements). Category names are preserved.">Delete All Products</button>
+          <button class="btn btn-primary btn-sm" id="pAdd">+ Add Product</button>
+          <button class="btn btn-primary btn-sm" id="pAddSvc" title="Add a service (labor, delivery, etc.) — no stock tracking">+ Add Service</button>`}
       </div>
-      <div class="tabs" id="pTabs" style="padding:0 0 0 4px">
-        <div class="tab ${this.tab === 'products' ? 'active' : ''}" data-tab="products">Products <span class="tab-count" id="pCountProducts">0</span></div>
-        <div class="tab ${this.tab === 'services' ? 'active' : ''}" data-tab="services">Services <span class="tab-count" id="pCountServices">0</span></div>
-      </div>
+      ${cashierInventory
+        ? '<div class="hint">Cashier access is limited to Newly Added Items. Zero-price items allow unit and stock corrections; catalog pricing and all other product controls remain administrator-only.</div>'
+        : `<div class="tabs" id="pTabs" style="padding:0 0 0 4px">
+            <div class="tab ${this.tab === 'products' ? 'active' : ''}" data-tab="products">Products <span class="tab-count" id="pCountProducts">0</span></div>
+            <div class="tab ${this.tab === 'services' ? 'active' : ''}" data-tab="services">Services <span class="tab-count" id="pCountServices">0</span></div>
+          </div>`}
       <div class="chips-wrap" id="pChipsWrap">
         <button class="chips-toggle" id="pChipsToggle" type="button" aria-expanded="false">
           <span class="chips-toggle-arrow">▸</span><span>Categories</span>
@@ -47,22 +86,36 @@ App.views.products = {
   },
 
   async _load() {
-    const [products, categories] = await Promise.all([
-      App.pos.products.list({ includeServices: true, q: this.q || undefined }),
-      App.pos.categories.withCounts(),
-    ]);
-    this.cache = { products, categories };
+    const allCategories = await App.pos.categories.withCounts();
+    const cashierInventory = this._isCashierInventory();
+    const inventoryCategory = cashierInventory
+      ? allCategories.find((c) => c.name === CASHIER_INVENTORY_CATEGORY)
+      : null;
+    const products = await App.pos.products.list({
+      includeServices: !cashierInventory,
+      q: this.q || undefined,
+      categoryId: inventoryCategory ? inventoryCategory.id : undefined,
+    });
+    const categories = cashierInventory
+      ? (inventoryCategory ? [inventoryCategory] : [])
+      : allCategories;
+    this.cache = { products: inventoryCategory || !cashierInventory ? products : [], categories };
   },
 
   _wire() {
     const v = this.viewEl;
     const d = App.ui.debounce(async () => { await this._load(); this._renderChips(); this._renderGrid(); }, 250);
     v.querySelector('#pSearch').addEventListener('input', (e) => { this.q = e.target.value; d(); });
-    v.querySelector('#pAdd').onclick = () => { this.tab = 'products'; this._syncTabs(); this._edit(null); };
-    v.querySelector('#pAddSvc').onclick = () => { this.tab = 'services'; this._syncTabs(); this._renderChips(); this._renderGrid(); this._editService(null); };
-    v.querySelector('#catManage').onclick = () => this._catModal();
-    v.querySelector('#pDeleteAll').onclick = () => this._deleteAll();
-    v.querySelector('#pImportCatalog').onclick = () => this._importCatalog();
+    const addProduct = v.querySelector('#pAdd');
+    const addService = v.querySelector('#pAddSvc');
+    const manageCategories = v.querySelector('#catManage');
+    const deleteAll = v.querySelector('#pDeleteAll');
+    const importCatalog = v.querySelector('#pImportCatalog');
+    if (addProduct) addProduct.onclick = () => { this.tab = 'products'; this._syncTabs(); this._edit(null); };
+    if (addService) addService.onclick = () => { this.tab = 'services'; this._syncTabs(); this._renderChips(); this._renderGrid(); this._editService(null); };
+    if (manageCategories) manageCategories.onclick = () => this._catModal();
+    if (deleteAll) deleteAll.onclick = () => this._deleteAll();
+    if (importCatalog) importCatalog.onclick = () => this._importCatalog();
     v.querySelectorAll('#pTabs .tab').forEach((t) => t.onclick = () => {
       this.tab = t.dataset.tab;
       this.q = '';
@@ -85,7 +138,8 @@ App.views.products = {
       if (!btn) return;
       const act = btn.dataset.act;
       const isSvc = App.isService(this.cache.products.find((x) => x.id === id));
-      if (act === 'edit') { if (isSvc) this._editService(id); else this._edit(id); }
+      if (act === 'cashier-details') this._editCashierDetails(id);
+      else if (act === 'edit') { if (isSvc) this._editService(id); else this._edit(id); }
       else if (act === 'stock') this._stock(id);
       else if (act === 'del') this._del(id);
     });
@@ -110,9 +164,12 @@ App.views.products = {
     toggle.querySelector('.chips-toggle-arrow').textContent = open ? '▾' : '▸';
     el.hidden = !open;
     if (!open) return;
+    const cashierInventory = this._isCashierInventory();
     const cats = this.cache.categories;
     const productsOnly = (this.cache.products || []).filter((p) => !App.isService(p));
-    const all = `<div class="chip ${this.cat === 'all' ? 'active' : ''}" data-cat="all">All <span class="muted" style="font-weight:400">(${productsOnly.length})</span></div>`;
+    const all = cashierInventory
+      ? ''
+      : `<div class="chip ${this.cat === 'all' ? 'active' : ''}" data-cat="all">All <span class="muted" style="font-weight:400">(${productsOnly.length})</span></div>`;
     el.innerHTML = all + cats.map((c) => {
       const col = App.catColor(c.name);
       const isActive = this.cat === c.name;
@@ -124,6 +181,8 @@ App.views.products = {
   _cardHtml(p) {
     const isSvc = App.isService(p);
     const def = (p.units && p.units[0]) || { unit: p.base_unit || (isSvc ? 'svc' : 'pc'), price: p.price };
+    const openPrice = !isSvc && this._isOpenBasePrice(p);
+    const cashierInventory = this._isCashierInventory();
     const low = !isSvc && p.stock <= (p.low || 10);
     const col = isSvc ? App.catColor('Services') : App.catColor(p.category);
     const svcTag = isSvc ? '<span class="badge svc">svc</span>' : '';
@@ -132,11 +191,15 @@ App.views.products = {
       <div class="nm">${App.ui.esc(p.name)} ${svcTag}${lowTag}</div>
       <div class="pr">${App.ui.money(def.price)} <small>/${App.ui.esc(def.unit)}</small></div>
       <div class="stk ${low ? 'low' : ''}">${isSvc ? 'Service' : 'Stock: ' + App.ui.qty(p.stock) + ' ' + App.ui.esc(p.base_unit)}${(!isSvc && p.units && p.units.length > 1) ? ' · ' + p.units.length + ' units' : ''}</div>
-      <div class="prod-actions">
-        <button class="btn btn-sm btn-edit" data-act="edit">Edit</button>
-        ${isSvc ? '' : '<button class="btn btn-sm btn-stock" data-act="stock">Stock</button>'}
-        <button class="btn btn-sm btn-del" data-act="del">Del</button>
-      </div>
+      ${cashierInventory
+        ? (openPrice
+          ? '<div class="prod-actions"><button class="btn btn-sm btn-edit" data-act="cashier-details">Edit unit &amp; stock</button></div>'
+          : '')
+        : `<div class="prod-actions">
+            <button class="btn btn-sm btn-edit" data-act="edit">Edit</button>
+            ${isSvc ? '' : '<button class="btn btn-sm btn-stock" data-act="stock">Stock</button>'}
+            <button class="btn btn-sm btn-del" data-act="del">Del</button>
+          </div>`}
     </div>`;
   },
 
@@ -201,6 +264,49 @@ App.views.products = {
   },
 
   destroy() { this._stopGridObserver(); },
+
+  _editCashierDetails(id) {
+    const p = this.cache.products.find((x) => x.id === id);
+    if (!p || p.category !== CASHIER_INVENTORY_CATEGORY) return;
+    const m = App.ui.modal({
+      title: 'Edit Unit & Stock — ' + p.name,
+      closeOnOverlay: false,
+      bodyHtml: `
+        <div class="field"><label class="fl">Base unit</label><input id="cashierBaseUnit" maxlength="32" value="${App.ui.esc(p.base_unit || 'pcs')}" autofocus placeholder="pcs, kg, box…"></div>
+        <div class="field"><label class="fl">Stock on hand</label><input id="cashierStock" type="number" min="0" step="0.001" value="${Number(p.stock) || 0}"></div>
+        <div class="hint">This item has no saved catalog price. Cashiers may correct its unit and stock; an administrator still controls catalog pricing.</div>`,
+      footerHtml: '<button class="btn btn-ghost" data-a="cancel">Cancel</button><button class="btn btn-primary" data-a="save">Save</button>',
+    });
+    m.el.querySelector('[data-a="cancel"]').onclick = () => m.close();
+    m.el.querySelector('[data-a="save"]').onclick = async () => {
+      const baseUnit = String(m.el.querySelector('#cashierBaseUnit').value || '').trim();
+      const stock = Number(m.el.querySelector('#cashierStock').value);
+      if (!baseUnit) {
+        App.ui.toast('Base unit is required', 'err');
+        m.el.querySelector('#cashierBaseUnit').focus();
+        return;
+      }
+      if (!Number.isFinite(stock) || stock < 0) {
+        App.ui.toast('Stock must be a non-negative number', 'err');
+        m.el.querySelector('#cashierStock').focus();
+        return;
+      }
+      try {
+        await App.pos.products.updateOpenDetails(id, {
+          base_unit: baseUnit,
+          stock,
+          reason: 'Cashier Newly Added Items correction',
+        });
+        App.ui.toast('Unit and stock updated ✓', 'ok');
+        m.close();
+        await this._load();
+        this._renderChips();
+        this._renderGrid();
+      } catch (e) {
+        App.ui.toast(e.message, 'err');
+      }
+    };
+  },
 
   _catModal() {
     const m = App.ui.modal({

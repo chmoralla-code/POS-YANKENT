@@ -62,6 +62,7 @@ function assertStockAvailable(db, items) {
 // triggers it) or the account-credit check (only 'account' triggers it) by
 // passing an unknown string.
 const VALID_PAYMENT_METHODS = new Set(['cash', 'card', 'ewallet', 'account']);
+const CASHIER_OPEN_PRICE_CATEGORY = 'Newly Added Items';
 
 function register(ipcMain, ctx) {
   const { db, guard } = ctx;
@@ -133,7 +134,10 @@ function register(ipcMain, ctx) {
     // display-only: trusting its price/factor/service flag would allow stale
     // UI state (or a malformed payload) to undercharge or bypass stock.
     const productStmt = db.prepare(
-      'SELECT id, sku, name, base_unit, is_service FROM products WHERE id=? AND active=1'
+      `SELECT p.id, p.sku, p.name, p.base_unit, p.is_service, c.name AS category
+         FROM products p
+         LEFT JOIN categories c ON c.id=p.category_id
+        WHERE p.id=? AND p.active=1`
     );
     const unitStmt = db.prepare(
       'SELECT unit, factor, price FROM product_units WHERE product_id=? AND unit=?'
@@ -148,15 +152,35 @@ function register(ipcMain, ctx) {
       const requestedUnit = String(i.unit || product.base_unit || '').trim();
       const sellUnit = unitStmt.get(productId, requestedUnit);
       if (!sellUnit) throw new Error(`Invalid unit for ${product.name}: ${requestedUnit || '(empty)'}`);
-      const unitPrice = nonNegativeNumber(sellUnit.price, 'unit price');
+      const catalogPrice = nonNegativeNumber(sellUnit.price, 'unit price');
+      // Open-price items (catalog price ₱0) may be priced by the cashier at
+      // sale time. Fixed catalog prices stay authoritative.
+      let unitPrice = catalogPrice;
+      if (catalogPrice === 0) {
+        if (session.role !== 'admin' && product.category !== CASHIER_OPEN_PRICE_CATEGORY) {
+          throw new Error('Cashier-entered prices are limited to Newly Added Items');
+        }
+        // Sale prices are currency amounts, so normalize cashier input to
+        // cents before validating/persisting it. Without this, a value such
+        // as ₱0.001 passes the positive-number check but rounds to a free
+        // line while inventory is still deducted.
+        unitPrice = round2(nonNegativeNumber(i.unitPrice ?? 0, 'unit price'));
+        if (unitPrice < 0.01) {
+          throw new Error(`Enter a price of at least ₱0.01 for ${product.name}`);
+        }
+      }
       const factor = Number(sellUnit.factor);
       if (!Number.isFinite(factor) || factor <= 0) throw new Error(`Invalid stock factor for ${product.name}`);
       const isService = !!product.is_service;
+      const amount = round2(qty * unitPrice);
+      if (amount < 0.01) {
+        throw new Error(`Line total must be at least ₱0.01 for ${product.name}`);
+      }
       return {
         productId,
         sku: product.sku, name: product.name, unit: sellUnit.unit,
         qty, unitPrice, factor,
-        amount: round2(qty * unitPrice),
+        amount,
         lineType: isService ? 'service' : 'product',
         // Inventory supports fractional units (the UI permits 0.001). Money
         // rounding here used to turn small but valid quantities into zero,
