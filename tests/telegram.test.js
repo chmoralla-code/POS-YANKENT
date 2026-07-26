@@ -95,19 +95,19 @@ test('escapeHtml escapes <, >, & in user-supplied text', () => {
   assert.equal(escapeHtml('<&>'), '&lt;&amp;&gt;');
 });
 
-test('fresh installations do not ship Telegram credentials', async () => {
+test('fresh installations seed default Telegram credentials', async () => {
   const t = await setup();
   assert.equal(
     t.api.db.prepare("SELECT value FROM settings WHERE key='telegram_token'").get().value,
-    ''
+    '8888024178:AAHEtknhc05MJzP1d0kCGXoEXpV0xXhJCaE'
   );
   assert.equal(
     t.api.db.prepare("SELECT value FROM settings WHERE key='telegram_chat_id'").get().value,
-    ''
+    '5161011730'
   );
   assert.equal(
     t.api.db.prepare("SELECT value FROM settings WHERE key='telegram_enabled'").get().value,
-    '0'
+    '1'
   );
   t.api.close();
 });
