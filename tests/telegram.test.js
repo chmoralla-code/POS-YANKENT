@@ -5,6 +5,7 @@ const assert = require('node:assert');
 const { createSession } = require('../src/main/lib/auth');
 const { makeApi } = require('./ipc-harness');
 const { buildReportMessage, buildAnalytics, escapeHtml } = require('../src/main/lib/telegram');
+const { _redactTelegramBackupSecrets } = require('../src/main/ipc/integrations');
 
 async function setup() {
   const api = await makeApi();
@@ -94,19 +95,19 @@ test('escapeHtml escapes <, >, & in user-supplied text', () => {
   assert.equal(escapeHtml('<&>'), '&lt;&amp;&gt;');
 });
 
-test('fresh installations do not ship Telegram credentials', async () => {
+test('fresh installations seed default Telegram credentials', async () => {
   const t = await setup();
   assert.equal(
     t.api.db.prepare("SELECT value FROM settings WHERE key='telegram_token'").get().value,
-    ''
+    '8888024178:AAHEtknhc05MJzP1d0kCGXoEXpV0xXhJCaE'
   );
   assert.equal(
     t.api.db.prepare("SELECT value FROM settings WHERE key='telegram_chat_id'").get().value,
-    ''
+    '5161011730'
   );
   assert.equal(
     t.api.db.prepare("SELECT value FROM settings WHERE key='telegram_enabled'").get().value,
-    '0'
+    '1'
   );
   t.api.close();
 });
@@ -169,4 +170,20 @@ test('sendReport handler returns { ok:false, error } on failure (not hidden behi
   assert.equal(unwrapped.ok, false);
   assert.ok(unwrapped.error);
   t.api.close();
+});
+
+test('Telegram report backup never contains the bot token', () => {
+  const data = {
+    tables: {
+      settings: [
+        { key: 'telegram_token', value: '123:very-secret' },
+        { key: 'telegram_chat_id', value: '456' },
+        { key: 'store_name', value: 'YANKENT POS' },
+      ],
+    },
+  };
+  _redactTelegramBackupSecrets(data);
+  assert.equal(data.tables.settings.find((row) => row.key === 'telegram_token').value, '');
+  assert.equal(data.tables.settings.find((row) => row.key === 'telegram_chat_id').value, '456');
+  assert.equal(JSON.stringify(data).includes('very-secret'), false);
 });

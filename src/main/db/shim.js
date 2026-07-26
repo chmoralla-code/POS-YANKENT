@@ -30,6 +30,7 @@ class Statement {
   constructor(db, sql) { this.db = db; this.stmt = db._raw.prepare(sql); }
   _bind(args) { this.stmt.reset(); this.stmt.bind(args); }
   run(...args) {
+    this.db._assertWritable();
     this._bind(args);
     this.stmt.step();
     const changes = this.db._raw.getRowsModified();
@@ -55,43 +56,95 @@ class Statement {
 }
 
 class Database {
-  constructor(raw, filePath) { this._raw = raw; this.filePath = filePath; this._inTx = 0; }
-  exec(sql) { this._raw.exec(sql); this._markDirty(); }
+  constructor(raw, filePath) {
+    this._raw = raw;
+    this.filePath = filePath;
+    this._inTx = 0;
+    this._persistenceError = null;
+    this._foreignKeysEnabled = false;
+  }
+  exec(sql) {
+    this._assertWritable();
+    this._raw.exec(sql);
+    this._markDirty();
+  }
   prepare(sql) { return new Statement(this, sql); }
-  run(sql, params) { this._raw.run(sql, params); this._markDirty(); return this; }
-  pragma() { /* no-op: sql.js ignores WAL; FK enforcement not required by the app */ }
+  run(sql, params) {
+    this._assertWritable();
+    this._raw.run(sql, params);
+    this._markDirty();
+    return this;
+  }
+  pragma(source) {
+    const text = String(source || '').trim();
+    if (!/^foreign_keys\s*=\s*(?:ON|OFF)$/i.test(text)) {
+      throw new Error('Unsupported PRAGMA');
+    }
+    this._raw.run('PRAGMA ' + text);
+    this._foreignKeysEnabled = /=\s*ON$/i.test(text);
+    return this;
+  }
   transaction(fn) {
     const self = this;
     return function (...args) {
+      self._assertWritable();
       self._raw.run('BEGIN');
       self._inTx++;
+      let result;
       try {
-        const r = fn.apply(this, args);
+        result = fn.apply(this, args);
         self._raw.run('COMMIT');
-        self._inTx--;
-        self._flush();
-        return r;
       } catch (e) {
-        self._inTx--;
         try { self._raw.run('ROLLBACK'); } catch {}
         throw e;
+      } finally {
+        self._inTx--;
       }
+      self.flush();
+      return result;
     };
   }
-  _markDirty() { if (this._inTx === 0) this._flush(); }
+  _assertWritable() {
+    if (!this._persistenceError) return;
+    const error = new Error(
+      'Database changes cannot be saved. Restart YANKENT POS and check that the drive has free space.'
+    );
+    error.code = 'PERSISTENCE_ERROR';
+    error.cause = this._persistenceError;
+    throw error;
+  }
+  _markDirty() { if (this._inTx === 0) this.flush(); }
   flush() {
     if (!this.filePath) return true;
-    fs.writeFileSync(this.filePath, Buffer.from(this._raw.export()));
-    return true;
-  }
-  _flush() {
-    try { this.flush(); } catch {}
+    const tempPath = this.filePath + '.tmp';
+    try {
+      const bytes = Buffer.from(this._raw.export());
+      // sql.js export() reopens its in-memory SQLite connection and resets
+      // connection-scoped PRAGMAs. Restore FK enforcement immediately so the
+      // next write cannot bypass cascades or SET NULL constraints.
+      if (this._foreignKeysEnabled) this._raw.run('PRAGMA foreign_keys = ON');
+      fs.writeFileSync(tempPath, bytes);
+      fs.renameSync(tempPath, this.filePath);
+      this._persistenceError = null;
+      return true;
+    } catch (error) {
+      this._persistenceError = error;
+      try { fs.unlinkSync(tempPath); } catch {}
+      const persistenceError = new Error(
+        'Database changes could not be saved. Check that the drive has free space, then restart YANKENT POS.'
+      );
+      persistenceError.code = 'PERSISTENCE_ERROR';
+      persistenceError.cause = error;
+      throw persistenceError;
+    }
   }
   close(options = {}) {
+    let flushError = null;
     if (options.flush !== false) {
-      try { this._flush(); } catch {}
+      try { this.flush(); } catch (error) { flushError = error; }
     }
     try { this._raw.close(); } catch {}
+    if (flushError) throw flushError;
   }
   getRowsModified() { return this._raw.getRowsModified(); }
 }

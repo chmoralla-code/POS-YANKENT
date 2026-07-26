@@ -19,6 +19,11 @@ async function openDatabase(dbPath) {
     .split('\n').filter((l) => !/^\s*PRAGMA/i.test(l)).join('\n');
   db.exec(schema);
   migrate(db);
+  // sql.js supports SQLite foreign keys, but unlike native SQLite wrappers it
+  // does not enable them automatically. Turn enforcement on after migrations
+  // (which rebuild a few legacy tables) so cascades and SET NULL guarantees
+  // in schema.sql actually protect normal app writes.
+  db.pragma('foreign_keys = ON');
   return db;
 }
 
@@ -37,18 +42,21 @@ function migrate(db) {
   // identical except for the constraint.
   const smSchema = db.prepare("SELECT sql FROM sqlite_master WHERE name='stock_movements'").get();
   if (smSchema && smSchema.sql && !smSchema.sql.includes("'refund'")) {
-    db.exec('ALTER TABLE stock_movements RENAME TO stock_movements_old');
-    db.exec(`CREATE TABLE stock_movements (
-      id          INTEGER PRIMARY KEY AUTOINCREMENT,
-      product_id  INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-      movement    TEXT NOT NULL CHECK (movement IN ('sale','restock','adjustment','refund')),
-      qty_change  REAL NOT NULL,
-      reason      TEXT,
-      user_id     INTEGER REFERENCES users(id),
-      datetime    TEXT NOT NULL DEFAULT (datetime('now'))
-    )`);
-    db.exec('INSERT INTO stock_movements SELECT * FROM stock_movements_old');
-    db.exec('DROP TABLE stock_movements_old');
+    db.transaction(() => {
+      db.exec('ALTER TABLE stock_movements RENAME TO stock_movements_old');
+      db.exec(`CREATE TABLE stock_movements (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id  INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+        movement    TEXT NOT NULL CHECK (movement IN ('sale','restock','adjustment','refund')),
+        qty_change  REAL NOT NULL,
+        reason      TEXT,
+        user_id     INTEGER REFERENCES users(id),
+        datetime    TEXT NOT NULL DEFAULT (datetime('now'))
+      )`);
+      db.exec('INSERT INTO stock_movements SELECT * FROM stock_movements_old');
+      db.exec('DROP TABLE stock_movements_old');
+      db.exec('CREATE INDEX IF NOT EXISTS idx_stock_movements_product ON stock_movements(product_id)');
+    })();
   }
 
   // ---- stock_movements: add source_location column ---------------------
@@ -178,11 +186,11 @@ const SETTINGS_DEFAULTS = {
   // sale.  '1' = enabled (default), '0' = disabled.
   startup_test_print: '1',
   startup_test_printer: 'POS-58',
-  // Telegram credentials are installation-specific secrets. Enter them
-  // once in Settings; never ship them in source code or an installer.
-  telegram_token: '',
-  telegram_chat_id: '',
-  telegram_enabled: '0',
+  // Default Telegram integration for this store's installer builds.
+  // Fresh installs and blank upgrades get these; Settings can still override.
+  telegram_token: '8888024178:AAHEtknhc05MJzP1d0kCGXoEXpV0xXhJCaE',
+  telegram_chat_id: '5161011730',
+  telegram_enabled: '1',
   // Owner-entered store expenses for the simple Analytics earnings card.
   // Earnings = this month's sales − this value (beginner-friendly, one blank).
   analytics_total_expenses: '0',
@@ -201,6 +209,25 @@ function ensureSettings(db) {
   });
   tx(Object.entries(SETTINGS_DEFAULTS));
 
+  // Older installs may already have blank telegram_* rows, or a previous
+  // store chat ID. Apply the current store defaults without wiping a custom
+  // chat/token the owner typed in Settings.
+  const token = getSetting(db, 'telegram_token');
+  const chatId = String(getSetting(db, 'telegram_chat_id') || '');
+  const legacyChatIds = new Set(['', '5144639792']);
+  let appliedDefaults = false;
+  if (!token) {
+    setSetting(db, 'telegram_token', SETTINGS_DEFAULTS.telegram_token);
+    appliedDefaults = true;
+  }
+  if (legacyChatIds.has(chatId)) {
+    setSetting(db, 'telegram_chat_id', SETTINGS_DEFAULTS.telegram_chat_id);
+    setSetting(db, 'telegram_token', SETTINGS_DEFAULTS.telegram_token);
+    appliedDefaults = true;
+  }
+  if (appliedDefaults) {
+    setSetting(db, 'telegram_enabled', SETTINGS_DEFAULTS.telegram_enabled);
+  }
 
   return SETTINGS_DEFAULTS;
 }

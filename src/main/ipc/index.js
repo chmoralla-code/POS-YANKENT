@@ -9,16 +9,80 @@
  * { ok, data } | { ok:false, error, code } envelope.
  */
 
-function makeGuard({ getSession, requireRole, touchSession, isSessionExpired, getSetting, db }) {
+const { SETTINGS_DEFAULTS } = require('../db');
+
+const SECRET_SETTING_KEYS = new Set(['telegram_token', 'telegram_chat_id']);
+const BOOLEAN_SETTING_KEYS = new Set(['printer_auto_print', 'startup_test_print', 'telegram_enabled']);
+
+function validatedSettingValue(key, value) {
+  if (!Object.prototype.hasOwnProperty.call(SETTINGS_DEFAULTS, key)) {
+    throw new Error('Unknown setting');
+  }
+  const text = String(value == null ? '' : value);
+  if (text.length > 2000) throw new Error('Setting value is too long');
+
+  if (BOOLEAN_SETTING_KEYS.has(key)) {
+    if (!['0', '1'].includes(text)) throw new Error('Invalid on/off setting');
+    return text;
+  }
+  if (key === 'printer_type') {
+    if (!['bluetooth', 'system', 'none'].includes(text)) throw new Error('Invalid printer type');
+    return text;
+  }
+  if (key === 'receipt_width') {
+    if (!['32', '48'].includes(text)) throw new Error('Receipt width must be 32 or 48');
+    return text;
+  }
+
+  const numericRanges = {
+    vat_rate: [0, 100],
+    discount_percent: [0, 100],
+    analytics_total_expenses: [0, Number.MAX_SAFE_INTEGER],
+    session_idle_timeout: [0, 1440],
+  };
+  if (numericRanges[key]) {
+    const number = Number(text);
+    const [min, max] = numericRanges[key];
+    if (!Number.isFinite(number) || number < min || number > max) {
+      throw new Error(`Invalid value for ${key}`);
+    }
+    return String(number);
+  }
+  return text;
+}
+
+function makeGuard({ getSession, requireRole, touchSession, isSessionExpired, getSetting, db, logout }) {
   return function guard(ipcMain, channel, opts, handler) {
     ipcMain.handle(channel, async (event, token, ...args) => {
       try {
         const session = getSession(token);
+        if (opts && (opts.auth || opts.admin) && token && !session) {
+          const err = new Error('Session expired or was revoked');
+          err.code = 'SESSION_EXPIRED';
+          throw err;
+        }
         // Check idle timeout for authenticated endpoints.
         if (opts && (opts.auth || opts.admin) && session) {
-          const idleMin = Number(getSetting(db, 'session_idle_timeout') || '15');
+          const currentUser = db.prepare(
+            'SELECT id, username, full_name, role, active FROM users WHERE id=?'
+          ).get(session.id);
+          if (!currentUser || !currentUser.active) {
+            logout(token);
+            const err = new Error('Session is no longer active');
+            err.code = 'SESSION_EXPIRED';
+            throw err;
+          }
+          // Roles and display names can be changed by another administrator
+          // while a session is open. Never keep authorizing stale privileges.
+          session.username = currentUser.username;
+          session.full_name = currentUser.full_name;
+          session.role = currentUser.role;
+
+          const configuredIdleMin = Number(getSetting(db, 'session_idle_timeout'));
+          const idleMin = Number.isFinite(configuredIdleMin) ? configuredIdleMin : 15;
           if (idleMin > 0 && isSessionExpired(token, idleMin * 60 * 1000)) {
             // Session expired — force re-authentication.
+            logout(token);
             const err = new Error('Session expired due to inactivity');
             err.code = 'SESSION_EXPIRED';
             throw err;
@@ -42,10 +106,10 @@ function registerAll(ipcMain, ctx) {
 
   const { db } = ctx;
   const crypto = require('crypto');
-  const { verifyPassword, createSession, logout, hashPassword, touchSession, isSessionExpired, DEFAULT_IDLE_TIMEOUT_MS } = require('../lib/auth');
+  const { verifyPassword, createSession, logout, logoutUser, hashPassword, touchSession, isSessionExpired } = require('../lib/auth');
   const { checkOnline, sendApprovalRequest, pollUpdates, answerCallback, deleteWebhook } = require('../lib/telegram');
 
-  const guard = makeGuard({ ...ctx, touchSession, isSessionExpired });
+  const guard = makeGuard({ ...ctx, touchSession, isSessionExpired, logout });
 
   // In-memory pending password-reset requests (token -> {userId, username, status, createdAt})
   const pendingResets = new Map();
@@ -57,7 +121,9 @@ function registerAll(ipcMain, ctx) {
   let discardPendingSalesForToken = () => 0;
 
   // ---- Auth --------------------------------------------------------------
-  ipcMain.handle('pos:auth:login', async (_e, { username, password }) => {
+  ipcMain.handle('pos:auth:login', async (_e, credentials = {}) => {
+    const username = String(credentials.username || '').trim();
+    const password = String(credentials.password || '');
     const user = db.prepare('SELECT * FROM users WHERE username=? AND active=1').get(username);
     if (!user || !verifyPassword(password, user.password_hash)) {
       return { ok: false, error: 'Invalid username or password', code: 'AUTH' };
@@ -78,17 +144,30 @@ function registerAll(ipcMain, ctx) {
   });
 
   // ---- Session heartbeat (idle timeout) ---------------------------------
-  // The renderer calls this on every user activity (mouse/keyboard) to
-  // keep the session alive.  Returns whether the session is still valid.
-  ipcMain.handle('pos:auth:heartbeat', async (_e, token) => {
+  // The renderer checks this periodically and tells us whether activity
+  // occurred since the previous check. A passive check must not itself count
+  // as activity or the configured idle timeout can never expire.
+  ipcMain.handle('pos:auth:heartbeat', async (_e, token, active = true) => {
     if (!token) return { ok: true, data: { alive: false } };
-    const idleMin = Number(ctx.getSetting(db, 'session_idle_timeout') || '15');
-    const idleMs = (idleMin > 0 ? idleMin : 15) * 60 * 1000;
-    if (isSessionExpired(token, idleMs)) {
+    const session = ctx.getSession(token);
+    const currentUser = session && db.prepare(
+      'SELECT id, username, full_name, role, active FROM users WHERE id=?'
+    ).get(session.id);
+    if (!session || !currentUser || !currentUser.active) {
       logout(token);
       return { ok: true, data: { alive: false } };
     }
-    touchSession(token);
+    session.username = currentUser.username;
+    session.full_name = currentUser.full_name;
+    session.role = currentUser.role;
+
+    const configuredIdleMin = Number(ctx.getSetting(db, 'session_idle_timeout'));
+    const idleMin = Number.isFinite(configuredIdleMin) ? configuredIdleMin : 15;
+    if (idleMin > 0 && isSessionExpired(token, idleMin * 60 * 1000)) {
+      logout(token);
+      return { ok: true, data: { alive: false } };
+    }
+    if (active !== false) touchSession(token);
     return { ok: true, data: { alive: true } };
   });
 
@@ -150,6 +229,7 @@ function registerAll(ipcMain, ctx) {
       if (req.status !== 'approved') return { ok: false, error: 'Reset has not been approved' };
       if (!newPassword || newPassword.length < 4) return { ok: false, error: 'Password must be at least 4 characters' };
       db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(hashPassword(newPassword), req.userId);
+      logoutUser(req.userId);
       pendingResets.delete(token);
       return { ok: true, data: true };
     } catch (e) { return { ok: false, error: e.message }; }
@@ -207,16 +287,16 @@ function registerAll(ipcMain, ctx) {
   // name/id remains attributable.
   guard(ipcMain, 'pos:users:delete', { admin: true }, (_c, id) => {
     if (!id) throw new Error('User id is required');
-    const target = db.prepare('SELECT username, role FROM users WHERE id=?').get(id);
+    const target = db.prepare('SELECT id, username, role, active FROM users WHERE id=?').get(id);
     if (!target) throw new Error('User not found');
     // Refuse to delete the only remaining admin — prevents lockout.
-    if (target.role === 'admin') {
+    if (target.role === 'admin' && target.active) {
       const adminCount = db.prepare("SELECT COUNT(*) AS c FROM users WHERE role='admin' AND active=1").get().c;
       if (adminCount <= 1) throw new Error('Cannot delete the only active admin');
     }
     // Refuse to delete the currently-logged-in user.
     const me = _c.session;
-    if (me && me.id === id) throw new Error('You cannot delete your own account');
+    if (me && me.id === target.id) throw new Error('You cannot delete your own account');
     const hasHistory =
       db.prepare('SELECT 1 FROM sales WHERE cashier_id=? LIMIT 1').get(id) ||
       db.prepare('SELECT 1 FROM refunds WHERE cashier_id=? OR admin_id=? LIMIT 1').get(id, id) ||
@@ -233,20 +313,27 @@ function registerAll(ipcMain, ctx) {
     return { deleted: true, deactivated: false };
   });
 
-  guard(ipcMain, 'pos:users:setPassword', { admin: true }, (_c, id, password) => {
+  guard(ipcMain, 'pos:users:setPassword', { admin: true }, ({ token }, id, password) => {
     const value = String(password || '');
     if (value.length < 4) throw new Error('Password must be at least 4 characters');
     const target = db.prepare('SELECT id FROM users WHERE id=?').get(id);
     if (!target) throw new Error('User not found');
     db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(hashPassword(value), target.id);
+    logoutUser(target.id, token);
     return true;
   });
 
   // ---- Settings ----------------------------------------------------------
-  guard(ipcMain, 'pos:settings:getAll', { auth: true }, () => ctx.getAllSettings(db));
+  guard(ipcMain, 'pos:settings:getAll', { auth: true }, ({ session }) => {
+    const settings = ctx.getAllSettings(db);
+    if (session.role !== 'admin') {
+      for (const key of SECRET_SETTING_KEYS) settings[key] = '';
+    }
+    return settings;
+  });
 
   guard(ipcMain, 'pos:settings:set', { admin: true }, (_c, key, value) => {
-    ctx.setSetting(db, key, value);
+    ctx.setSetting(db, key, validatedSettingValue(String(key || ''), value));
     return true;
   });
 
@@ -276,4 +363,4 @@ function registerAll(ipcMain, ctx) {
   if (win && !win.isDestroyed()) win.webContents.send('pos:app:ready');
 }
 
-module.exports = { registerAll, makeGuard };
+module.exports = { registerAll, makeGuard, validatedSettingValue };

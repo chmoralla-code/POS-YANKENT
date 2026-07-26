@@ -183,6 +183,57 @@ test.describe('POS — Cart', () => {
       await expect(page.locator('#posPay button[data-pay="cash"]')).toHaveAttribute('aria-pressed', 'true');
     } finally { await electron.close(); }
   });
+
+  test('checkout saves entered cash and electronic payment references', async () => {
+    const { electron, page } = await launchApp();
+    try {
+      await login(page, 'admin', 'admin123');
+      await page.evaluate(async () => {
+        await window.pos.products.create({
+          sku: 'E2E-PAY',
+          name: 'E2E Payment Item',
+          base_unit: 'pc',
+          stock: 10,
+          cost: 0,
+          price: 30,
+          low_stock_threshold: 1,
+          is_service: false,
+          units: [{ unit: 'pc', factor: 1, price: 30 }],
+        });
+      });
+      await page.click('.nav-item[data-view="products"]');
+      await page.click('.nav-item[data-view="pos"]');
+      await page.waitForSelector('#posSearch');
+      await page.fill('#posSearch', 'E2E Payment Item');
+      await page.waitForTimeout(400);
+      await page.locator('.prod-card', { hasText: 'E2E Payment Item' }).click();
+
+      await page.click('#posCharge');
+      await page.fill('#payCash', '20');
+      await page.locator('.modal [data-a="ok"]').click();
+      await expect(page.locator('#toast')).toContainText('less than the amount due');
+      await expect(page.locator('#payCash')).toBeVisible();
+      await page.fill('#payCash', '50');
+      await page.locator('.modal [data-a="ok"]').click();
+      await expect(page.locator('.modal-h span')).toContainText('Receipt');
+      const cashTxn = (await page.locator('.modal-h span').textContent()).match(/YK-\d+/)[0];
+      const cashSale = await page.evaluate((txn) => window.pos.sales.get(txn), cashTxn);
+      expect(cashSale.amount_tendered).toBe(50);
+      expect(cashSale.change).toBe(20);
+      await page.locator('.modal .x').click();
+
+      await page.click('#posPay button[data-pay="card"]');
+      await page.click('#posCharge');
+      await page.fill('#payRef', 'CARD-E2E-REFERENCE');
+      await page.locator('.modal [data-a="ok"]').click();
+      await expect(page.locator('.modal-h span')).toContainText('Receipt');
+      const cardTxn = (await page.locator('.modal-h span').textContent()).match(/YK-\d+/)[0];
+      const cardSale = await page.evaluate((txn) => window.pos.sales.get(txn), cardTxn);
+      expect(cardSale.reference).toBe('CARD-E2E-REFERENCE');
+      expect(cardSale.amount_tendered).toBe(0);
+      await page.locator('.modal .x').click();
+    } finally { await electron.close(); }
+  });
 });
 
 test.describe('POS — Cashier refund controls', () => {

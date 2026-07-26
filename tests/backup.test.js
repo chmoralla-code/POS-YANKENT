@@ -51,3 +51,22 @@ test('import rejects invalid backup files', async () => {
   assert.throws(() => importAll(db, { tables: {} }), /missing table/);
   close();
 });
+
+test('import rejects untrusted backup column names before wiping current data', async () => {
+  const { db, close } = await freshDb();
+  const beforeProducts = db.prepare('SELECT COUNT(*) AS c FROM products').get().c;
+  const data = exportAll(db);
+  data.tables.products[0]["name) VALUES ('injected'); DELETE FROM users; --"] = 'attack';
+  assert.throws(() => importAll(db, data), /unknown column/i);
+  assert.equal(db.prepare('SELECT COUNT(*) AS c FROM products').get().c, beforeProducts);
+  assert.ok(db.prepare("SELECT id FROM users WHERE username='admin'").get());
+  close();
+});
+
+test('backup import restores foreign-key enforcement after completion', async () => {
+  const { db, close } = await freshDb();
+  const data = exportAll(db);
+  importAll(db, data);
+  assert.equal(Number(db.prepare('PRAGMA foreign_keys').get().foreign_keys), 1);
+  close();
+});

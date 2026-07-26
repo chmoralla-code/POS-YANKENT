@@ -599,7 +599,7 @@ App.views.reports = {
     // The Restock History tab has its own date filters (dFrom/dTo); the
     // Sales Reports tab uses from/to.  Pass the right range per tab/type.
     const f = type === 'deliveries'
-      ? { from: this.dFrom || undefined, to: this.dTo || undefined }
+      ? { from: this.dFrom || undefined, to: this.dTo || undefined, q: this.dQ || undefined }
       : { from: this.from || undefined, to: this.to || undefined };
     try { const p = await App.pos.reports.exportCSV(type, f); if (p) App.ui.toast('Exported: ' + p, 'ok'); }
     catch (e) { App.ui.toast(e.message, 'err'); }
@@ -630,8 +630,8 @@ App.views.reports = {
       This Month: <b>${App.ui.money(s.month.total)}</b> / ${s.month.tx} tx<br>
       This Year: <b>${App.ui.money(s.year.total)}</b> / ${s.year.tx} tx<br>
       Best Day: <b>${s.bestDay ? App.ui.money(s.bestDay.total) + ' (' + s.bestDay.label + ')' : '—'}</b></p>
-      <h3>Best-selling</h3><table><tr><th>Item</th><th class="r">Qty</th><th class="r">Total</th></tr>${d.best.map((b) => `<tr><td>${b.name}</td><td class="r">${App.ui.qty(b.qty)}</td><td class="r">${App.ui.money(b.total)}</td></tr>`).join('')}</table>
-      <h3>By cashier</h3><table><tr><th>Cashier</th><th class="r">Tx</th><th class="r">Total</th></tr>${d.csr.map((c) => `<tr><td>${c.cashier_name}</td><td class="r">${c.tx}</td><td class="r">${App.ui.money(c.total)}</td></tr>`).join('')}</table>
+      <h3>Best-selling</h3><table><tr><th>Item</th><th class="r">Qty</th><th class="r">Total</th></tr>${d.best.map((b) => `<tr><td>${App.ui.esc(b.name)}</td><td class="r">${App.ui.qty(b.qty)}</td><td class="r">${App.ui.money(b.total)}</td></tr>`).join('')}</table>
+      <h3>By cashier</h3><table><tr><th>Cashier</th><th class="r">Tx</th><th class="r">Total</th></tr>${d.csr.map((c) => `<tr><td>${App.ui.esc(c.cashier_name)}</td><td class="r">${c.tx}</td><td class="r">${App.ui.money(c.total)}</td></tr>`).join('')}</table>
       </body></html>`;
     App.pos.printer.printHtml(html).catch((e) => App.ui.toast(e.message, 'err'));
   },

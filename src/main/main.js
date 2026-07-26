@@ -11,6 +11,12 @@ const { registerAll } = require('./ipc');
 const { initUpdater } = require('./updater');
 const { exportAll } = require('./backup');
 const { startLoanReminderScheduler, DEFAULT_DRAIN_TIMEOUT_MS } = require('./lib/loan-reminders');
+const {
+  bootIdFrom,
+  isPathInside,
+  shouldClearLegacyAutostart,
+  isDatabaseCorruptionError,
+} = require('./lib/system');
 const os = require('os');
 
 const RENDERER_DIR = path.join(__dirname, '..', 'renderer');
@@ -79,10 +85,7 @@ function startupTestMarkerPath() {
 }
 
 function currentBootId() {
-  // os.uptime() is seconds since the OS booted.  Combining it with the
-  // process start time gives a stable per-boot identifier: two app launches
-  // in the same boot session see the same rounded uptime.
-  return Math.floor(os.uptime() / 60);
+  return bootIdFrom(Date.now(), os.uptime());
 }
 
 function shouldRunStartupTest() {
@@ -248,8 +251,21 @@ function createWindow() {
 
   // Open external links in the system browser, never inside the app.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:\/\//.test(url)) { shell.openExternal(url); return { action: 'deny' }; }
+    try {
+      const target = new URL(url);
+      if (target.protocol === 'https:') shell.openExternal(target.toString());
+    } catch {}
     return { action: 'deny' };
+  });
+  // Never let the privileged BrowserWindow navigate to an untrusted origin.
+  // The preload bridge is attached to this window, so an external document
+  // loaded in-place must not inherit access to POS IPC methods.
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    try {
+      const target = new URL(url);
+      if (target.protocol === 'yankent:' && target.hostname === 'app') return;
+    } catch {}
+    event.preventDefault();
   });
 
   // If the renderer process crashes (GPU failure, OOM, etc.), reload the
@@ -273,11 +289,18 @@ function createWindow() {
 
 function registerProtocol() {
   protocol.handle('yankent', (request) => {
-    const u = new URL(request.url);
-    let rel = decodeURIComponent(u.pathname);
+    let u;
+    let rel;
+    try {
+      u = new URL(request.url);
+      if (u.hostname !== 'app') return new Response('Forbidden', { status: 403 });
+      rel = decodeURIComponent(u.pathname);
+    } catch {
+      return new Response('Bad request', { status: 400 });
+    }
     if (rel === '/' || rel === '') rel = '/index.html';
     const filePath = path.normalize(path.join(RENDERER_DIR, rel));
-    if (!filePath.startsWith(RENDERER_DIR)) {
+    if (!isPathInside(RENDERER_DIR, filePath)) {
       return new Response('Forbidden', { status: 403 });
     }
     return net.fetch('file:///' + filePath.replace(/\\/g, '/').replace(/^\//, ''));
@@ -306,16 +329,41 @@ if (!gotTheLock) {
   // corrupted (partial write, disk full, forced shutdown), back it up and
   // create a fresh one so the app always boots instead of hanging on the
   // loading screen with no IPC handlers registered.
+  let recoveredDatabasePath = null;
   try {
     db = await openDatabase(dbPath());
     ensureSettings(db);
     seedDatabase(db);
   } catch (e) {
-    console.error('[main] Database open failed, attempting recovery:', e.message);
+    console.error('[main] Database open failed:', e.message);
+    if (!isDatabaseCorruptionError(e)) {
+      try {
+        dialog.showErrorBox(
+          'YANKENT POS could not open its database',
+          `The database was left untouched.\n\n${e.message}`
+        );
+      } catch {}
+      app.quit();
+      return;
+    }
+    console.error('[main] Database is corrupted; attempting recovery.');
     const p = dbPath();
     try {
-      if (fs.existsSync(p)) fs.renameSync(p, p + '.corrupted-' + Date.now());
-    } catch {}
+      if (fs.existsSync(p)) {
+        recoveredDatabasePath = p + '.corrupted-' + Date.now();
+        fs.renameSync(p, recoveredDatabasePath);
+      }
+    } catch (renameError) {
+      console.error('[main] Could not preserve corrupted database:', renameError.message);
+      try {
+        dialog.showErrorBox(
+          'YANKENT POS could not recover its database',
+          `The damaged database could not be moved and was left untouched.\n\n${renameError.message}`
+        );
+      } catch {}
+      app.quit();
+      return;
+    }
     try {
       db = await openDatabase(p);
       ensureSettings(db);
@@ -324,6 +372,21 @@ if (!gotTheLock) {
     } catch (e2) {
       console.error('[main] Database recovery also failed:', e2.message);
     }
+  }
+  if (!db) {
+    try {
+      dialog.showErrorBox('YANKENT POS could not start', 'A usable database could not be opened or created.');
+    } catch {}
+    app.quit();
+    return;
+  }
+  if (recoveredDatabasePath) {
+    try {
+      dialog.showErrorBox(
+        'YANKENT POS recovered from database corruption',
+        `A fresh database was created. The damaged original was preserved at:\n${recoveredDatabasePath}\n\nRestore the latest backup from Settings before entering new sales.`
+      );
+    } catch {}
   }
 
   // ---- Sweep orphaned pending sales -------------------------------------
@@ -369,7 +432,7 @@ if (!gotTheLock) {
   // registration so users who had it enabled without choosing to are freed.
   try {
     const autoStartInit = getSetting(db, 'autostart_initialized');
-    if (autoStartInit) {
+    if (shouldClearLegacyAutostart(autoStartInit)) {
       setAutoStartup(false);
       setSetting(db, 'autostart_initialized', '0');
       console.log('[main] Cleared legacy auto-startup registration.');

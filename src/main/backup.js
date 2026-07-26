@@ -27,8 +27,8 @@ const TABLES = [
 ];
 // Tables that use AUTOINCREMENT (and therefore have a sqlite_sequence row).
 const SEQ_TABLES = TABLES.filter((table) => table !== 'settings');
-// Wipe order: children first. The sql.js shim does not enforce every foreign
-// key path, but explicit ordering keeps restore behavior correct if it does.
+// Wipe order: children first so restore remains valid with foreign-key
+// enforcement enabled during all normal database work.
 const WIPE_ORDER = [
   'loan_reminders', 'loan_events', 'loan_payments', 'loans',
   'sale_items', 'stock_movements', 'refunds', 'sales', 'product_units',
@@ -72,6 +72,30 @@ function validateBackup(data) {
 function importAll(db, data) {
   validateBackup(data);
   assertLoanReminderRunIdle('restore a backup');
+
+  // Build every insert plan from the trusted local schema before deleting a
+  // single row. Backup keys are data, never SQL identifiers: rejecting
+  // unknown keys prevents malformed files from injecting SQL through column
+  // names and avoids silently ignoring columns that appear after row one.
+  const plans = {};
+  for (const table of TABLES) {
+    const rows = Array.isArray(data.tables[table]) ? data.tables[table] : [];
+    const allowed = db.prepare(`PRAGMA table_info(${table})`).all().map((column) => column.name);
+    const allowedSet = new Set(allowed);
+    for (const row of rows) {
+      if (!row || typeof row !== 'object' || Array.isArray(row)) {
+        throw new Error(`Backup table ${table} contains an invalid row`);
+      }
+      for (const key of Object.keys(row)) {
+        if (!allowedSet.has(key)) throw new Error(`Backup table ${table} contains an unknown column: ${key}`);
+      }
+    }
+    const cols = allowed.filter((column) =>
+      rows.some((row) => Object.prototype.hasOwnProperty.call(row, column))
+    );
+    plans[table] = { rows, cols };
+  }
+
   db.pragma('foreign_keys = OFF');
   const tx = db.transaction(() => {
     for (const table of WIPE_ORDER) db.exec(`DELETE FROM ${table};`);
@@ -80,9 +104,8 @@ function importAll(db, data) {
 
     for (const table of TABLES) {
       // Schema-v1 backups legitimately have no Loan tables.
-      const rows = Array.isArray(data.tables[table]) ? data.tables[table] : [];
+      const { rows, cols } = plans[table];
       if (!rows.length) continue;
-      const cols = Object.keys(rows[0]);
       if (!cols.length) continue;
       const stmt = db.prepare(
         `INSERT INTO ${table} (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`
@@ -113,8 +136,7 @@ function importAll(db, data) {
   });
   try {
     tx();
-    // The shim's transaction flush is intentionally best-effort. Verify the
-    // restored database reached disk before reporting import success.
+    // Verify the restored database reached disk before reporting success.
     db.flush();
   } finally {
     db.pragma('foreign_keys = ON');

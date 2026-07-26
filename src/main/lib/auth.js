@@ -76,6 +76,18 @@ function logout(token) {
   if (token) sessions.delete(token);
 }
 
+function logoutUser(userId, exceptToken = null) {
+  const id = Number(userId);
+  let removed = 0;
+  for (const [token, session] of sessions) {
+    if (session.id === id && token !== exceptToken) {
+      sessions.delete(token);
+      removed++;
+    }
+  }
+  return removed;
+}
+
 /**
  * Throw a permission error if the session lacks the required role.
  * @param {object|null} session - from getSession(token)
@@ -105,6 +117,7 @@ module.exports = {
   touchSession,
   isSessionExpired,
   logout,
+  logoutUser,
   requireRole,
   DEFAULT_IDLE_TIMEOUT_MS,
 };

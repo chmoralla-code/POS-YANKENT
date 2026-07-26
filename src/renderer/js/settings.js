@@ -47,7 +47,7 @@ App.views.settings = {
             <div class="collapse-arrow">▸</div>
             <div class="collapse-info">
               <div class="collapse-title">Store Information</div>
-              <div class="collapse-preview muted">${App.ui.esc(this.s.store_name || 'YANKENT POS')} · ${this.s.vat_rate || 12}% VAT</div>
+              <div class="collapse-preview muted">${App.ui.esc(this.s.store_name || 'YANKENT POS')} · ${App.ui.esc(this.s.vat_rate || 12)}% VAT</div>
             </div>
           </div>
           <div class="collapse-b">
@@ -76,7 +76,7 @@ App.views.settings = {
             <div class="collapse-arrow">▸</div>
             <div class="collapse-info">
               <div class="collapse-title">Thermal Printer (ESC/POS)</div>
-              <div class="collapse-preview muted">${printerPreview} · ${startupTestPreview}</div>
+              <div class="collapse-preview muted">${App.ui.esc(printerPreview)} · ${App.ui.esc(startupTestPreview)}</div>
             </div>
           </div>
           <div class="collapse-b">
@@ -121,7 +121,7 @@ App.views.settings = {
             <div class="collapse-arrow">▸</div>
             <div class="collapse-info">
               <div class="collapse-title">Telegram Owner Report</div>
-              <div class="collapse-preview muted">${tgPreview}</div>
+              <div class="collapse-preview muted">${App.ui.esc(tgPreview)}</div>
             </div>
           </div>
           <div class="collapse-b">
@@ -235,24 +235,36 @@ App.views.settings = {
 
     const save = async (keys) => {
       for (const k of keys) { const el = v.querySelector('#s_' + k); if (el) await App.pos.settings.set(k, el.value); }
-      App.settingsCache = await App.pos.settings.getAll(); App.currencySymbol = App.settingsCache.currency_symbol || '₱';
+      App.settingsCache = await App.pos.settings.getAll();
+      this.s = App.settingsCache;
+      App.currencySymbol = App.settingsCache.currency_symbol || '₱';
     };
-    v.querySelector('#sSaveStore').onclick = async () => { await save(['store_name','store_address','store_tin','store_phone','vat_rate','currency_symbol','receipt_width','discount_percent','receipt_footer','session_idle_timeout']); App.ui.toast('Store info saved ✓', 'ok'); this._updatePreview('store'); };
+    v.querySelector('#sSaveStore').onclick = async () => {
+      try {
+        await save(['store_name','store_address','store_tin','store_phone','vat_rate','currency_symbol','receipt_width','discount_percent','receipt_footer','session_idle_timeout']);
+        App.ui.toast('Store info saved ✓', 'ok');
+        await this._updatePreview('store');
+      } catch (e) { App.ui.toast(e.message, 'err'); }
+    };
     v.querySelector('#sSavePrinter').onclick = async () => {
-      await save(['printer_service_uuid','printer_char_uuid','printer_type']);
-      const c = v.querySelector('#sAuto').checked ? '1' : '0';
-      await App.pos.settings.set('printer_auto_print', c);
-      App.settingsCache.printer_auto_print = c;
-      // Startup test-print settings
-      const st = v.querySelector('#sStartupTest').checked ? '1' : '0';
-      await App.pos.settings.set('startup_test_print', st);
-      App.settingsCache.startup_test_print = st;
-      const printerSel = v.querySelector('#sStartupPrinter');
-      if (printerSel) {
-        await App.pos.settings.set('startup_test_printer', printerSel.value);
-        App.settingsCache.startup_test_printer = printerSel.value;
-      }
-      App.ui.toast('Printer settings saved ✓', 'ok'); this._updatePreview('printer');
+      try {
+        await save(['printer_service_uuid','printer_char_uuid','printer_type']);
+        const c = v.querySelector('#sAuto').checked ? '1' : '0';
+        await App.pos.settings.set('printer_auto_print', c);
+        App.settingsCache.printer_auto_print = c;
+        // Startup test-print settings
+        const st = v.querySelector('#sStartupTest').checked ? '1' : '0';
+        await App.pos.settings.set('startup_test_print', st);
+        App.settingsCache.startup_test_print = st;
+        const printerSel = v.querySelector('#sStartupPrinter');
+        if (printerSel) {
+          await App.pos.settings.set('startup_test_printer', printerSel.value);
+          App.settingsCache.startup_test_printer = printerSel.value;
+        }
+        this.s = App.settingsCache;
+        App.ui.toast('Printer settings saved ✓', 'ok');
+        await this._updatePreview('printer');
+      } catch (e) { App.ui.toast(e.message, 'err'); }
     };
     v.querySelector('#sSaveTg').onclick = async () => {
       const enabled = v.querySelector('#sTgEnabled').checked ? '1' : '0';
@@ -403,11 +415,11 @@ App.views.settings = {
     v.querySelector('#sTgTest').onclick = async () => { try { const r = await App.pos.telegram.test(); r.ok ? App.ui.toast('Test message sent ✓', 'ok') : App.ui.toast(r.error || 'Failed', 'err'); } catch (e) { App.ui.toast(e.message, 'err'); } };
     v.querySelector('#sTgReport').onclick = async () => { try { const r = await App.pos.telegram.sendReport(); r.ok ? App.ui.toast('Report sent ✓', 'ok') : App.ui.toast(r.error || 'Failed', 'err'); } catch (e) { App.ui.toast(e.message, 'err'); } };
 
-    v.querySelector('#sBackup').onclick = async () => { try { const r = await App.pos.backup.export(); if (r) v.querySelector('#sBackupResult').innerHTML = `<div class="hint">Backup saved: <b>${App.ui.esc(r.path)}</b><br>${Object.entries(r.tables).map(([k, n]) => k + ': ' + n).join(' · ')}</div>`; } catch (e) { App.ui.toast(e.message, 'err'); } };
+    v.querySelector('#sBackup').onclick = async () => { try { const r = await App.pos.backup.export(); if (r) v.querySelector('#sBackupResult').innerHTML = `<div class="hint">Backup saved: <b>${App.ui.esc(r.path)}</b><br>${Object.entries(r.tables).map(([k, n]) => App.ui.esc(k) + ': ' + App.ui.esc(n)).join(' · ')}</div>`; } catch (e) { App.ui.toast(e.message, 'err'); } };
     v.querySelector('#sImport').onclick = async () => {
       const ok = await App.ui.confirm('Importing will REPLACE all current data with the backup contents. Continue?');
       if (!ok) return;
-      try { const r = await App.pos.backup.import(); if (r) { App.ui.toast('Import complete ✓', 'ok'); v.querySelector('#sBackupResult').innerHTML = `<div class="hint">Restored from <b>${App.ui.esc(r.path)}</b><br>${Object.entries(r.tables).map(([k, n]) => k + ': ' + n).join(' · ')}</div>`; this.s = await App.pos.settings.getAll(); App.settingsCache = this.s; } }
+      try { const r = await App.pos.backup.import(); if (r) { App.ui.toast('Import complete ✓', 'ok'); v.querySelector('#sBackupResult').innerHTML = `<div class="hint">Restored from <b>${App.ui.esc(r.path)}</b><br>${Object.entries(r.tables).map(([k, n]) => App.ui.esc(k) + ': ' + App.ui.esc(n)).join(' · ')}</div>`; this.s = await App.pos.settings.getAll(); App.settingsCache = this.s; } }
       catch (e) { App.ui.toast(e.message, 'err'); }
     };
 
@@ -419,7 +431,7 @@ App.views.settings = {
         if (r.devMode) {
           el.innerHTML = '<div class="hint">Dev mode — publish a GitHub Release to test updates.</div>';
         } else if (r.available && App._isNewer(r.version, r.currentVersion)) {
-          el.innerHTML = `<div class="hint">v${r.currentVersion} → v${r.version} available</div>`;
+          el.innerHTML = `<div class="hint">v${App.ui.esc(r.currentVersion)} → v${App.ui.esc(r.version)} available</div>`;
           const ok = await App._showWhatsNew(r);
           if (!ok) return;
           const downloaded = await App._showDownloadProgress(r);
@@ -428,7 +440,7 @@ App.views.settings = {
             el.innerHTML = '<div class="hint" style="color:var(--danger)">Update download failed. Check your internet connection and try again.</div>';
           }
         } else {
-          el.innerHTML = '<div class="hint" style="color:var(--ok)">You are up to date (v' + r.currentVersion + ').</div>';
+          el.innerHTML = '<div class="hint" style="color:var(--ok)">You are up to date (v' + App.ui.esc(r.currentVersion) + ').</div>';
         }
       } catch (e) {
         v.querySelector('#sUpdateResult').innerHTML = `<div class="hint" style="color:var(--danger)">${App.ui.esc(e.message)}</div>`;

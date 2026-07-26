@@ -503,28 +503,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     App._loggingOut = true;
     const btn = document.getElementById('logoutBtn');
     const orig = btn ? btn.textContent : '';
-    // Ask the cashier whether to send the sales report + backup to the
-    // owner via Telegram before ending the session.  "No" skips sending
-    // and proceeds straight to logout — no data is lost either way.
-    try {
-      const send = await App.ui.confirm(
-        'Send the sales report + backup to the owner via Telegram before signing out?',
-        { title: 'Send Telegram report?', okText: 'Yes, send', cancelText: 'No, just sign out' }
-      );
-      if (send) {
-        if (btn) { btn.disabled = true; btn.textContent = 'Sending report…'; }
-        try {
-          const r = await App.pos.telegram.sendReport();
-          if (r && r.ok) App.ui.toast(r.warning ? ('Report sent, backup failed' + (r.warning ? ': ' + r.warning : '')) : 'Report + backup sent to owner ✓', r.warning ? 'err' : 'ok');
-          else if (r && r.error) App.ui.toast(r.error, 'err');
-        } catch (e) {
-          // Offline or not configured — silently skip (no data lost)
-        } finally {
-          if (btn) { btn.disabled = false; btn.textContent = orig; }
+    // An expired session cannot send an authenticated report. Skip that
+    // prompt when idle handling initiated logout, but retain it for a normal
+    // user-requested sign-out.
+    const skipReport = !!App._skipLogoutReport;
+    App._skipLogoutReport = false;
+    if (!skipReport) {
+      try {
+        const send = await App.ui.confirm(
+          'Send the sales report + backup to the owner via Telegram before signing out?',
+          { title: 'Send Telegram report?', okText: 'Yes, send', cancelText: 'No, just sign out' }
+        );
+        if (send) {
+          if (btn) { btn.disabled = true; btn.textContent = 'Sending report…'; }
+          try {
+            const r = await App.pos.telegram.sendReport();
+            if (r && r.ok) App.ui.toast(r.warning ? ('Report sent, backup failed' + (r.warning ? ': ' + r.warning : '')) : 'Report + backup sent to owner ✓', r.warning ? 'err' : 'ok');
+            else if (r && r.error) App.ui.toast(r.error, 'err');
+          } catch (e) {
+            // Offline or not configured — silently skip (no data lost)
+          } finally {
+            if (btn) { btn.disabled = false; btn.textContent = orig; }
+          }
         }
+      } catch (e) {
+        // confirm() dismissed — proceed to logout without sending
       }
-    } catch (e) {
-      // confirm() dismissed — proceed to logout without sending
     }
     await App.ui.closeAllModals();
     await App.pos.logout();
@@ -684,6 +688,8 @@ App._start = async function () {
   // main process reports the session is dead (exceeded the idle timeout
   // configured in Settings), the app auto-logs out so an unattended POS
   // can't be used by someone else.
+  App._lastActivity = Date.now();
+  App._lastHeartbeatActivity = App._lastActivity;
   if (!App._idleChecker) {
     // Reset the idle timer on any user activity. mousemove is throttled to
     // at most one write per 2s (the value is only read every 30s anyway),
@@ -696,17 +702,18 @@ App._start = async function () {
     ['mousemove', 'keydown', 'click', 'touchstart', 'wheel'].forEach((ev) =>
       document.addEventListener(ev, resetActivity, { passive: true })
     );
-    App._lastActivity = Date.now();
-
     App._idleChecker = setInterval(async () => {
       // Only check when the app is visible (not on the login screen).
       const appEl = document.getElementById('app');
       if (!appEl || appEl.classList.contains('hidden')) return;
       if (document.hidden) return; // tab/window minimized — don't burn CPU on heartbeat
       try {
-        const res = await App.pos.heartbeat();
+        const hadActivity = App._lastActivity > App._lastHeartbeatActivity;
+        if (hadActivity) App._lastHeartbeatActivity = App._lastActivity;
+        const res = await App.pos.heartbeat(hadActivity);
         if (res && res.alive === false) {
           App.ui.toast('Session expired due to inactivity', 'err');
+          App._skipLogoutReport = true;
           document.getElementById('logoutBtn').click();
         }
       } catch {}

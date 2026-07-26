@@ -3,6 +3,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 let token = null;
+let expiredToken = null;
 
 /**
  * Secure bridge between the renderer (UI) and the main process (local DB).
@@ -15,6 +16,7 @@ async function call(channel, ...args) {
   // Session expired — clear the token so subsequent calls fail fast and
   // the renderer can show the login screen instead of error toasts.
   if (r && r.code === 'SESSION_EXPIRED') {
+    expiredToken = token;
     token = null;
   }
   const err = new Error((r && r.error) || 'Request failed');
@@ -45,15 +47,23 @@ contextBridge.exposeInMainWorld('pos', {
   // ---- Auth ----
   async login(username, password) {
     const r = await ipcRenderer.invoke('pos:auth:login', { username, password });
-    if (r && r.ok) { token = r.data.token; return r.data; }
+    if (r && r.ok) { token = r.data.token; expiredToken = null; return r.data; }
     const err = new Error((r && r.error) || 'Login failed');
     err.code = r && r.code;
     throw err;
   },
-  async logout() { await ipcRenderer.invoke('pos:auth:logout', token); token = null; },
+  async logout() {
+    await ipcRenderer.invoke('pos:auth:logout', token || expiredToken);
+    token = null;
+    expiredToken = null;
+  },
   session: () => call('pos:auth:session'),
-  async heartbeat() {
-    const r = await ipcRenderer.invoke('pos:auth:heartbeat', token);
+  async heartbeat(active = true) {
+    const r = await ipcRenderer.invoke('pos:auth:heartbeat', token, active);
+    if (r && r.ok && r.data && r.data.alive === false) {
+      expiredToken = token;
+      token = null;
+    }
     return r && r.ok ? r.data : { alive: false };
   },
   async requestPasswordReset(username) {
