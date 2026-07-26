@@ -12,6 +12,10 @@ const NEWLY_ADDED_ITEMS_COUNT = 1592;
 const NEWLY_ADDED_ITEMS_UNIT_PRICE_FIX = 'newly_added_items_unit_price_v1';
 const NEWLY_ADDED_ITEMS_NOTEBOOK1_REMOVED = 'newly_added_items_notebook1_removed_v1';
 const NEWLY_ADDED_ITEMS_RECOUNT_V1 = 'newly_added_items_recount_v9';
+const NEWLY_ADDED_ITEMS_ERASED_STOCK_RECOVERY =
+  'newly_added_items_erased_stock_recovery_v2';
+const NEWLY_ADDED_ITEMS_ERASED_STOCK_REASON =
+  'Recovered after legacy Erase sales reset';
 const PRODUCT_CATALOG_PATH = path.join(
   __dirname,
   '..',
@@ -252,6 +256,90 @@ function applyNewlyAddedUnitPriceFix(db) {
 }
 
 /**
+ * Repair the inventory damage caused by releases where "Erase sales data"
+ * also set every product stock value to zero.
+ *
+ * A zero-stock item can be legitimate, so this migration only runs when both
+ * the full inventory and the installed Newly Added Items catalog show the
+ * mass-zero signature left by that old reset. Non-zero quantities are always
+ * preserved, including stock an administrator has already re-entered.
+ */
+function recoverErasedNewlyAddedStock(db) {
+  const marker = db.prepare('SELECT value FROM settings WHERE key=?')
+    .get(NEWLY_ADDED_ITEMS_ERASED_STOCK_RECOVERY);
+  if (marker) return { recovered: 0, detected: false, alreadyRun: true };
+
+  const items = getNewlyAddedItems();
+  const positiveCatalogItems = items.filter((item) => Number(item.stock) > 0);
+  const catalogStockBySku = new Map(
+    positiveCatalogItems.map((item) => [String(item.sku).trim(), Number(item.stock)])
+  );
+  const inventory = db.prepare(
+    `SELECT COUNT(*) AS total,
+            SUM(CASE WHEN COALESCE(stock,0)=0 THEN 1 ELSE 0 END) AS zero_count
+       FROM products
+      WHERE active=1 AND COALESCE(is_service,0)=0`
+  ).get();
+  const installed = db.prepare(
+    `SELECT p.id,p.sku,p.stock,
+            (SELECT COUNT(*) FROM stock_movements m WHERE m.product_id=p.id) AS movement_count
+       FROM products p
+       JOIN categories c ON c.id=p.category_id
+      WHERE p.active=1
+        AND COALESCE(p.is_service,0)=0
+        AND c.name=? COLLATE NOCASE`
+  ).all(NEWLY_ADDED_ITEMS_CATEGORY)
+    .filter((row) => catalogStockBySku.has(String(row.sku || '').trim()));
+
+  const installedZeroCount = installed.filter((row) => Number(row.stock) === 0).length;
+  const erasedRows = installed.filter(
+    (row) => Number(row.stock) === 0 && Number(row.movement_count) === 0
+  );
+  const inventoryTotal = Number(inventory?.total) || 0;
+  const inventoryZeroCount = Number(inventory?.zero_count) || 0;
+  const catalogCoverage = installed.length / positiveCatalogItems.length;
+  const inventoryZeroRatio = inventoryTotal ? inventoryZeroCount / inventoryTotal : 0;
+  const installedZeroRatio = installed.length ? installedZeroCount / installed.length : 0;
+  const massResetDetected = catalogCoverage >= 0.9
+    && inventoryZeroRatio >= 0.9
+    && installedZeroRatio >= 0.9;
+  // Some clients ran the destructive reset when only the first handwritten
+  // batch was installed, then received later catalog batches with good stock.
+  // Ten or more zero rows with no stock history identifies that partial
+  // footprint without treating an ordinary sold-out product as damage.
+  const partialResetDetected = erasedRows.length >= 10;
+  const detected = erasedRows.length > 0 && (massResetDetected || partialResetDetected);
+
+  let recovered = 0;
+  db.transaction(() => {
+    if (detected) {
+      const setStock = db.prepare(
+        'UPDATE products SET stock=? WHERE id=? AND active=1 AND stock=0'
+      );
+      const addMovement = db.prepare(
+        'INSERT INTO stock_movements(product_id,movement,qty_change,reason,user_id) VALUES(?,?,?,?,NULL)'
+      );
+      for (const row of erasedRows) {
+        const stock = catalogStockBySku.get(String(row.sku || '').trim());
+        const result = setStock.run(stock, row.id);
+        if (!result.changes) continue;
+        addMovement.run(
+          row.id,
+          'adjustment',
+          stock,
+          NEWLY_ADDED_ITEMS_ERASED_STOCK_REASON
+        );
+        recovered++;
+      }
+    }
+    db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)')
+      .run(NEWLY_ADDED_ITEMS_ERASED_STOCK_RECOVERY, detected ? String(recovered) : 'checked');
+  })();
+
+  return { recovered, detected, alreadyRun: false };
+}
+
+/**
  * Add the handwritten inventory batches to an existing database exactly once.
  *
  * Existing names are preserved rather than overwritten, and the settings
@@ -259,6 +347,7 @@ function applyNewlyAddedUnitPriceFix(db) {
  */
 function ensureNewlyAddedItems(db) {
   removeNotebook1NewlyAddedItems(db);
+  recoverErasedNewlyAddedStock(db);
   applyNewlyAddedUnitPriceFix(db);
   applyNewlyAddedRecount(db);
 
@@ -630,6 +719,8 @@ function seedDatabase(db) {
       .run(NEWLY_ADDED_ITEMS_NOTEBOOK1_REMOVED, '1');
     db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)')
       .run(NEWLY_ADDED_ITEMS_RECOUNT_V1, '1');
+    db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)')
+      .run(NEWLY_ADDED_ITEMS_ERASED_STOCK_RECOVERY, 'fresh');
   });
 
   tx();
@@ -639,6 +730,7 @@ function seedDatabase(db) {
 module.exports = {
   seedDatabase,
   ensureNewlyAddedItems,
+  recoverErasedNewlyAddedStock,
   removeLegacyDemoCustomers,
   LEGACY_DEMO_CLEANUP_SETTING,
   NEWLY_ADDED_ITEMS_CATEGORY,
@@ -647,4 +739,6 @@ module.exports = {
   NEWLY_ADDED_ITEMS_UNIT_PRICE_FIX,
   NEWLY_ADDED_ITEMS_NOTEBOOK1_REMOVED,
   NEWLY_ADDED_ITEMS_RECOUNT_V1,
+  NEWLY_ADDED_ITEMS_ERASED_STOCK_RECOVERY,
+  NEWLY_ADDED_ITEMS_ERASED_STOCK_REASON,
 };

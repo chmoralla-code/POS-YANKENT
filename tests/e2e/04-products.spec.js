@@ -51,6 +51,9 @@ test.describe('Products & Inventory', () => {
         'Firefly led bulb 9w',
         'UNIDEX TEE 3x2',
       ]));
+      await page.fill('#pSearch', 'GOLDEN CUP Brass Plated Iron Hinges Loose Pin 4x4');
+      await expect(page.locator('#pGrid .prod-card')).toHaveCount(1);
+      await expect(page.locator('#pGrid .prod-card')).toContainText('Stock: 12 pcs');
     } finally { await electron.close(); }
   });
 

@@ -13,6 +13,8 @@ const {
   NEWLY_ADDED_ITEMS_UNIT_PRICE_FIX,
   NEWLY_ADDED_ITEMS_NOTEBOOK1_REMOVED,
   NEWLY_ADDED_ITEMS_RECOUNT_V1,
+  NEWLY_ADDED_ITEMS_ERASED_STOCK_RECOVERY,
+  NEWLY_ADDED_ITEMS_ERASED_STOCK_REASON,
 } = require('../src/main/db/seed');
 const { makeApi } = require('./ipc-harness');
 
@@ -109,6 +111,126 @@ test('fresh catalog contains all Newly Added Items with the requested stock, uni
   assert.equal(
     t.api.db.prepare('SELECT value FROM settings WHERE key=?').get(NEWLY_ADDED_ITEMS_SETTING).value,
     '1'
+  );
+  assert.equal(
+    t.api.db.prepare('SELECT value FROM settings WHERE key=?')
+      .get(NEWLY_ADDED_ITEMS_ERASED_STOCK_RECOVERY).value,
+    'fresh'
+  );
+  t.api.close();
+});
+
+test('legacy mass-zero reset restores Newly Added Items catalog stock once', async () => {
+  const t = await setup();
+  const preservedSku = 'NAI-002';
+  const restoredSku = 'NAI-001';
+  const restoredCatalogItem = EXPECTED_NEWLY_ADDED_ITEMS.find((item) => item.sku === restoredSku);
+  const positiveCatalogCount = EXPECTED_NEWLY_ADDED_ITEMS
+    .filter((item) => Number(item.stock) > 0).length;
+
+  t.api.db.transaction(() => {
+    t.api.db.prepare('DELETE FROM settings WHERE key=?')
+      .run(NEWLY_ADDED_ITEMS_ERASED_STOCK_RECOVERY);
+    t.api.db.prepare(
+      'UPDATE products SET stock=0 WHERE active=1 AND COALESCE(is_service,0)=0'
+    ).run();
+    // Preserve stock manually re-entered after the legacy reset.
+    t.api.db.prepare('UPDATE products SET stock=? WHERE sku=?').run(777, preservedSku);
+    t.api.db.prepare('DELETE FROM stock_movements').run();
+  })();
+
+  ensureNewlyAddedItems(t.api.db);
+
+  assert.equal(
+    t.api.db.prepare('SELECT stock FROM products WHERE sku=?').get(restoredSku).stock,
+    restoredCatalogItem.stock
+  );
+  assert.equal(
+    t.api.db.prepare('SELECT stock FROM products WHERE sku=?').get(preservedSku).stock,
+    777
+  );
+  // The requested recovery is scoped to Newly Added Items.
+  assert.equal(
+    t.api.db.prepare('SELECT stock FROM products WHERE sku=?').get('CMT-001').stock,
+    0
+  );
+  assert.equal(
+    t.api.db.prepare('SELECT COUNT(*) AS count FROM stock_movements WHERE reason=?')
+      .get(NEWLY_ADDED_ITEMS_ERASED_STOCK_REASON).count,
+    positiveCatalogCount - 1
+  );
+
+  ensureNewlyAddedItems(t.api.db);
+  assert.equal(
+    t.api.db.prepare('SELECT COUNT(*) AS count FROM stock_movements WHERE reason=?')
+      .get(NEWLY_ADDED_ITEMS_ERASED_STOCK_REASON).count,
+    positiveCatalogCount - 1
+  );
+  t.api.close();
+});
+
+test('ordinary zero-stock items do not trigger catalog stock recovery', async () => {
+  const t = await setup();
+  const sku = 'NAI-001';
+  t.api.db.transaction(() => {
+    t.api.db.prepare('DELETE FROM settings WHERE key=?')
+      .run(NEWLY_ADDED_ITEMS_ERASED_STOCK_RECOVERY);
+    t.api.db.prepare('UPDATE products SET stock=0 WHERE sku=?').run(sku);
+  })();
+
+  ensureNewlyAddedItems(t.api.db);
+
+  assert.equal(t.api.db.prepare('SELECT stock FROM products WHERE sku=?').get(sku).stock, 0);
+  assert.equal(
+    t.api.db.prepare('SELECT COUNT(*) AS count FROM stock_movements WHERE reason=?')
+      .get(NEWLY_ADDED_ITEMS_ERASED_STOCK_REASON).count,
+    0
+  );
+  assert.equal(
+    t.api.db.prepare('SELECT value FROM settings WHERE key=?')
+      .get(NEWLY_ADDED_ITEMS_ERASED_STOCK_RECOVERY).value,
+    'checked'
+  );
+  t.api.close();
+});
+
+test('legacy reset of an early Newly Added Items batch is recovered after later batches arrive', async () => {
+  const t = await setup();
+  const affected = EXPECTED_NEWLY_ADDED_ITEMS
+    .filter((item) => Number(item.stock) > 0)
+    .slice(0, 46);
+  const affectedSkus = affected.map((item) => item.sku);
+  const placeholders = affectedSkus.map(() => '?').join(',');
+  const unaffected = EXPECTED_NEWLY_ADDED_ITEMS
+    .find((item) => Number(item.stock) > 0 && !affectedSkus.includes(item.sku));
+
+  t.api.db.transaction(() => {
+    t.api.db.prepare('DELETE FROM settings WHERE key=?')
+      .run(NEWLY_ADDED_ITEMS_ERASED_STOCK_RECOVERY);
+    t.api.db.prepare(`UPDATE products SET stock=0 WHERE sku IN (${placeholders})`)
+      .run(...affectedSkus);
+    t.api.db.prepare(
+      `DELETE FROM stock_movements
+        WHERE product_id IN (SELECT id FROM products WHERE sku IN (${placeholders}))`
+    ).run(...affectedSkus);
+  })();
+
+  ensureNewlyAddedItems(t.api.db);
+
+  for (const item of affected) {
+    assert.equal(
+      t.api.db.prepare('SELECT stock FROM products WHERE sku=?').get(item.sku).stock,
+      item.stock
+    );
+  }
+  assert.equal(
+    t.api.db.prepare('SELECT stock FROM products WHERE sku=?').get(unaffected.sku).stock,
+    unaffected.stock
+  );
+  assert.equal(
+    t.api.db.prepare('SELECT COUNT(*) AS count FROM stock_movements WHERE reason=?')
+      .get(NEWLY_ADDED_ITEMS_ERASED_STOCK_REASON).count,
+    affected.length
   );
   t.api.close();
 });
