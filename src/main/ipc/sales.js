@@ -687,7 +687,7 @@ function register(ipcMain, ctx) {
       ];
       db.prepare(`DELETE FROM sqlite_sequence WHERE name IN (${resetTables.map(() => '?').join(',')})`)
         .run(...resetTables);
-      db.prepare("UPDATE products SET stock = 0 WHERE is_service = 0 OR is_service IS NULL").run();
+      // Keep current product stock — only sales history / movements are wiped.
       db.prepare("UPDATE customers SET credit_used = 0,updated_at=datetime('now')").run();
     });
     tx();

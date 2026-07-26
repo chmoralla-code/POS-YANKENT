@@ -76,7 +76,7 @@ App.views.reports = {
           <button type="button" class="btn btn-sm btn-ghost" id="rSendTg">Send to Telegram</button>
           <button type="button" class="btn btn-sm btn-ghost" id="rPrint">Print report</button>
           <span class="reports-action-separator" aria-hidden="true"></span>
-          <button type="button" class="btn btn-sm btn-danger" id="rReset" title="Permanently erase sales, refunds, and stock movements">Erase sales data…</button>
+          <button type="button" class="btn btn-sm btn-danger" id="rReset" title="Permanently erase sales, refunds, and stock movements (product stock is kept)">Erase sales data…</button>
         </div>
       </header>
       <section class="report-filter-panel" aria-labelledby="rFilterTitle">
@@ -607,7 +607,7 @@ App.views.reports = {
 
   async _resetSales() {
     const ok = await App.ui.confirm(
-      'This will PERMANENTLY erase ALL sales, sale items, refunds and stock movements.\n\nUsers, products, customers, categories and settings will be preserved. Product stock will be reset to 0.\n\nThis cannot be undone. Consider exporting a backup first.\n\nContinue?',
+      'This will PERMANENTLY erase ALL sales, sale items, refunds and stock movements.\n\nUsers, products, customers, categories, settings, and current product stock will be preserved.\n\nThis cannot be undone. Consider exporting a backup first.\n\nContinue?',
       { danger: true, title: 'Reset all sales' }
     );
     if (!ok) return;

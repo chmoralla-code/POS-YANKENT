@@ -544,11 +544,10 @@ test('reset all sales wipes sales/items/refunds/movements and resets sequence', 
   assert.ok(api.db.prepare('SELECT COUNT(*) AS c FROM products').get().c > 0);
   assert.ok(api.db.prepare('SELECT COUNT(*) AS c FROM categories').get().c > 0);
   assert.ok(api.db.prepare('SELECT COUNT(*) AS c FROM settings').get().c > 0);
-  // product stock reset to 0
+  // product stock is preserved (sale of 2 bags deducted from initial stock; not zeroed by reset)
   const s = api.db.prepare('SELECT stock FROM products WHERE id=?').get(cement.id).stock;
-  assert.equal(s, 0);
-  // next valid sale starts fresh at YK-000001 (restock first so stock>0)
-  await api.call('pos:products:setStock', adminSession, cement.id, 10, 'test restock');
+  assert.equal(s, cement.stock - 2);
+  // next valid sale starts fresh at YK-000001
   const res2 = await api.call('pos:sales:create', cashierSession, {
     items: [{ productId: cement.id, sku: cement.sku, name: cement.name, unit: 'bag', qty: 1, unitPrice: 280, factor: 1 }],
     paymentMethod: 'cash', amountTendered: 500,
