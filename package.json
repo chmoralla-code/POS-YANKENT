@@ -1,6 +1,6 @@
 {
   "name": "yankent-pos",
-  "version": "2.2.14",
+  "version": "2.2.15",
   "description": "YANKENT POS - offline construction & supply point-of-sale desktop application",
   "productName": "YANKENT POS",
   "main": "src/main/main.js",
