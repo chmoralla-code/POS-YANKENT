@@ -21,6 +21,7 @@ test-results/
 # Local-only tooling (not part of the POS release)
 opencode-gui/
 tools/
+docs/invoices/
 scripts/add-*-items.js
 scripts/add-batch-*.js
 scripts/add-new-items-batch.js
