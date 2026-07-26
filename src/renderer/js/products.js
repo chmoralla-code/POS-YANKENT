@@ -318,6 +318,12 @@ App.views.products = {
       if (!name) { App.ui.toast('Name is required', 'err'); return; }
       const baseUnit = m.el.querySelector('#fUnit').value.trim() || 'pc';
       const price = num(m.el.querySelector('#fPrice').value);
+      const stock = num(m.el.querySelector('#fStock').value, NaN);
+      if (!Number.isFinite(stock) || stock < 0) {
+        App.ui.toast('Stock must be a non-negative number', 'err');
+        m.el.querySelector('#fStock').focus();
+        return;
+      }
       const costInput = m.el.querySelector('#fCost');
       const rawCost = costInput.value.trim();
       if (!rawCost) {
@@ -336,7 +342,7 @@ App.views.products = {
         name,
         category_id: +m.el.querySelector('#fCat').value || null,
         base_unit: baseUnit,
-        stock: parseFloat(m.el.querySelector('#fStock').value) || 0,
+        stock,
         cost,
         price,
         low_stock_threshold: id && p ? (p.low != null ? p.low : 10) : 10,
@@ -353,7 +359,7 @@ App.views.products = {
           // while letting admins adjust stock directly from the Edit modal.
           const stockEl = m.el.querySelector('#fStock');
           const orig = parseFloat(stockEl.dataset.orig);
-          const newStock = parseFloat(stockEl.value) || 0;
+          const newStock = Number(stockEl.value);
           if (Number.isFinite(orig) && Math.abs(newStock - orig) > 1e-9) {
             await App.pos.products.setStock(id, newStock, 'Adjusted via Edit', null, null);
           }
@@ -452,7 +458,7 @@ App.views.products = {
 
   _stock(id) {
     const p = this.cache.products.find((x) => x.id === id);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = App.ui.todayISO();
     const m = App.ui.modal({
       title: 'Adjust Stock — ' + p.name, closeOnOverlay: false,
       bodyHtml: `<div class="field"><label class="fl">Current stock (${App.ui.esc(p.base_unit)})</label><input value="${App.ui.qty(p.stock)}" readonly></div>
@@ -467,9 +473,15 @@ App.views.products = {
     m.el.querySelector('[data-a="cancel"]').onclick = () => m.close();
     m.el.querySelector('[data-a="ok"]').onclick = async () => {
       try {
+        const newStock = Number(m.el.querySelector('#sNew').value);
+        if (!Number.isFinite(newStock) || newStock < 0) {
+          App.ui.toast('Stock must be a non-negative number', 'err');
+          m.el.querySelector('#sNew').focus();
+          return;
+        }
         await App.pos.products.setStock(
           id,
-          parseFloat(m.el.querySelector('#sNew').value) || 0,
+          newStock,
           m.el.querySelector('#sReason').value,
           m.el.querySelector('#sDate').value,
           m.el.querySelector('#sLocation').value

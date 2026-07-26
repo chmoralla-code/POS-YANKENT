@@ -329,7 +329,7 @@ App.views.pos = {
       const units = (p.units && p.units.length) ? p.units : [{ unit: p.base_unit || 'svc', factor: 1, price: p.price }];
       const m = App.ui.modal({
         title: 'Quantity — ' + p.name, closeOnOverlay: false,
-        bodyHtml: `<div class="field"><label class="fl">Quantity (${(units[0] || {}).unit || p.base_unit || 'svc'})</label><input id="svcQty" type="number" step="0.01" value="1" autofocus></div>`,
+        bodyHtml: `<div class="field"><label class="fl">Quantity (${App.ui.esc((units[0] || {}).unit || p.base_unit || 'svc')})</label><input id="svcQty" type="number" step="0.01" value="1" autofocus></div>`,
         footerHtml: `<button class="btn btn-ghost" data-a="cancel">Cancel</button><button class="btn btn-primary" data-a="ok">Add to cart</button>`,
       });
       m.el.querySelector('[data-a="cancel"]').onclick = () => m.close();
@@ -528,9 +528,21 @@ App.views.pos = {
     m.el.querySelector('[data-a="cancel"]').onclick = () => m.close();
     m.el.querySelector('[data-a="ok"]').onclick = (e) => {
       const btn = e.currentTarget;
+      const payment = { amountTendered: 0, reference: '' };
+      if (pay === 'cash') {
+        const received = Number(m.el.querySelector('#payCash').value);
+        if (!Number.isFinite(received) || received < 0 || received + 1e-9 < total) {
+          App.ui.toast('Cash received is less than the amount due', 'err');
+          m.el.querySelector('#payCash').focus();
+          return;
+        }
+        payment.amountTendered = received;
+      } else if (pay === 'card' || pay === 'ewallet') {
+        payment.reference = String(m.el.querySelector('#payRef').value || '').trim();
+      }
       btn.disabled = true; btn.textContent = 'Processing…'; btn.classList.add('is-printing');
       m.close();
-      this._confirm(total, pay, cust, dueDate);
+      this._confirm(total, pay, cust, dueDate, payment);
     };
     if (pay === 'cash') {
       const cash = m.el.querySelector('#payCash');
@@ -543,7 +555,7 @@ App.views.pos = {
     }
   },
 
-  async _confirm(total, pay, cust, dueDate) {
+  async _confirm(total, pay, cust, dueDate, payment = {}) {
     const generation = App.captureSessionGeneration();
     const gross = App.cart.reduce((s, i) => s + i.qty * i.unitPrice, 0);
     const discPct = this.state.discountOn ? (parseFloat((App.settingsCache || {}).discount_percent) || 0) : 0;
@@ -558,9 +570,9 @@ App.views.pos = {
       customerName: cust ? cust.name : 'Walk-in Customer',
       paymentMethod: pay,
       dueDate: pay === 'account' ? dueDate : null,
-      amountTendered: pay === 'cash' ? total : 0,
+      amountTendered: pay === 'cash' ? payment.amountTendered : 0,
       discount: discAmt,
-      reference: '',
+      reference: payment.reference || '',
     };
     try {
       // Create a PENDING sale — stock is NOT deducted yet.  The sale is

@@ -14,7 +14,7 @@ function fakeIpc() {
   };
 }
 
-async function makeApi() {
+async function makeApi(overrides = {}) {
   const { db, close } = await freshDb();
   const ipc = fakeIpc();
   const ctx = {
@@ -29,6 +29,7 @@ async function makeApi() {
     getMainWindow: () => ({ isDestroyed: () => false, webContents: { send: () => {} } }),
     BrowserWindow: function () { return { loadFile: async () => {}, close: () => {}, webContents: { print: async () => {} } }; },
     app: { getVersion: () => '0.0.0', isPackaged: false, getPath: () => '' },
+    ...overrides,
   };
   const { registerAll } = require('../src/main/ipc/index');
   registerAll(ipc, ctx);

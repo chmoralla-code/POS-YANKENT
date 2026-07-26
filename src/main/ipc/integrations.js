@@ -4,10 +4,19 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
+const { randomUUID } = require('crypto');
 const { buildReceipt, receiptPlainText } = require('../lib/receipt');
 const { encodeReceipt, testPrint } = require('../lib/escpos');
 const { checkOnline, sendMessage, sendDocument, buildReportMessage } = require('../lib/telegram');
 const { exportAll, importAll } = require('../backup');
+
+function redactTelegramBackupSecrets(data) {
+  if (!data || !data.tables || !Array.isArray(data.tables.settings)) return data;
+  data.tables.settings = data.tables.settings.map((row) =>
+    row.key === 'telegram_token' ? { ...row, value: '' } : row
+  );
+  return data;
+}
 
 // ---- Windows printer helpers (winspool RAW mode via PowerShell) ---------
 // These run a PowerShell snippet that P/Invokes winspool.drv to send bytes
@@ -23,7 +32,7 @@ const { exportAll, importAll } = require('../backup');
  */
 function sendRawFileToPrinter(filePath, printerName) {
   return new Promise((resolve) => {
-    const escTmp = filePath.replace(/\\/g, '\\\\');
+    const fileLiteral = "'" + String(filePath).replace(/'/g, "''") + "'";
     // If no printer name given, fall back to the Windows default printer.
     const printerExpr = printerName
       ? "'" + String(printerName).replace(/'/g, "''") + "'"
@@ -58,7 +67,7 @@ function sendRawFileToPrinter(filePath, printerName) {
       'if (-not $opened) { Write-Output "ERR:open_failed:" + $prn; exit 3 }',
       '[void][W.PU]::StartDocPrinter($h, 1, [ref]$di)',
       '[void][W.PU]::StartPagePrinter($h)',
-      '$bytes = [System.IO.File]::ReadAllBytes("' + escTmp + '")',
+      '$bytes = [System.IO.File]::ReadAllBytes(' + fileLiteral + ')',
       '$w = 0',
       '[void][W.PU]::WritePrinter($h, $bytes, $bytes.Length, [ref]$w)',
       '[void][W.PU]::EndPagePrinter($h)',
@@ -67,6 +76,14 @@ function sendRawFileToPrinter(filePath, printerName) {
       'Write-Output "OK:" + $prn',
     ].join('\n');
     let stdout = '';
+    let settled = false;
+    let timer = null;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      resolve(value);
+    };
     const child = spawn('powershell', ['-NoProfile', '-Command', psScript], {
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'ignore'],
@@ -74,14 +91,14 @@ function sendRawFileToPrinter(filePath, printerName) {
     child.stdout.on('data', (d) => { stdout += d.toString(); });
     const done = (code) => {
       const out = stdout.trim();
-      if (out.startsWith('OK:')) resolve({ ok: true, printer: out.slice(3) });
-      else if (out.startsWith('ERR:')) resolve({ ok: false, error: out.slice(4), printer: printerName });
-      else resolve({ ok: false, error: 'powershell exit ' + code });
+      if (out.startsWith('OK:')) finish({ ok: true, printer: out.slice(3) });
+      else if (out.startsWith('ERR:')) finish({ ok: false, error: out.slice(4), printer: printerName });
+      else finish({ ok: false, error: 'powershell exit ' + code });
     };
-    child.on('error', () => resolve({ ok: false, error: 'spawn failed' }));
+    child.on('error', () => finish({ ok: false, error: 'spawn failed' }));
     child.on('exit', done);
     // Safety timeout so a hung spooler never blocks the event loop.
-    setTimeout(() => { try { child.kill(); } catch {} resolve({ ok: false, error: 'timeout' }); }, 15000);
+    timer = setTimeout(() => { try { child.kill(); } catch {} finish({ ok: false, error: 'timeout' }); }, 15000);
   });
 }
 
@@ -405,7 +422,7 @@ async function sendStartupTestPrint(ctx) {
   // the POS-58 renders the store name centered and performs a clean cut.
   const { testPrint } = require('../lib/escpos');
   const bytes = testPrint(width);
-  const tmp = path.join(os.tmpdir(), `yankent-startup-test-${Date.now()}.bin`);
+  const tmp = path.join(os.tmpdir(), `yankent-startup-test-${randomUUID()}.bin`);
   try {
     fs.writeFileSync(tmp, bytes);
     const res = await sendRawFileToPrinter(tmp, printerName);
@@ -456,7 +473,7 @@ function register(ipcMain, ctx) {
     const route = await resolveConfiguredWindowsPrinter(ctx);
     if (!route.selected) throw new Error(route.error || 'No connected Windows printer');
     const printerName = route.selected.name;
-    const tmp = path.join(os.tmpdir(), `yankent-receipt-${Date.now()}.bin`);
+    const tmp = path.join(os.tmpdir(), `yankent-receipt-${randomUUID()}.bin`);
     try {
       fs.writeFileSync(tmp, bytes);
       const res = await sendRawFileToPrinter(tmp, printerName);
@@ -503,7 +520,7 @@ function register(ipcMain, ctx) {
     const route = await resolveConfiguredWindowsPrinter(ctx);
     if (!route.selected) throw new Error(route.error || 'No connected Windows printer');
     const printerName = route.selected.name;
-    const tmp = path.join(os.tmpdir(), `yankent-receipt-${Date.now()}.txt`);
+    const tmp = path.join(os.tmpdir(), `yankent-receipt-${randomUUID()}.txt`);
     try {
       fs.writeFileSync(tmp, text, 'utf8');
       const res = await sendRawFileToPrinter(tmp, printerName);
@@ -524,7 +541,8 @@ function register(ipcMain, ctx) {
         ? path.join(process.resourcesPath, 'PrinterDriver.exe')
         : path.join(__dirname, '..', '..', '..', 'resources', 'PrinterDriver.exe');
       if (!fs.existsSync(exe)) return { ok: false, error: 'Installer not found at ' + exe };
-      const child = spawn('powershell', ['-NoProfile', '-Command', `Start-Process -FilePath '${exe}' -Verb RunAs`], {
+      const exeLiteral = String(exe).replace(/'/g, "''");
+      const child = spawn('powershell', ['-NoProfile', '-Command', `Start-Process -FilePath '${exeLiteral}' -Verb RunAs`], {
         windowsHide: true,
         detached: true,
         stdio: 'ignore',
@@ -627,7 +645,8 @@ function register(ipcMain, ctx) {
         : path.join(__dirname, '..', '..', '..', 'resources', 'PrinterDriver.exe');
       const exe = fs.existsSync(bundledExe) ? bundledExe : null;
       if (!exe) return { ok: false, error: 'Bundled PrinterDriver.exe was not found.' };
-      const child = spawn('powershell', ['-NoProfile', '-Command', `Start-Process -FilePath '${exe}' -Verb RunAs`], {
+      const exeLiteral = String(exe).replace(/'/g, "''");
+      const child = spawn('powershell', ['-NoProfile', '-Command', `Start-Process -FilePath '${exeLiteral}' -Verb RunAs`], {
         windowsHide: true,
         detached: true,
         stdio: 'ignore',
@@ -676,6 +695,9 @@ function register(ipcMain, ctx) {
     // Attach the latest data backup alongside the report.
     try {
       const data = exportAll(db);
+      // The report uses the configured token to upload the document; never
+      // place that same credential inside the uploaded backup.
+      redactTelegramBackupSecrets(data);
       const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
       const filename = `yankent-backup-${stamp}.yankent`;
       const buffer = Buffer.from(JSON.stringify(data, null, 2), 'utf8');
@@ -774,4 +796,5 @@ module.exports = {
   _buildWindowsPrinterHealth: buildWindowsPrinterHealth,
   _autoRecoverWindowsPrinter: autoRecoverWindowsPrinter,
   _sendRawFileToPrinter: sendRawFileToPrinter,
+  _redactTelegramBackupSecrets: redactTelegramBackupSecrets,
 };

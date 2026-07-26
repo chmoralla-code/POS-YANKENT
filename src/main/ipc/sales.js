@@ -24,6 +24,39 @@ function clampLimit(value, fallback, max) {
   return Number.isFinite(n) && n > 0 ? Math.min(n, max) : fallback;
 }
 
+function roundQuantity(value) {
+  return Math.round((Number(value) + Number.EPSILON) * 1000000) / 1000000;
+}
+
+function assertStockAvailable(db, items) {
+  const requiredByProduct = new Map();
+  for (const item of items) {
+    const isService = item.isService || item.line_type === 'service' || item.lineType === 'service';
+    if (isService || !item.productId && !item.product_id) continue;
+    const productId = Number(item.productId ?? item.product_id);
+    const required = Number(item.stockConsumed ?? item.stock_consumed);
+    if (!Number.isInteger(productId) || productId <= 0 || !Number.isFinite(required) || required <= 0) {
+      throw new Error('Invalid stock requirement');
+    }
+    const current = requiredByProduct.get(productId) || {
+      required: 0,
+      name: item.name || item.sku || `product ${productId}`,
+    };
+    current.required = roundQuantity(current.required + required);
+    requiredByProduct.set(productId, current);
+  }
+
+  const productStmt = db.prepare('SELECT stock,is_service FROM products WHERE id=?');
+  for (const [productId, requirement] of requiredByProduct) {
+    const product = productStmt.get(productId);
+    if (!product) throw new Error('Product not found: ' + requirement.name);
+    if (product.is_service) throw new Error(`Product type changed for ${requirement.name}; refresh the cart`);
+    if (Number(product.stock) < requirement.required - 1e-9) {
+      throw new Error(`Insufficient stock for ${requirement.name} (need ${requirement.required}, have ${product.stock} base units)`);
+    }
+  }
+}
+
 // Payment methods the UI offers (see pos.js pay-grid). Validating here so a
 // malformed payload can't bypass the cash-sufficiency check (only 'cash'
 // triggers it) or the account-credit check (only 'account' triggers it) by
@@ -125,13 +158,29 @@ function register(ipcMain, ctx) {
         qty, unitPrice, factor,
         amount: round2(qty * unitPrice),
         lineType: isService ? 'service' : 'product',
-        stockConsumed: round2(qty * factor),
+        // Inventory supports fractional units (the UI permits 0.001). Money
+        // rounding here used to turn small but valid quantities into zero,
+        // allowing a sale without the matching stock deduction.
+        stockConsumed: roundQuantity(qty * factor),
         isService,
       };
     });
 
     const discount = nonNegativeNumber(p.discount ?? 0, 'discount');
     const deliveryFee = nonNegativeNumber(p.deliveryFee ?? 0, 'delivery fee');
+    const gross = round2(lineItems.reduce((sum, item) => sum + item.amount, 0));
+    if (discount > gross + deliveryFee + 1e-9) {
+      throw new Error('Discount cannot exceed the sale amount');
+    }
+    const configuredDiscountPercent = nonNegativeNumber(
+      ctx.getSetting(db, 'discount_percent') || 0,
+      'configured discount'
+    );
+    if (configuredDiscountPercent > 100) throw new Error('Invalid configured discount');
+    const maximumDiscount = round2(gross * configuredDiscountPercent / 100);
+    if (discount > maximumDiscount + 1e-9) {
+      throw new Error(`Discount exceeds the configured ${configuredDiscountPercent}% limit`);
+    }
 
     const totals = computeTotals(lineItems, {
       vatRate,
@@ -151,7 +200,9 @@ function register(ipcMain, ctx) {
     // the pending sale so the Loan can be created atomically at commit time.
     let customer = null;
     if (p.customerId) customer = db.prepare('SELECT * FROM customers WHERE id=?').get(p.customerId);
-    const customerName = customer ? customer.name : (p.customerName || 'Walk-in Customer');
+    const customerName = customer
+      ? customer.name
+      : (String(p.customerName || '').trim() || 'Walk-in Customer');
     let dueDate = null;
     if (paymentMethod === 'account') {
       if (!customer || customer.type !== 'contractor' || !Number(customer.active)) {
@@ -166,14 +217,7 @@ function register(ipcMain, ctx) {
     // Stock validation (check sufficient stock up front so the cashier
     // knows immediately if there isn't enough — the actual deduction
     // happens at commit time and is re-validated then).
-    for (const i of lineItems) {
-      if (i.isService) continue;
-      const prod = db.prepare('SELECT stock, is_service FROM products WHERE id=?').get(i.productId);
-      if (!prod) throw new Error('Product not found: ' + i.sku);
-      if (!prod.is_service && prod.stock < i.stockConsumed - 1e-9) {
-        throw new Error(`Insufficient stock for ${i.name} (have ${prod.stock} base units)`);
-      }
-    }
+    assertStockAvailable(db, lineItems);
 
     const result = db.transaction(() => {
       // Insert the sale row first to get an atomic autoincrement id, then
@@ -191,7 +235,7 @@ function register(ipcMain, ctx) {
       const cols = ['txn_id','seq','datetime','cashier_id','cashier_name','customer_id','customer_name',
         'project','po_number','subtotal','vat','discount','delivery_fee','total','payment_method',
         'amount_tendered','change','reference','due_date','status'];
-      const args = ['PENDING', 0, datetime, session.id, session.full_name, p.customerId || null, customerName,
+      const args = ['PENDING', 0, datetime, session.id, session.full_name, customer ? customer.id : null, customerName,
         p.project || null, p.poNumber || null, totals.subtotal, totals.vat, discount,
         deliveryFee, totals.total, paymentMethod, tendered, change, p.reference || null,
         dueDate, 'pending'];
@@ -228,14 +272,7 @@ function register(ipcMain, ctx) {
 
     // Re-validate stock at commit time — another sale may have been
     // committed between create and commit, reducing available stock.
-    for (const it of items) {
-      if (it.line_type === 'service' || !it.product_id) continue;
-      const prod = db.prepare('SELECT stock, is_service FROM products WHERE id=?').get(it.product_id);
-      if (!prod) throw new Error('Product not found: ' + it.sku);
-      if (!prod.is_service && prod.stock < it.stock_consumed - 1e-9) {
-        throw new Error(`Insufficient stock for ${it.name} (have ${prod.stock} base units)`);
-      }
-    }
+    assertStockAvailable(db, items);
 
     db.transaction(() => {
       // Credit may have changed after this pending sale was created. Check it
@@ -510,41 +547,91 @@ function register(ipcMain, ctx) {
 
   guard(ipcMain, 'pos:reports:exportCSV', { auth: true }, async (_c, type, f = {}) => {
     const fs = require('fs');
-    let rows, header;
+    let rows, header, keys, title, defaultName;
+    const range = (sql, params, column) => {
+      if (f.from) { sql += ` AND ${column} >= ?`; params.push(String(f.from) + ' 00:00:00'); }
+      if (f.to) { sql += ` AND ${column} <= ?`; params.push(String(f.to) + ' 23:59:59'); }
+      return sql;
+    };
     if (type === 'bestSelling') {
-      rows = db.prepare(`SELECT si.name, SUM(si.qty) AS qty, SUM(si.amount) AS total
-        FROM sale_items si JOIN sales s ON si.sale_id=s.id WHERE s.status='completed'
-        GROUP BY si.product_id ORDER BY total DESC`).all();
+      const params = [];
+      let sql = `SELECT si.name, SUM(si.qty) AS qty, SUM(si.amount) AS total
+        FROM sale_items si JOIN sales s ON si.sale_id=s.id WHERE s.status='completed'`;
+      sql = range(sql, params, 's.datetime');
+      sql += ' GROUP BY si.product_id ORDER BY total DESC';
+      rows = db.prepare(sql).all(...params);
       header = ['Name','Qty','Total'];
+      keys = ['name','qty','total'];
+      title = 'best-selling products';
+      defaultName = 'best-selling';
     } else if (type === 'byCashier') {
-      rows = db.prepare(`SELECT cashier_name, COUNT(*) AS tx, SUM(total) AS total FROM sales WHERE status='completed' GROUP BY cashier_id ORDER BY total DESC`).all();
+      const params = [];
+      let sql = "SELECT cashier_name, COUNT(*) AS tx, SUM(total) AS total FROM sales WHERE status='completed'";
+      sql = range(sql, params, 'datetime');
+      sql += ' GROUP BY cashier_id ORDER BY total DESC';
+      rows = db.prepare(sql).all(...params);
       header = ['Cashier','Transactions','Total'];
+      keys = ['cashier_name','tx','total'];
+      title = 'cashier sales';
+      defaultName = 'cashiers';
     } else if (type === 'salesByDay') {
-      rows = db.prepare(`SELECT date(datetime) AS date, COUNT(*) AS tx, SUM(total) AS total FROM sales WHERE status='completed' GROUP BY date(datetime) ORDER BY date DESC`).all();
+      const params = [];
+      let sql = "SELECT date(datetime) AS date, COUNT(*) AS tx, SUM(total) AS total FROM sales WHERE status='completed'";
+      sql = range(sql, params, 'datetime');
+      sql += ' GROUP BY date(datetime) ORDER BY date DESC';
+      rows = db.prepare(sql).all(...params);
       header = ['Date','Transactions','Total'];
+      keys = ['date','tx','total'];
+      title = 'daily sales';
+      defaultName = 'sales-by-day';
     } else if (type === 'deliveries') {
-      rows = db.prepare(`SELECT sm.datetime, p.sku, p.name, sm.qty_change, p.base_unit, sm.movement, sm.reason, sm.source_location, u.full_name AS user_name
+      const params = [];
+      let sql = `SELECT sm.datetime, p.sku, p.name, sm.qty_change, p.base_unit, sm.movement, sm.reason, sm.source_location, u.full_name AS user_name
         FROM stock_movements sm LEFT JOIN products p ON sm.product_id=p.id LEFT JOIN users u ON sm.user_id=u.id
-        WHERE sm.qty_change > 0 ORDER BY sm.datetime DESC`).all();
+        WHERE sm.qty_change > 0`;
+      sql = range(sql, params, 'sm.datetime');
+      if (f.q) {
+        sql += ' AND (p.name LIKE ? OR p.sku LIKE ? OR sm.reason LIKE ? OR sm.source_location LIKE ? OR u.full_name LIKE ?)';
+        const like = '%' + String(f.q) + '%';
+        params.push(like, like, like, like, like);
+      }
+      sql += ' ORDER BY sm.datetime DESC';
+      rows = db.prepare(sql).all(...params);
       header = ['Date','SKU','Product','Qty Added','Unit','Type','Reason','Location','Restocked By'];
-      const dm = { Date:'datetime', SKU:'sku', Product:'name', 'Qty Added':'qty_change', Unit:'base_unit', Type:'movement', Reason:'reason', Location:'source_location', 'Restocked By':'user_name' };
-      const csv = [header.join(',')].concat(rows.map((r) => header.map((h) => csvCell(r[dm[h] || lowerFirst(h)])).join(','))).join('\n');
-      const res = await ctx.dialog.showSaveDialog(ctx.getMainWindow(), {
-        title: 'Export restock history', defaultPath: `yankent-restocks-${Date.now()}.csv`,
-        filters: [{ name: 'CSV', extensions: ['csv'] }],
-      });
-      if (res.canceled || !res.filePath) return null;
-      fs.writeFileSync(res.filePath, '\uFEFF' + csv, 'utf8');
-      return res.filePath;
-    } else {
+      keys = ['datetime','sku','name','qty_change','base_unit','movement','reason','source_location','user_name'];
+      title = 'restock history';
+      defaultName = 'restocks';
+    } else if (type === 'refunds') {
+      const params = [];
+      let sql = `SELECT refund_txn_id,original_txn_id,datetime,cashier_name,admin_name,
+        customer_name,total,reason FROM refunds WHERE 1=1`;
+      sql = range(sql, params, 'datetime');
+      sql += ' ORDER BY datetime DESC';
+      rows = db.prepare(sql).all(...params);
+      header = ['Refund ID','Original Txn','Date','Cashier','Approved By','Customer','Total','Reason'];
+      keys = ['refund_txn_id','original_txn_id','datetime','cashier_name','admin_name','customer_name','total','reason'];
+      title = 'refunds';
+      defaultName = 'refunds';
+    } else if (type === 'sales') {
       // Only completed sales — exclude pending (never printed) and refunded
       // so the exported CSV matches the on-screen "Recent Sales" table.
-      rows = db.prepare(`SELECT txn_id, datetime, cashier_name, customer_name, total, payment_method FROM sales WHERE status='completed' ORDER BY datetime DESC`).all();
+      const params = [];
+      let sql = "SELECT txn_id,datetime,cashier_name,customer_name,total,payment_method FROM sales WHERE status='completed'";
+      sql = range(sql, params, 'datetime');
+      sql += ' ORDER BY datetime DESC';
+      rows = db.prepare(sql).all(...params);
       header = ['Txn','Date','Cashier','Customer','Total','Payment'];
+      keys = ['txn_id','datetime','cashier_name','customer_name','total','payment_method'];
+      title = 'sales';
+      defaultName = 'sales';
+    } else {
+      throw new Error('Unsupported CSV export type');
     }
-    const csv = [header.join(',')].concat(rows.map((r) => header.map((h) => csvCell(r[lowerFirst(h)])).join(','))).join('\n');
+    const csv = [header.join(',')]
+      .concat(rows.map((row) => keys.map((key) => csvCell(row[key])).join(',')))
+      .join('\n');
     const res = await ctx.dialog.showSaveDialog(ctx.getMainWindow(), {
-      title: 'Export ' + type, defaultPath: `yankent-${type}-${Date.now()}.csv`,
+      title: 'Export ' + title, defaultPath: `yankent-${defaultName}-${Date.now()}.csv`,
       filters: [{ name: 'CSV', extensions: ['csv'] }],
     });
     if (res.canceled || !res.filePath) return null;
@@ -587,14 +674,13 @@ function register(ipcMain, ctx) {
   return { discardPendingSalesForToken, clearPendingSaleOwners };
 }
 
-function lowerFirst(s) {
-  // map header label to row key: 'SKU'->'sku', 'Total'->'total', 'Transactions'->'tx'
-  const m = { SKU:'sku', Name:'name', Qty:'qty', Total:'total', Cashier:'cashier_name', Transactions:'tx', Date:'date', Txn:'txn_id', Customer:'customer_name', Payment:'payment_method' };
-  return m[s] || s;
-}function csvCell(v) {
+function csvCell(v) {
   if (v == null) return '';
-  const s = String(v);
+  let s = String(v);
+  // Prevent spreadsheet programs from evaluating user-entered names, reasons,
+  // or references as formulas when the CSV is opened.
+  if (typeof v === 'string' && /^\s*[=+\-@]/.test(s)) s = "'" + s;
   return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
 
-module.exports = { register };
+module.exports = { register, _csvCell: csvCell, _assertStockAvailable: assertStockAvailable };

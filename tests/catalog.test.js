@@ -30,11 +30,57 @@ test('bulk import creates products + categories, skips duplicates, attaches unit
   assert.ok(a);
   assert.equal(a.stock, 5);
   assert.equal(a.price, 300);
+  const initialMovement = api.db.prepare(
+    "SELECT * FROM stock_movements WHERE product_id=? AND movement='restock'"
+  ).get(a.id);
+  assert.ok(initialMovement);
+  assert.equal(initialMovement.qty_change, 5);
   // units attached (Nail B gets a default unit since none provided)
   const b = api.db.prepare('SELECT * FROM products WHERE name=?').get('Test Nail B');
   const bUnits = api.db.prepare('SELECT * FROM product_units WHERE product_id=?').all(b.id);
   assert.equal(bUnits.length, 1);
   assert.equal(bUnits[0].unit, 'kg');
+  t.api.close();
+});
+
+test('foreign keys are enforced and deleting a category clears product references', async () => {
+  const t = await setup();
+  const { api, adminSession } = t;
+  const fk = api.db.prepare('PRAGMA foreign_keys').get();
+  assert.equal(Number(fk.foreign_keys), 1);
+  const product = api.db.prepare('SELECT id,category_id FROM products WHERE sku=?').get('CMT-001');
+  assert.ok(product.category_id);
+  await api.call('pos:categories:delete', adminSession, product.category_id);
+  assert.equal(api.db.prepare('SELECT category_id FROM products WHERE id=?').get(product.id).category_id, null);
+  t.api.close();
+});
+
+test('bulk import rejects negative inventory, prices, and invalid units atomically', async () => {
+  const invalidItems = [
+    { name: 'Negative Import Stock', stock: -5, price: 10 },
+    { name: 'Negative Import Price', stock: 1, price: -10 },
+    { name: 'Negative Import Factor', stock: 1, price: 10, units: [{ unit: 'box', factor: -2, price: 10 }] },
+    { name: 'Negative Import Unit Price', stock: 1, price: 10, units: [{ unit: 'box', factor: 2, price: -20 }] },
+  ];
+  for (const item of invalidItems) {
+    const t = await setup();
+    await assert.rejects(
+      () => t.api.call('pos:products:bulkImport', t.adminSession, [item]),
+      /non-negative|greater than zero/
+    );
+    assert.equal(t.api.db.prepare('SELECT id FROM products WHERE name=?').get(item.name), undefined);
+    t.api.close();
+  }
+});
+
+test('stock adjustment rejects malformed calendar dates without changing stock', async () => {
+  const t = await setup();
+  const cement = t.api.db.prepare('SELECT * FROM products WHERE sku=?').get('CMT-001');
+  await assert.rejects(
+    () => t.api.call('pos:products:setStock', t.adminSession, cement.id, cement.stock + 1, 'bad date', '2026-02-30'),
+    /valid date/i
+  );
+  assert.equal(t.api.db.prepare('SELECT stock FROM products WHERE id=?').get(cement.id).stock, cement.stock);
   t.api.close();
 });
 

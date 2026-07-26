@@ -4,8 +4,12 @@
  * transaction + stock-movement path is exercised end to end. */
 const test = require('node:test');
 const assert = require('node:assert');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const { createSession } = require('../src/main/lib/auth');
 const { makeApi } = require('./ipc-harness');
+const { _csvCell } = require('../src/main/ipc/sales');
 
 async function setup() {
   const api = await makeApi();
@@ -156,6 +160,110 @@ test('insufficient stock is rejected', async () => {
     paymentMethod: 'cash', amountTendered: 9999999,
   }), /Insufficient stock/);
   t.api.close();
+});
+
+test('duplicate cart lines are aggregated before stock validation', async () => {
+  const t = await setup();
+  const { api, cement, cashierSession } = t;
+  api.db.prepare('UPDATE products SET stock=5 WHERE id=?').run(cement.id);
+  await assert.rejects(() => api.call('pos:sales:create', cashierSession, {
+    items: [
+      { productId: cement.id, unit: 'bag', qty: 4 },
+      { productId: cement.id, unit: 'bag', qty: 4 },
+    ],
+    paymentMethod: 'cash', amountTendered: 3000,
+  }), /Insufficient stock/);
+  assert.equal(api.db.prepare('SELECT stock FROM products WHERE id=?').get(cement.id).stock, 5);
+  assert.equal(api.db.prepare("SELECT COUNT(*) AS c FROM sales WHERE status='pending'").get().c, 0);
+  t.api.close();
+});
+
+test('small fractional quantities still consume inventory', async () => {
+  const t = await setup();
+  const before = t.api.db.prepare('SELECT stock FROM products WHERE id=?').get(t.nails.id).stock;
+  const sale = await t.api.call('pos:sales:create', t.cashierSession, {
+    items: [{ productId: t.nails.id, unit: 'kg', qty: 0.001 }],
+    paymentMethod: 'cash', amountTendered: 1,
+  });
+  const item = t.api.db.prepare('SELECT stock_consumed FROM sale_items WHERE sale_id=?').get(sale.saleId);
+  assert.equal(item.stock_consumed, 0.001);
+  await t.api.call('pos:sales:commit', t.cashierSession, sale.txnId);
+  const after = t.api.db.prepare('SELECT stock FROM products WHERE id=?').get(t.nails.id).stock;
+  assert.ok(Math.abs(after - (before - 0.001)) < 1e-9);
+  t.api.close();
+});
+
+test('cash tendered, change, and electronic reference are persisted', async () => {
+  const t = await setup();
+  const cash = await t.api.call('pos:sales:create', t.cashierSession, {
+    items: [{ productId: t.cement.id, unit: 'bag', qty: 1 }],
+    paymentMethod: 'cash', amountTendered: 500,
+  });
+  const cashRow = t.api.db.prepare('SELECT amount_tendered,change FROM sales WHERE id=?').get(cash.saleId);
+  assert.equal(cashRow.amount_tendered, 500);
+  assert.equal(cashRow.change, 220);
+
+  const card = await t.api.call('pos:sales:create', t.cashierSession, {
+    items: [{ productId: t.nails.id, unit: 'kg', qty: 1 }],
+    paymentMethod: 'card', reference: 'CARD-REF-123',
+  });
+  const cardRow = t.api.db.prepare('SELECT reference FROM sales WHERE id=?').get(card.saleId);
+  assert.equal(cardRow.reference, 'CARD-REF-123');
+  t.api.close();
+});
+
+test('sale discount cannot exceed the administrator-configured percentage', async () => {
+  const t = await setup();
+  t.api.db.prepare("UPDATE settings SET value='5' WHERE key='discount_percent'").run();
+  await assert.rejects(() => t.api.call('pos:sales:create', t.cashierSession, {
+    items: [{ productId: t.cement.id, unit: 'bag', qty: 1 }],
+    paymentMethod: 'cash', amountTendered: 500, discount: 100,
+  }), /configured 5% limit/);
+  const allowed = await t.api.call('pos:sales:create', t.cashierSession, {
+    items: [{ productId: t.cement.id, unit: 'bag', qty: 1 }],
+    paymentMethod: 'cash', amountTendered: 500, discount: 14,
+  });
+  assert.equal(t.api.db.prepare('SELECT discount,total FROM sales WHERE id=?').get(allowed.saleId).discount, 14);
+  t.api.close();
+});
+
+test('CSV exports neutralize formulas and honor the requested date range', async () => {
+  assert.equal(_csvCell('=2+2'), "'=2+2");
+  assert.equal(_csvCell(' +SUM(A1:A2)'), "' +SUM(A1:A2)");
+  assert.equal(_csvCell('ordinary'), 'ordinary');
+
+  const csvPath = path.join(os.tmpdir(), `yankent-csv-${Date.now()}-${Math.random().toString(36).slice(2)}.csv`);
+  const api = await makeApi({
+    dialog: {
+      showSaveDialog: async () => ({ canceled: false, filePath: csvPath }),
+      showOpenDialog: async () => ({ canceled: true, filePaths: [] }),
+    },
+  });
+  try {
+    const cashier = api.db.prepare('SELECT * FROM users WHERE username=?').get('cashier');
+    const session = createSession(cashier);
+    const cement = api.db.prepare('SELECT * FROM products WHERE sku=?').get('CMT-001');
+    const first = await api.call('pos:sales:create', session, {
+      items: [{ productId: cement.id, unit: 'bag', qty: 1 }],
+      paymentMethod: 'cash', amountTendered: 500,
+    });
+    await api.call('pos:sales:commit', session, first.txnId);
+    const second = await api.call('pos:sales:create', session, {
+      items: [{ productId: cement.id, unit: 'bag', qty: 1 }],
+      paymentMethod: 'cash', amountTendered: 500,
+    });
+    await api.call('pos:sales:commit', session, second.txnId);
+    api.db.prepare("UPDATE sales SET datetime='2026-01-15 10:00:00' WHERE id=?").run(first.saleId);
+    api.db.prepare("UPDATE sales SET datetime='2026-02-15 10:00:00' WHERE id=?").run(second.saleId);
+
+    await api.call('pos:reports:exportCSV', session, 'sales', { from: '2026-02-01', to: '2026-02-28' });
+    const csv = fs.readFileSync(csvPath, 'utf8');
+    assert.match(csv, new RegExp(second.txnId));
+    assert.doesNotMatch(csv, new RegExp(first.txnId));
+  } finally {
+    api.close();
+    try { fs.unlinkSync(csvPath); } catch {}
+  }
 });
 
 test('invalid payment method is rejected (cannot bypass cash/credit checks)', async () => {

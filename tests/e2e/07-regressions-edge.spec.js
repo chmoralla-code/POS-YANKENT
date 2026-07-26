@@ -134,4 +134,16 @@ test.describe('Edge cases', () => {
       await expect(page.locator('#app:not(.hidden)')).toBeVisible();
     } finally { await electron.close(); }
   });
+
+  test('privileged app window refuses in-place navigation to an external origin', async () => {
+    const { electron, page } = await launchApp();
+    try {
+      await login(page, 'admin', 'admin123');
+      const before = page.url();
+      await page.evaluate(() => { window.location.href = 'https://example.com/'; });
+      await page.waitForTimeout(500);
+      expect(page.url()).toBe(before);
+      expect(page.isClosed()).toBe(false);
+    } finally { await electron.close(); }
+  });
 });

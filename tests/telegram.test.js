@@ -5,6 +5,7 @@ const assert = require('node:assert');
 const { createSession } = require('../src/main/lib/auth');
 const { makeApi } = require('./ipc-harness');
 const { buildReportMessage, buildAnalytics, escapeHtml } = require('../src/main/lib/telegram');
+const { _redactTelegramBackupSecrets } = require('../src/main/ipc/integrations');
 
 async function setup() {
   const api = await makeApi();
@@ -169,4 +170,20 @@ test('sendReport handler returns { ok:false, error } on failure (not hidden behi
   assert.equal(unwrapped.ok, false);
   assert.ok(unwrapped.error);
   t.api.close();
+});
+
+test('Telegram report backup never contains the bot token', () => {
+  const data = {
+    tables: {
+      settings: [
+        { key: 'telegram_token', value: '123:very-secret' },
+        { key: 'telegram_chat_id', value: '456' },
+        { key: 'store_name', value: 'YANKENT POS' },
+      ],
+    },
+  };
+  _redactTelegramBackupSecrets(data);
+  assert.equal(data.tables.settings.find((row) => row.key === 'telegram_token').value, '');
+  assert.equal(data.tables.settings.find((row) => row.key === 'telegram_chat_id').value, '456');
+  assert.equal(JSON.stringify(data).includes('very-secret'), false);
 });

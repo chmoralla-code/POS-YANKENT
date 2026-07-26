@@ -1,6 +1,7 @@
 'use strict';
 
 /** Products, categories, product units, customers. */
+const { parseDateOnly } = require('../lib/loans');
 
 function clampLimit(value, fallback, max) {
   const n = Math.floor(Number(value));
@@ -49,13 +50,15 @@ function register(ipcMain, ctx) {
     if (!n) throw new Error('Category name is required');
     const ex = db.prepare('SELECT id FROM categories WHERE name=? AND id!=?').get(n, id);
     if (ex) throw new Error('Category name already in use');
-    db.prepare('UPDATE categories SET name=? WHERE id=?').run(n, id);
+    const result = db.prepare('UPDATE categories SET name=? WHERE id=?').run(n, id);
+    if (!result.changes) throw new Error('Category not found');
     return true;
   });
 
   guard(ipcMain, 'pos:categories:delete', { admin: true }, (_c, id) => {
     // Products in this category get category_id = NULL (SET NULL in schema)
-    db.prepare('DELETE FROM categories WHERE id=?').run(id);
+    const result = db.prepare('DELETE FROM categories WHERE id=?').run(id);
+    if (!result.changes) throw new Error('Category not found');
     return true;
   });
 
@@ -71,16 +74,31 @@ function register(ipcMain, ctx) {
     db.prepare('SELECT * FROM customers ORDER BY id').all()
   );
 
-  guard(ipcMain, 'pos:customers:create', { admin: true }, (_c, c) => {
+  guard(ipcMain, 'pos:customers:create', { admin: true }, (_c, c = {}) => {
+    const name = String(c.name || '').trim();
+    const type = String(c.type || 'walkin').trim().toLowerCase();
+    const creditLimit = nonNegativeNumber(c.credit_limit, 'Credit limit');
+    if (!name) throw new Error('Customer name is required');
+    if (!['walkin', 'contractor'].includes(type)) throw new Error('Invalid customer type');
     const info = db.prepare(
       'INSERT INTO customers(name,type,phone,credit_limit,credit_used) VALUES(?,?,?,?,0)'
-    ).run(c.name, c.type || 'walkin', c.phone || '', c.credit_limit || 0);
+    ).run(name, type, String(c.phone || '').trim(), creditLimit);
     return { id: info.lastInsertRowid };
   });
 
-  guard(ipcMain, 'pos:customers:update', { admin: true }, (_c, id, c) => {
+  guard(ipcMain, 'pos:customers:update', { admin: true }, (_c, id, c = {}) => {
+    const current = db.prepare('SELECT credit_used FROM customers WHERE id=?').get(id);
+    if (!current) throw new Error('Customer not found');
+    const name = String(c.name || '').trim();
+    const type = String(c.type || '').trim().toLowerCase();
+    const creditLimit = nonNegativeNumber(c.credit_limit, 'Credit limit');
+    if (!name) throw new Error('Customer name is required');
+    if (!['walkin', 'contractor'].includes(type)) throw new Error('Invalid customer type');
+    if (creditLimit + 1e-9 < Number(current.credit_used || 0)) {
+      throw new Error('Credit limit cannot be lower than the current outstanding balance');
+    }
     db.prepare('UPDATE customers SET name=?, type=?, phone=?, credit_limit=? WHERE id=?')
-      .run(c.name, c.type, c.phone || '', c.credit_limit || 0, id);
+      .run(name, type, String(c.phone || '').trim(), creditLimit, id);
     return true;
   });
 
@@ -243,7 +261,8 @@ function register(ipcMain, ctx) {
     const now = new Date();
     const pad = (n) => String(n).padStart(2, '0');
     const localNow = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-    const dt = date ? `${date} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}` : localNow;
+    const restockDate = date ? parseDateOnly(date, 'Restock date') : null;
+    const dt = restockDate ? `${restockDate} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}` : localNow;
     db.transaction(() => {
       db.prepare('UPDATE products SET stock=? WHERE id=?').run(stock, id);
       db.prepare('INSERT INTO stock_movements(product_id,movement,qty_change,reason,user_id,datetime,source_location) VALUES(?,?,?,?,?,?,?)')
@@ -333,6 +352,7 @@ function register(ipcMain, ctx) {
   // Returns { imported, skipped, categories }.
   guard(ipcMain, 'pos:products:bulkImport', { admin: true }, (_c, items) => {
     if (!Array.isArray(items)) throw new Error('Expected an array of products');
+    if (items.length > 10000) throw new Error('A catalog import cannot exceed 10,000 products');
     const result = db.transaction(() => {
       const insCat = db.prepare('INSERT OR IGNORE INTO categories(name, sort) VALUES (?, ?)');
       const catIdStmt = db.prepare('SELECT id FROM categories WHERE name=?');
@@ -361,26 +381,32 @@ function register(ipcMain, ctx) {
       let imported = 0, skipped = 0;
       const newCats = new Set();
       const seenNorm = new Set();
-      for (const it of items) {
+      const insMovement = db.prepare(
+        'INSERT INTO stock_movements(product_id,movement,qty_change,reason,user_id) VALUES(?,?,?,?,?)'
+      );
+      for (const rawItem of items) {
+        const it = rawItem && typeof rawItem === 'object' ? rawItem : {};
         const name = String(it.name || '').trim();
         if (!name) { skipped++; continue; }
         if (findByName.get(name)) { skipped++; continue; }
         const norm = name.toLowerCase().replace(/\s+/g, ' ').replace(/[^a-z0-9]/g, '').trim();
         if (seenNorm.has(norm)) { skipped++; continue; }
         seenNorm.add(norm);
-        const catName = String(it.category || 'Uncategorized').trim();
+        const catName = String(it.category || 'Uncategorized').trim() || 'Uncategorized';
         const catId = getCatId(catName);
         newCats.add(catName);
-        const base = String(it.baseUnit || it.unit || 'pc').trim();
-        const stock = Number(it.stock) || 0;
-        const price = Number(it.price) || 0;
+        const base = String(it.baseUnit || it.unit || 'pc').trim() || 'pc';
+        const stock = nonNegativeNumber(it.stock, 'Stock');
+        const price = nonNegativeNumber(it.price, 'Price');
         const n = counterStmt.get().n;
-        const sku = it.sku || ('P-' + String(n).padStart(5, '0'));
+        const sku = String(it.sku || ('P-' + String(n).padStart(5, '0'))).trim();
+        if (!sku) throw new Error(`SKU is required for ${name}`);
         const pid = insProd.run(sku, name, catId, base, stock, 0, price).lastInsertRowid;
-        const units = Array.isArray(it.units) && it.units.length ? it.units : [{ unit: base, factor: 1, price }];
+        const units = normalizeUnits(it.units, base, price);
         for (const u of units) {
-          insUnit.run(pid, String(u.unit || base), Number(u.factor) || 1, Number(u.price) || price);
+          insUnit.run(pid, u.unit, u.factor, u.price);
         }
+        if (stock > 0) insMovement.run(pid, 'restock', stock, 'Initial stock (catalog import)', _c.session?.id || null);
         imported++;
       }
       return { imported, skipped, categories: Array.from(newCats) };

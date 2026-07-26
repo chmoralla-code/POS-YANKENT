@@ -90,7 +90,6 @@ function runCleanupMutation(db, run, transactional) {
   }
   db.transaction(run)();
   try {
-    // Database.transaction() uses the shim's best-effort internal flush.
     // Explicitly verify durable persistence before reporting completion.
     db.flush();
     return null;

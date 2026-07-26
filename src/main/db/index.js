@@ -19,6 +19,11 @@ async function openDatabase(dbPath) {
     .split('\n').filter((l) => !/^\s*PRAGMA/i.test(l)).join('\n');
   db.exec(schema);
   migrate(db);
+  // sql.js supports SQLite foreign keys, but unlike native SQLite wrappers it
+  // does not enable them automatically. Turn enforcement on after migrations
+  // (which rebuild a few legacy tables) so cascades and SET NULL guarantees
+  // in schema.sql actually protect normal app writes.
+  db.pragma('foreign_keys = ON');
   return db;
 }
 
@@ -37,18 +42,21 @@ function migrate(db) {
   // identical except for the constraint.
   const smSchema = db.prepare("SELECT sql FROM sqlite_master WHERE name='stock_movements'").get();
   if (smSchema && smSchema.sql && !smSchema.sql.includes("'refund'")) {
-    db.exec('ALTER TABLE stock_movements RENAME TO stock_movements_old');
-    db.exec(`CREATE TABLE stock_movements (
-      id          INTEGER PRIMARY KEY AUTOINCREMENT,
-      product_id  INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-      movement    TEXT NOT NULL CHECK (movement IN ('sale','restock','adjustment','refund')),
-      qty_change  REAL NOT NULL,
-      reason      TEXT,
-      user_id     INTEGER REFERENCES users(id),
-      datetime    TEXT NOT NULL DEFAULT (datetime('now'))
-    )`);
-    db.exec('INSERT INTO stock_movements SELECT * FROM stock_movements_old');
-    db.exec('DROP TABLE stock_movements_old');
+    db.transaction(() => {
+      db.exec('ALTER TABLE stock_movements RENAME TO stock_movements_old');
+      db.exec(`CREATE TABLE stock_movements (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id  INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+        movement    TEXT NOT NULL CHECK (movement IN ('sale','restock','adjustment','refund')),
+        qty_change  REAL NOT NULL,
+        reason      TEXT,
+        user_id     INTEGER REFERENCES users(id),
+        datetime    TEXT NOT NULL DEFAULT (datetime('now'))
+      )`);
+      db.exec('INSERT INTO stock_movements SELECT * FROM stock_movements_old');
+      db.exec('DROP TABLE stock_movements_old');
+      db.exec('CREATE INDEX IF NOT EXISTS idx_stock_movements_product ON stock_movements(product_id)');
+    })();
   }
 
   // ---- stock_movements: add source_location column ---------------------
