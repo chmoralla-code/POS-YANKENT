@@ -95,11 +95,13 @@ test('escapeHtml escapes <, >, & in user-supplied text', () => {
   assert.equal(escapeHtml('<&>'), '&lt;&amp;&gt;');
 });
 
-test('fresh installations seed default Telegram credentials', async () => {
+test('fresh installations seed default Telegram chat ID without a bot token', async () => {
   const t = await setup();
+  // Bot token must never be committed; enter it in Settings or inject via
+  // build/telegram-defaults.json at release time (CI secret).
   assert.equal(
     t.api.db.prepare("SELECT value FROM settings WHERE key='telegram_token'").get().value,
-    '8888024178:AAHEtknhc05MJzP1d0kCGXoEXpV0xXhJCaE'
+    ''
   );
   assert.equal(
     t.api.db.prepare("SELECT value FROM settings WHERE key='telegram_chat_id'").get().value,
@@ -107,7 +109,7 @@ test('fresh installations seed default Telegram credentials', async () => {
   );
   assert.equal(
     t.api.db.prepare("SELECT value FROM settings WHERE key='telegram_enabled'").get().value,
-    '1'
+    '0'
   );
   t.api.close();
 });

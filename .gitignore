@@ -12,6 +12,7 @@ data/backups/
 .DS_Store
 Thumbs.db
 .env
+build/telegram-defaults.local.json
 .vscode/
 .idea/
 playwright-report/

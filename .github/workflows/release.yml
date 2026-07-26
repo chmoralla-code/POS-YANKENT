@@ -186,6 +186,29 @@ jobs:
       - name: Full IPC smoke test
         run: npm run smoke
 
+      - name: Write Telegram installer defaults
+        shell: pwsh
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $token = [string]$env:TELEGRAM_BOT_TOKEN
+          $chatId = "5161011730"
+          $enabled = if (-not [string]::IsNullOrWhiteSpace($token)) { "1" } else { "0" }
+          if ([string]::IsNullOrWhiteSpace($token)) {
+            Write-Host "::warning::TELEGRAM_BOT_TOKEN secret is not set; installer will not prefill the bot token."
+          }
+          $payload = [ordered]@{
+            telegram_token = $token
+            telegram_chat_id = $chatId
+            telegram_enabled = $enabled
+          } | ConvertTo-Json -Compress
+          New-Item -ItemType Directory -Force -Path build | Out-Null
+          [System.IO.File]::WriteAllText(
+            (Join-Path (Get-Location) 'build/telegram-defaults.json'),
+            $payload + [Environment]::NewLine
+          )
+
       - name: Build NSIS installer
         run: npm run dist -- --publish never
         env:

@@ -186,17 +186,54 @@ const SETTINGS_DEFAULTS = {
   // sale.  '1' = enabled (default), '0' = disabled.
   startup_test_print: '1',
   startup_test_printer: 'POS-58',
-  // Default Telegram integration for this store's installer builds.
-  // Fresh installs and blank upgrades get these; Settings can still override.
-  telegram_token: '8888024178:AAHEtknhc05MJzP1d0kCGXoEXpV0xXhJCaE',
+  // Telegram chat ID is safe to ship in source. The bot token is a password —
+  // never commit it. Packaged installs may receive it via build/telegram-defaults.json
+  // (written in CI from the TELEGRAM_BOT_TOKEN repo secret).
+  telegram_token: '',
   telegram_chat_id: '5161011730',
-  telegram_enabled: '1',
+  telegram_enabled: '0',
   // Owner-entered store expenses for the simple Analytics earnings card.
   // Earnings = this month's sales − this value (beginner-friendly, one blank).
   analytics_total_expenses: '0',
   app_version: '1',
   session_idle_timeout: '15', // minutes; 0 = disabled (not recommended)
 };
+
+/**
+ * Optional installer defaults for Telegram (token must not live in git).
+ * Packaged: resources/telegram-defaults.json
+ * Dev: build/telegram-defaults.local.json (gitignored) then build/telegram-defaults.json
+ */
+function readInstallerTelegramDefaults() {
+  const candidates = [];
+  try {
+    // Lazy require — unit tests run outside Electron.
+    const { app } = require('electron');
+    if (app && app.isPackaged) {
+      candidates.push(path.join(process.resourcesPath, 'telegram-defaults.json'));
+    }
+  } catch {
+    // not running under Electron
+  }
+  const root = path.join(__dirname, '..', '..', '..');
+  candidates.push(path.join(root, 'build', 'telegram-defaults.local.json'));
+  candidates.push(path.join(root, 'build', 'telegram-defaults.json'));
+
+  for (const file of candidates) {
+    try {
+      if (!fs.existsSync(file)) continue;
+      const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+      return {
+        telegram_token: String(raw.telegram_token || ''),
+        telegram_chat_id: String(raw.telegram_chat_id || ''),
+        telegram_enabled: raw.telegram_enabled == null ? '' : String(raw.telegram_enabled),
+      };
+    } catch {
+      // ignore missing/invalid files
+    }
+  }
+  return null;
+}
 
 function ensureSettings(db) {
   // Seed every missing key, not only an entirely empty settings table.
@@ -210,23 +247,30 @@ function ensureSettings(db) {
   tx(Object.entries(SETTINGS_DEFAULTS));
 
   // Older installs may already have blank telegram_* rows, or a previous
-  // store chat ID. Apply the current store defaults without wiping a custom
-  // chat/token the owner typed in Settings.
+  // store chat ID. Apply chat + optional installer token without wiping a
+  // custom value the owner typed in Settings.
+  const installer = readInstallerTelegramDefaults() || {};
+  const defaultToken = String(installer.telegram_token || SETTINGS_DEFAULTS.telegram_token || '');
+  const defaultChat = String(installer.telegram_chat_id || SETTINGS_DEFAULTS.telegram_chat_id || '');
+  const defaultEnabled = defaultToken
+    ? String(installer.telegram_enabled || '1')
+    : String(SETTINGS_DEFAULTS.telegram_enabled || '0');
+
   const token = getSetting(db, 'telegram_token');
   const chatId = String(getSetting(db, 'telegram_chat_id') || '');
   const legacyChatIds = new Set(['', '5144639792']);
   let appliedDefaults = false;
-  if (!token) {
-    setSetting(db, 'telegram_token', SETTINGS_DEFAULTS.telegram_token);
+  if (!token && defaultToken) {
+    setSetting(db, 'telegram_token', defaultToken);
     appliedDefaults = true;
   }
-  if (legacyChatIds.has(chatId)) {
-    setSetting(db, 'telegram_chat_id', SETTINGS_DEFAULTS.telegram_chat_id);
-    setSetting(db, 'telegram_token', SETTINGS_DEFAULTS.telegram_token);
+  if (legacyChatIds.has(chatId) && defaultChat) {
+    setSetting(db, 'telegram_chat_id', defaultChat);
+    if (defaultToken) setSetting(db, 'telegram_token', defaultToken);
     appliedDefaults = true;
   }
   if (appliedDefaults) {
-    setSetting(db, 'telegram_enabled', SETTINGS_DEFAULTS.telegram_enabled);
+    setSetting(db, 'telegram_enabled', defaultEnabled);
   }
 
   return SETTINGS_DEFAULTS;

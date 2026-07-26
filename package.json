@@ -29,6 +29,10 @@
         "to": "app-update.yml"
       },
       {
+        "from": "build/telegram-defaults.json",
+        "to": "telegram-defaults.json"
+      },
+      {
         "from": "resources",
         "to": ".",
         "filter": [
