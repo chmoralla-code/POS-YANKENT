@@ -362,6 +362,7 @@ function register(ipcMain, ctx) {
          VALUES(?,?,?,?,?,?,?,10,0,1)`
       );
       const findByName = db.prepare('SELECT id FROM products WHERE name=? AND active=1');
+      const findBySku = db.prepare('SELECT id FROM products WHERE sku=?');
       const insUnit = db.prepare('INSERT INTO product_units(product_id,unit,factor,price) VALUES(?,?,?,?)');
       const counterStmt = db.prepare('SELECT COALESCE(MAX(id),0)+1 AS n FROM products');
 
@@ -399,8 +400,14 @@ function register(ipcMain, ctx) {
         const stock = nonNegativeNumber(it.stock, 'Stock');
         const price = nonNegativeNumber(it.price, 'Price');
         const n = counterStmt.get().n;
-        const sku = String(it.sku || ('P-' + String(n).padStart(5, '0'))).trim();
-        if (!sku) throw new Error(`SKU is required for ${name}`);
+        const preferredSku = String(it.sku || ('P-' + String(n).padStart(5, '0'))).trim();
+        if (!preferredSku) throw new Error(`SKU is required for ${name}`);
+        let sku = preferredSku;
+        let suffix = 2;
+        while (findBySku.get(sku)) {
+          sku = `${preferredSku}-${suffix}`;
+          suffix++;
+        }
         const pid = insProd.run(sku, name, catId, base, stock, 0, price).lastInsertRowid;
         const units = normalizeUnits(it.units, base, price);
         for (const u of units) {

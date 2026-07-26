@@ -3,7 +3,35 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { createSession } = require('../src/main/lib/auth');
+const {
+  ensureNewlyAddedItems,
+  NEWLY_ADDED_ITEMS_CATEGORY,
+  NEWLY_ADDED_ITEMS_SETTING,
+} = require('../src/main/db/seed');
 const { makeApi } = require('./ipc-harness');
+
+const EXPECTED_NEWLY_ADDED_ITEMS = [
+  ['NAI-001', 'GOLDEN CUP Brass Plated Iron Hinges Loose Pin 4x4', 12, 75],
+  ['NAI-002', 'SHERLOCK Door Hinges 3x3', 2, 105],
+  ['NAI-003', 'STANLEY Door Hinges 3" (76mm)', 33, 120],
+  ['NAI-004', 'HOTECHE Iron Padlock 2" / 50mm orange', 2, 140],
+  ['NAI-005', 'HOTECHE Iron Padlock 20mm orange', 7, 41],
+  ['NAI-006', 'EGRNIA Iron Padlock yellow', 2, 50],
+  ['NAI-007', 'TDC Expert in Hinges 3x3 yellow', 5, 80],
+  ['NAI-008', 'TDC Expert in Hinges 4x4 yellow', 1, 90],
+  ['NAI-009', 'STANLEY Door Hinges 4" (101mm)', 29, 180],
+  ['NAI-010', 'TOPGRADE Pin Hinges Steel 3 1/2"', 9, 125],
+  ['NAI-011', 'HOTECHE Heavy duty Iron Padlock 38mm', 1, 85],
+  ['NAI-012', 'Silicone Sealant 300ml', 61, 180],
+  ['NAI-013', '3M Vinyl Electrical tape', 28, 60],
+  ['NAI-014', 'ARMAK Vinyl Electrical tape 0.16 x 19 x 8m', 15, 35],
+  ['NAI-015', 'ARMAK Electrical tape 0.16 x 19 x 4m', 5, 25],
+  ['NAI-016', 'ARMAK Electrical tape 0.16 x 19 x 16m', 26, 50],
+  ['NAI-017', 'ROYU PVC Electrical tape 0.155 x 19 x 16m', 45, 40],
+  ['NAI-018', 'ROYU PVC Electrical tape 0.155 x 19 x 4m', 4, 25],
+  ['NAI-019', 'ROYU PVC Electrical tape 0.155 x 19 x 8m', 50, 30],
+  ['NAI-020', 'LENOX Gabot', 74, 50],
+];
 
 async function setup() {
   const api = await makeApi();
@@ -11,6 +39,75 @@ async function setup() {
   const cashier = api.db.prepare('SELECT * FROM users WHERE username=?').get('cashier');
   return { api, adminSession: createSession(admin), cashierSession: createSession(cashier) };
 }
+
+test('fresh catalog contains all Newly Added Items with the requested stock, unit, and price', async () => {
+  const t = await setup();
+  const rows = t.api.db.prepare(
+    `SELECT p.sku,p.name,p.stock,p.price,p.base_unit,u.unit,u.factor,u.price AS unit_price
+       FROM products p
+       JOIN categories c ON c.id=p.category_id
+       JOIN product_units u ON u.product_id=p.id
+      WHERE c.name=?
+      ORDER BY p.sku`
+  ).all(NEWLY_ADDED_ITEMS_CATEGORY);
+
+  assert.deepEqual(
+    rows.map((row) => [
+      row.sku,
+      row.name,
+      row.stock,
+      row.price,
+      row.base_unit,
+      row.unit,
+      row.factor,
+      row.unit_price,
+    ]),
+    EXPECTED_NEWLY_ADDED_ITEMS.map(([sku, name, stock, price]) =>
+      [sku, name, stock, price, 'pcs', 'pcs', 1, price]
+    )
+  );
+
+  const movementCount = t.api.db.prepare(
+    `SELECT COUNT(*) AS count
+       FROM stock_movements m
+       JOIN products p ON p.id=m.product_id
+       JOIN categories c ON c.id=p.category_id
+      WHERE c.name=? AND m.movement='restock'`
+  ).get(NEWLY_ADDED_ITEMS_CATEGORY);
+  assert.equal(movementCount.count, EXPECTED_NEWLY_ADDED_ITEMS.length);
+  assert.equal(
+    t.api.db.prepare('SELECT value FROM settings WHERE key=?').get(NEWLY_ADDED_ITEMS_SETTING).value,
+    '1'
+  );
+  t.api.close();
+});
+
+test('existing-database catalog update runs once and preserves later edits or deletions', async () => {
+  const t = await setup();
+  const category = t.api.db.prepare('SELECT id FROM categories WHERE name=?')
+    .get(NEWLY_ADDED_ITEMS_CATEGORY);
+  t.api.db.prepare('DELETE FROM settings WHERE key=?').run(NEWLY_ADDED_ITEMS_SETTING);
+  t.api.db.prepare('DELETE FROM products WHERE category_id=?').run(category.id);
+
+  const first = ensureNewlyAddedItems(t.api.db);
+  assert.equal(first.inserted, EXPECTED_NEWLY_ADDED_ITEMS.length);
+  assert.equal(first.skipped, 0);
+  assert.equal(first.alreadyRun, false);
+
+  t.api.db.prepare('UPDATE products SET stock=?,price=? WHERE sku=?').run(999, 999, 'NAI-001');
+  const second = ensureNewlyAddedItems(t.api.db);
+  assert.equal(second.alreadyRun, true);
+  assert.deepEqual(
+    t.api.db.prepare('SELECT stock,price FROM products WHERE sku=?').get('NAI-001'),
+    { stock: 999, price: 999 }
+  );
+
+  t.api.db.prepare('DELETE FROM products WHERE sku=?').run('NAI-020');
+  const third = ensureNewlyAddedItems(t.api.db);
+  assert.equal(third.alreadyRun, true);
+  assert.equal(t.api.db.prepare('SELECT id FROM products WHERE sku=?').get('NAI-020'), undefined);
+  t.api.close();
+});
 
 test('bulk import creates products + categories, skips duplicates, attaches units', async () => {
   const t = await setup();
@@ -93,6 +190,32 @@ test('re-importing the same names skips them (idempotent)', async () => {
   const r2 = await api.call('pos:products:bulkImport', adminSession, items);
   assert.equal(r2.imported, 0);
   assert.equal(r2.skipped, 1);
+  t.api.close();
+});
+
+test('catalog import allocates a safe SKU after Delete All retains an inactive fixed SKU', async () => {
+  const t = await setup();
+  const { api, adminSession } = t;
+  const catalog = require('../src/renderer/assets/product-catalog.json');
+  const item = catalog.find((entry) => entry.sku === 'NAI-001');
+  assert.ok(item);
+
+  await api.call('pos:products:deleteAll', adminSession);
+  const retained = api.db.prepare('SELECT id,active FROM products WHERE sku=?').get(item.sku);
+  assert.ok(retained);
+  assert.equal(retained.active, 0);
+
+  const result = await api.call('pos:products:bulkImport', adminSession, [item]);
+  assert.equal(result.imported, 1);
+  assert.equal(result.skipped, 0);
+  const restored = api.db.prepare('SELECT sku,active,stock,price FROM products WHERE name=? AND active=1')
+    .get(item.name);
+  assert.deepEqual(restored, {
+    sku: 'NAI-001-2',
+    active: 1,
+    stock: item.stock,
+    price: item.price,
+  });
   t.api.close();
 });
 

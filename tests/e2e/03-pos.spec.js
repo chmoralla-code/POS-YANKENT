@@ -48,6 +48,20 @@ test.describe('POS — Catalog & Navigation', () => {
     } finally { await electron.close(); }
   });
 
+  test('Newly Added Items chip filters the POS grid to the 20 requested products', async () => {
+    const { electron, page } = await launchApp();
+    try {
+      await login(page, 'admin', 'admin123');
+      await page.click('#posChipsToggle');
+      const chip = page.locator('#posChips .chip[data-cat="Newly Added Items"]');
+      await expect(chip).toBeVisible();
+      await chip.click();
+      await expect(page.locator('#posGrid .prod-card')).toHaveCount(20);
+      await expect(page.locator('#posGrid')).toContainText('GOLDEN CUP Brass Plated Iron Hinges Loose Pin 4x4');
+      await expect(page.locator('#posGrid')).toContainText('LENOX Gabot');
+    } finally { await electron.close(); }
+  });
+
   test('Products tab and Services tab switch', async () => {
     const { electron, page } = await launchApp();
     try {

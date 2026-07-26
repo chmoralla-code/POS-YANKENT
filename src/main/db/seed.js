@@ -4,6 +4,17 @@ const fs = require('fs');
 const path = require('path');
 
 const LEGACY_DEMO_CLEANUP_SETTING = 'legacy_demo_customers_removed_v1';
+const NEWLY_ADDED_ITEMS_CATEGORY = 'Newly Added Items';
+const NEWLY_ADDED_ITEMS_SETTING = 'newly_added_items_catalog_v1';
+const NEWLY_ADDED_ITEMS_COUNT = 20;
+const PRODUCT_CATALOG_PATH = path.join(
+  __dirname,
+  '..',
+  '..',
+  'renderer',
+  'assets',
+  'product-catalog.json'
+);
 const LEGACY_WALK_IN = {
   id: 1,
   name: 'Walk-in Customer',
@@ -45,6 +56,128 @@ const LEGACY_DEMO_CUSTOMERS = [
     originalBalances: [0],
   },
 ];
+
+function readProductCatalog() {
+  return JSON.parse(fs.readFileSync(PRODUCT_CATALOG_PATH, 'utf8'));
+}
+
+function getNewlyAddedItems(catalog = readProductCatalog()) {
+  const items = catalog.filter((item) =>
+    String(item.category || '').trim().toLowerCase() === NEWLY_ADDED_ITEMS_CATEGORY.toLowerCase()
+  );
+  if (items.length !== NEWLY_ADDED_ITEMS_COUNT) {
+    throw new Error(
+      `Expected ${NEWLY_ADDED_ITEMS_COUNT} "${NEWLY_ADDED_ITEMS_CATEGORY}" catalog items; found ${items.length}`
+    );
+  }
+
+  const names = new Set();
+  const skus = new Set();
+  for (const item of items) {
+    const name = String(item.name || '').trim();
+    const sku = String(item.sku || '').trim();
+    const stock = Number(item.stock);
+    const price = Number(item.price);
+    const baseUnit = String(item.baseUnit || item.unit || '').trim();
+    if (!name || !sku || !baseUnit || !Number.isFinite(stock) || stock < 0
+      || !Number.isFinite(price) || price < 0) {
+      throw new Error(`Invalid "${NEWLY_ADDED_ITEMS_CATEGORY}" catalog entry: ${name || sku || '(unnamed)'}`);
+    }
+    const normalizedName = name.toLowerCase();
+    const normalizedSku = sku.toLowerCase();
+    if (names.has(normalizedName) || skus.has(normalizedSku)) {
+      throw new Error(`Duplicate "${NEWLY_ADDED_ITEMS_CATEGORY}" catalog entry: ${name}`);
+    }
+    names.add(normalizedName);
+    skus.add(normalizedSku);
+  }
+  return items;
+}
+
+/**
+ * Add the July 2026 inventory batch to an existing database exactly once.
+ *
+ * Existing names are preserved rather than overwritten, and the settings
+ * marker prevents later user edits or deletions from being undone at startup.
+ */
+function ensureNewlyAddedItems(db) {
+  const marker = db.prepare('SELECT value FROM settings WHERE key=?').get(NEWLY_ADDED_ITEMS_SETTING);
+  if (marker) return { inserted: 0, skipped: 0, alreadyRun: true };
+
+  const items = getNewlyAddedItems();
+  let inserted = 0;
+  let categoryId = null;
+
+  db.transaction(() => {
+    let category = db.prepare('SELECT id FROM categories WHERE name=? COLLATE NOCASE')
+      .get(NEWLY_ADDED_ITEMS_CATEGORY);
+    if (!category) {
+      const sort = Number(db.prepare('SELECT COALESCE(MAX(sort),0) AS value FROM categories').get().value) + 1;
+      db.prepare('INSERT INTO categories(name,sort) VALUES(?,?)')
+        .run(NEWLY_ADDED_ITEMS_CATEGORY, sort);
+      category = db.prepare('SELECT id FROM categories WHERE name=?').get(NEWLY_ADDED_ITEMS_CATEGORY);
+    }
+    categoryId = category.id;
+
+    const findName = db.prepare('SELECT id FROM products WHERE TRIM(name)=? COLLATE NOCASE LIMIT 1');
+    const findSku = db.prepare('SELECT id FROM products WHERE sku=?');
+    const insertProduct = db.prepare(
+      `INSERT INTO products(sku,name,category_id,base_unit,stock,cost,price,low_stock_threshold,is_service,active)
+       VALUES(?,?,?,?,?,?,?,10,0,1)`
+    );
+    const insertUnit = db.prepare(
+      'INSERT INTO product_units(product_id,unit,factor,price) VALUES(?,?,?,?)'
+    );
+    const insertMovement = db.prepare(
+      'INSERT INTO stock_movements(product_id,movement,qty_change,reason,user_id) VALUES(?,?,?,?,NULL)'
+    );
+
+    for (const item of items) {
+      const name = String(item.name).trim();
+      if (findName.get(name)) continue;
+
+      const preferredSku = String(item.sku).trim();
+      let sku = preferredSku;
+      let suffix = 2;
+      while (findSku.get(sku)) {
+        sku = `${preferredSku}-${suffix}`;
+        suffix++;
+      }
+
+      const baseUnit = String(item.baseUnit || item.unit).trim();
+      const stock = Number(item.stock);
+      const price = Number(item.price);
+      const productId = insertProduct
+        .run(sku, name, categoryId, baseUnit, stock, 0, price)
+        .lastInsertRowid;
+      const units = Array.isArray(item.units) && item.units.length
+        ? item.units
+        : [{ unit: baseUnit, factor: 1, price }];
+      for (const unit of units) {
+        insertUnit.run(
+          productId,
+          String(unit.unit || baseUnit).trim(),
+          Number(unit.factor) || 1,
+          Number(unit.price) || price
+        );
+      }
+      if (stock > 0) {
+        insertMovement.run(productId, 'restock', stock, 'Initial stock (Newly Added Items)');
+      }
+      inserted++;
+    }
+
+    db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)')
+      .run(NEWLY_ADDED_ITEMS_SETTING, '1');
+  })();
+
+  return {
+    inserted,
+    skipped: items.length - inserted,
+    alreadyRun: false,
+    categoryId,
+  };
+}
 
 function amountMatches(value, expected) {
   const amount = Number(value);
@@ -234,15 +367,20 @@ function removeLegacyDemoCustomers(db, { transactional = true, snapshot = true }
 }
 
 /**
- * Seed initial data: users, walk-in customer, and the 135-item
- * construction-supply product catalog from product-catalog.json.
- * Idempotent: only runs when the database is empty.
+ * Seed initial data: users, walk-in customer, and the construction-supply
+ * product catalog. Existing databases receive one-time catalog additions.
  */
 function seedDatabase(db) {
   const { hashPassword } = require('../lib/auth');
 
   const userCount = db.prepare('SELECT COUNT(*) AS c FROM users').get().c;
-  if (userCount > 0) return false; // already seeded
+  if (userCount > 0) {
+    ensureNewlyAddedItems(db);
+    return false;
+  }
+
+  const items = readProductCatalog();
+  getNewlyAddedItems(items);
 
   const tx = db.transaction(() => {
     // ---- Users -----------------------------------------------------------
@@ -259,9 +397,6 @@ function seedDatabase(db) {
     insCust.run('Walk-in Customer', 'walkin', '', 0, 0);
 
     // ---- Products from product-catalog.json ------------------------------
-    const catalogPath = path.join(__dirname, '..', '..', 'renderer', 'assets', 'product-catalog.json');
-    const items = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
-
     const insCat = db.prepare('INSERT OR IGNORE INTO categories(name, sort) VALUES(?, ?)');
     const catIdStmt = db.prepare('SELECT id FROM categories WHERE name=?');
     const maxSortStmt = db.prepare('SELECT COALESCE(MAX(sort),0) AS s FROM categories');
@@ -271,6 +406,9 @@ function seedDatabase(db) {
     );
     const insUnit = db.prepare(
       'INSERT INTO product_units(product_id,unit,factor,price) VALUES(?,?,?,?)'
+    );
+    const insMovement = db.prepare(
+      'INSERT INTO stock_movements(product_id,movement,qty_change,reason,user_id) VALUES(?,?,?,?,NULL)'
     );
     const counterStmt = db.prepare('SELECT COALESCE(MAX(id),0)+1 AS n FROM products');
 
@@ -302,11 +440,24 @@ function seedDatabase(db) {
       for (const u of units) {
         insUnit.run(pid, String(u.unit || base), Number(u.factor) || 1, Number(u.price) || price);
       }
+      if (stock > 0) {
+        insMovement.run(pid, 'restock', stock, 'Initial stock (catalog)');
+      }
     }
+
+    db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)')
+      .run(NEWLY_ADDED_ITEMS_SETTING, '1');
   });
 
   tx();
   return true;
 }
 
-module.exports = { seedDatabase, removeLegacyDemoCustomers, LEGACY_DEMO_CLEANUP_SETTING };
+module.exports = {
+  seedDatabase,
+  ensureNewlyAddedItems,
+  removeLegacyDemoCustomers,
+  LEGACY_DEMO_CLEANUP_SETTING,
+  NEWLY_ADDED_ITEMS_CATEGORY,
+  NEWLY_ADDED_ITEMS_SETTING,
+};

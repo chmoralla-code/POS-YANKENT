@@ -16,6 +16,7 @@ App.categoryColors = {
   'Tools':      '#c62828',
   'Fasteners':  '#6a1b9a',
   'Services':   '#00838f',
+  'Newly Added Items': '#455a64',
 };
 App.catColor = function (cat) { return (App.categoryColors && App.categoryColors[cat]) || '#757575'; };
 
