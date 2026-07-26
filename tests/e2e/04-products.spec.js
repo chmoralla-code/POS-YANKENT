@@ -87,6 +87,41 @@ test.describe('Products & Inventory', () => {
       await page.fill('#cashierStock', '113');
       await page.click('.modal [data-a="save"]');
       await expect(page.locator('#pGrid')).toContainText('Stock: 113 box');
+
+      // A base-open item remains editable even when a separately priced
+      // alternate unit is present; the alternate price is protected server-side.
+      await page.fill('#pSearch', 'concrete nails #3');
+      const mixedCard = page.locator('#pGrid .prod-card', { hasText: 'concrete nails #3' });
+      await expect(mixedCard).toBeVisible();
+      await mixedCard.getByRole('button', { name: 'Edit unit & stock' }).click();
+      await expect(page.locator('.modal')).toContainText('Edit Unit & Stock');
+      await page.fill('#cashierStock', '3');
+      await page.getByRole('button', { name: 'Save' }).click();
+      await expect(mixedCard).toContainText('Stock: 3 carton');
+    } finally { await electron.close(); }
+  });
+
+  test('Products view resets cashier-only state before the next admin session', async () => {
+    const { electron, page } = await launchApp();
+    try {
+      await login(page, 'cashier', 'cashier123');
+      await navigate(page, 'products');
+      await expect(page.locator('#pChips .chip[data-cat="Newly Added Items"]')).toHaveClass(/active/);
+      await expect(page.locator('#pChips')).toBeVisible();
+
+      await page.click('#logoutBtn');
+      await page.locator('.modal [data-a="no"]').click();
+      await expect(page.locator('#login')).toBeVisible();
+
+      await login(page, 'admin', 'admin123');
+      await navigate(page, 'products');
+      await expect(page.locator('#pTabs .tab[data-tab="products"]')).toHaveClass(/active/);
+      await expect(page.locator('#pChips')).toBeHidden();
+      expect(await page.evaluate(() => ({
+        tab: App.views.products.tab,
+        cat: App.views.products.cat,
+        chipsOpen: App.views.products.chipsOpen,
+      }))).toEqual({ tab: 'products', cat: 'all', chipsOpen: false });
     } finally { await electron.close(); }
   });
 

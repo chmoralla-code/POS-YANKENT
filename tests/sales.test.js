@@ -10,6 +10,7 @@ const path = require('path');
 const { createSession } = require('../src/main/lib/auth');
 const { makeApi } = require('./ipc-harness');
 const { _csvCell } = require('../src/main/ipc/sales');
+const { NEWLY_ADDED_ITEMS_CATEGORY } = require('../src/main/db/seed');
 
 async function setup() {
   const api = await makeApi();
@@ -315,10 +316,11 @@ test('sale lines use authoritative catalog price, unit factor, and product type'
   t.api.close();
 });
 
-test('open-price catalog items accept cashier unitPrice; fixed prices stay locked', async () => {
+test('cashier open-price sales are limited to Newly Added Items; admin remains unrestricted', async () => {
   const t = await setup();
-  const { api, cashierSession } = t;
-  const catId = api.db.prepare('SELECT id FROM categories ORDER BY id LIMIT 1').get().id;
+  const { api, adminSession, cashierSession } = t;
+  const catId = api.db.prepare('SELECT id FROM categories WHERE name=?')
+    .get(NEWLY_ADDED_ITEMS_CATEGORY).id;
   const openId = Number(api.db.prepare(
     `INSERT INTO products(sku,name,category_id,base_unit,stock,cost,price,low_stock_threshold,is_service,active)
      VALUES(?,?,?,?,?,?,?,?,0,1)`
@@ -339,6 +341,44 @@ test('open-price catalog items accept cashier unitPrice; fixed prices stay locke
     items: [{ productId: openId, unit: 'pcs', qty: 1, unitPrice: 0 }],
     paymentMethod: 'cash', amountTendered: 1,
   }), /Enter a price/);
+
+  await assert.rejects(() => api.call('pos:sales:create', cashierSession, {
+    items: [{ productId: openId, unit: 'pcs', qty: 1, unitPrice: 0.001 }],
+    paymentMethod: 'cash', amountTendered: 0,
+  }), /at least ₱0\.01/);
+
+  await assert.rejects(() => api.call('pos:sales:create', cashierSession, {
+    items: [{ productId: openId, unit: 'pcs', qty: 0.001, unitPrice: 1 }],
+    paymentMethod: 'cash', amountTendered: 0,
+  }), /Line total must be at least ₱0\.01/);
+
+  const outsideCategoryId = api.db.prepare('SELECT id FROM categories WHERE name!=? ORDER BY id LIMIT 1')
+    .get(NEWLY_ADDED_ITEMS_CATEGORY).id;
+  const outsideOpenId = Number(api.db.prepare(
+    `INSERT INTO products(sku,name,category_id,base_unit,stock,cost,price,low_stock_threshold,is_service,active)
+     VALUES(?,?,?,?,?,?,?,?,0,1)`
+  ).run('OPEN-OUTSIDE-SALE', 'Outside Open Price Item', outsideCategoryId, 'pcs', 5, 0, 0, 1).lastInsertRowid);
+  api.db.prepare('INSERT INTO product_units(product_id,unit,factor,price) VALUES(?,?,?,?)')
+    .run(outsideOpenId, 'pcs', 1, 0);
+
+  const saleCountBeforeRejectedCall = api.db.prepare('SELECT COUNT(*) AS count FROM sales').get().count;
+  await assert.rejects(() => api.call('pos:sales:create', cashierSession, {
+    items: [{ productId: outsideOpenId, unit: 'pcs', qty: 1, unitPrice: 42 }],
+    paymentMethod: 'cash', amountTendered: 42,
+  }), /limited to Newly Added Items/);
+  assert.equal(
+    api.db.prepare('SELECT COUNT(*) AS count FROM sales').get().count,
+    saleCountBeforeRejectedCall,
+    'rejected cashier payload must not create a pending sale'
+  );
+
+  const adminOpenSale = await api.call('pos:sales:create', adminSession, {
+    items: [{ productId: outsideOpenId, unit: 'pcs', qty: 1, unitPrice: 42 }],
+    paymentMethod: 'cash', amountTendered: 42,
+  });
+  const adminOpenItem = api.db.prepare('SELECT unit_price,amount FROM sale_items WHERE sale_id=?')
+    .get(adminOpenSale.saleId);
+  assert.deepEqual(adminOpenItem, { unit_price: 42, amount: 42 });
 
   const cement = api.db.prepare('SELECT * FROM products WHERE sku=?').get('CMT-001');
   const locked = await api.call('pos:sales:create', cashierSession, {

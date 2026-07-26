@@ -4,6 +4,8 @@ window.App = window.App || {};
 App.views = App.views || {};
 App.cart = App.cart || [];
 
+const POS_CASHIER_OPEN_PRICE_CATEGORY = 'Newly Added Items';
+
 App.views.pos = {
   title: 'Point of Sale',
   cache: { products: [], categories: [], customers: [] },
@@ -220,27 +222,37 @@ App.views.pos = {
   _cardHtml(p) {
     const def = (p.units && p.units[0]) || { unit: p.base_unit || 'svc', price: p.price, factor: 1 };
     const openPrice = this._isOpenPrice(p, def.unit);
-    const priceText = openPrice ? 'Set price' : App.ui.money(def.price);
-    const priceAria = openPrice ? 'price set at sale' : `${App.ui.money(def.price)} per ${def.unit}`;
+    const canSetOpenPrice = openPrice && this._canSetOpenPrice(p, def.unit);
+    const unavailableOpenPrice = openPrice && !canSetOpenPrice;
+    const priceText = openPrice
+      ? (canSetOpenPrice ? 'Set price' : 'Price unavailable')
+      : App.ui.money(def.price);
+    const priceAria = openPrice
+      ? (canSetOpenPrice ? 'price set at sale' : 'price unavailable to cashier')
+      : `${App.ui.money(def.price)} per ${def.unit}`;
     if (this.state.tab === 'products' && !App.isService(p)) {
       const low = p.stock <= (p.low || 10);
       const out = p.stock <= 0;
       const col = App.catColor(p.category);
-      // Open-price items stay clickable when out of stock so cashiers can set stock.
-      const disabled = out && !openPrice;
-      const cls = out ? 'out-of-stock' : 'in-stock';
-      const stockLabel = out ? 'out of stock' : `stock ${App.ui.qty(p.stock)} ${p.base_unit}`;
-      return `<button type="button" class="prod-card ${cls}${openPrice ? ' open-price' : ''}" data-id="${p.id}" style="border-left:4px solid ${col}" title="${App.ui.esc(p.name)}" aria-label="${App.ui.esc(`${p.name}, ${priceAria}, ${stockLabel}`)}"${disabled ? ' disabled aria-disabled="true"' : ''}>
+      // Only authorized open-price items stay clickable at zero stock so their
+      // unit/stock can be corrected. Other zero-price items remain visibly
+      // unavailable to cashiers and cannot open a correction modal.
+      const disabled = unavailableOpenPrice || (out && !canSetOpenPrice);
+      const cls = out || unavailableOpenPrice ? 'out-of-stock' : 'in-stock';
+      const stockLabel = unavailableOpenPrice
+        ? 'price unavailable'
+        : (out ? 'out of stock' : `stock ${App.ui.qty(p.stock)} ${p.base_unit}`);
+      return `<button type="button" class="prod-card ${cls}${canSetOpenPrice ? ' open-price' : ''}" data-id="${p.id}" style="border-left:4px solid ${col}" title="${App.ui.esc(p.name)}" aria-label="${App.ui.esc(`${p.name}, ${priceAria}, ${stockLabel}`)}"${disabled ? ' disabled aria-disabled="true"' : ''}>
         <div class="nm">${App.ui.esc(p.name)}</div>
         <div class="pr">${priceText} <small>/${App.ui.esc(def.unit)}</small></div>
-        <div class="stk ${out ? 'low' : low ? 'low' : ''}">${out ? (openPrice ? 'SET STOCK' : 'OUT OF STOCK') : 'Stock: ' + App.ui.qty(p.stock) + ' ' + App.ui.esc(p.base_unit)}${(!out && p.units && p.units.length > 1) ? ' · ' + p.units.length + ' units' : ''}</div>
+        <div class="stk ${out || unavailableOpenPrice ? 'low' : low ? 'low' : ''}">${unavailableOpenPrice ? 'PRICE UNAVAILABLE' : (out ? (canSetOpenPrice ? 'SET STOCK' : 'OUT OF STOCK') : 'Stock: ' + App.ui.qty(p.stock) + ' ' + App.ui.esc(p.base_unit))}${(!out && !unavailableOpenPrice && p.units && p.units.length > 1) ? ' · ' + p.units.length + ' units' : ''}</div>
       </button>`;
     }
     // Services: never treat as out-of-stock (stock is always 0 by design).
-    return `<button type="button" class="prod-card svc-card" data-id="${p.id}" title="${App.ui.esc(p.name)}" aria-label="${App.ui.esc(`${p.name}, service, ${priceAria}`)}">
+    return `<button type="button" class="prod-card svc-card${unavailableOpenPrice ? ' out-of-stock' : ''}" data-id="${p.id}" title="${App.ui.esc(p.name)}" aria-label="${App.ui.esc(`${p.name}, service, ${priceAria}`)}"${unavailableOpenPrice ? ' disabled aria-disabled="true"' : ''}>
       <div class="nm">${App.ui.esc(p.name)}</div>
       <div class="pr">${priceText} <small>/${App.ui.esc(def.unit)}</small></div>
-      <div class="stk">Service</div>
+      <div class="stk">${unavailableOpenPrice ? 'PRICE UNAVAILABLE' : 'Service'}</div>
     </button>`;
   },
 
@@ -340,6 +352,44 @@ App.views.pos = {
     return this._catalogUnitPrice(p, unit) <= 0;
   },
 
+  _canSetOpenPrice(p, unit) {
+    if (!this._isOpenPrice(p, unit)) return false;
+    const isAdmin = !!(App.current && App.current.user && App.current.user.role === 'admin');
+    return isAdmin || (p && p.category === POS_CASHIER_OPEN_PRICE_CATEGORY);
+  },
+
+  _syncCartProductDetails(productId, previousBaseUnit, updated) {
+    const units = Array.isArray(updated.units) ? updated.units : [];
+    const nextBaseUnit = String(updated.base_unit || '').trim();
+    const baseRow = units.find(
+      (u) => u.unit === nextBaseUnit && Math.abs(Number(u.factor) - 1) < 1e-9
+    ) || units.find((u) => u.unit === nextBaseUnit);
+    for (const line of App.cart) {
+      if (line.productId !== productId) continue;
+      line.units = units;
+      line.base_unit = nextBaseUnit;
+      line.stock = updated.stock;
+      // A base-unit rename updates every existing line that used the old
+      // base. Otherwise those lines retain a unit that no longer exists and
+      // the authoritative sales endpoint rejects the whole cart.
+      if (line.unit !== previousBaseUnit) continue;
+      line.unit = nextBaseUnit;
+      line.factor = baseRow && Number(baseRow.factor) > 0 ? Number(baseRow.factor) : 1;
+      const catalogPrice = Number(baseRow && baseRow.price) || 0;
+      if (catalogPrice > 0) {
+        line.unitPrice = catalogPrice;
+        line.priceEditable = false;
+      } else {
+        // Preserve each line's cashier-entered price across a label-only base
+        // correction; only the catalog unit remains open-priced.
+        if (line.priceEditable && Number(line.unitPrice) >= 0.01) {
+          line.openUnitPrice = Number(line.unitPrice);
+        }
+        line.priceEditable = true;
+      }
+    }
+  },
+
   _promptOpenDetails(p) {
     return new Promise((resolve) => {
       const unit = (p.units && p.units[0] && p.units[0].unit) || p.base_unit || 'pcs';
@@ -360,10 +410,11 @@ App.views.pos = {
       const stockInput = m.el.querySelector('#openStock');
       priceInput.focus();
       const submit = () => {
-        const unitPrice = parseFloat(priceInput.value);
+        const enteredPrice = parseFloat(priceInput.value);
+        const unitPrice = Math.round((enteredPrice + Number.EPSILON) * 100) / 100;
         const baseUnit = String(unitInput.value || '').trim();
         const nextStock = parseFloat(stockInput.value);
-        if (!Number.isFinite(unitPrice) || unitPrice <= 0) { App.ui.toast('Enter a valid price', 'err'); priceInput.focus(); return; }
+        if (!Number.isFinite(unitPrice) || unitPrice < 0.01) { App.ui.toast('Price must be at least ₱0.01', 'err'); priceInput.focus(); return; }
         if (!baseUnit) { App.ui.toast('Enter a base unit', 'err'); unitInput.focus(); return; }
         if (!Number.isFinite(nextStock) || nextStock < 0) { App.ui.toast('Enter a valid stock', 'err'); stockInput.focus(); return; }
         if (!(nextStock > 0)) { App.ui.toast('Stock must be greater than zero to sell', 'err'); stockInput.focus(); return; }
@@ -378,7 +429,8 @@ App.views.pos = {
   },
 
   async _applyOpenDetails(p, details) {
-    const changedUnit = String(details.baseUnit).trim() !== String(p.base_unit || '').trim();
+    const previousBaseUnit = String(p.base_unit || '').trim();
+    const changedUnit = String(details.baseUnit).trim() !== previousBaseUnit;
     const changedStock = Math.abs(Number(details.stock) - Number(p.stock || 0)) > 1e-9;
     if (!changedUnit && !changedStock) {
       return {
@@ -392,6 +444,7 @@ App.views.pos = {
       stock: details.stock,
       reason: 'Cashier open-price correction',
     });
+    this._syncCartProductDetails(p.id, previousBaseUnit, updated);
     p.base_unit = updated.base_unit;
     p.stock = updated.stock;
     p.price = 0;
@@ -402,6 +455,11 @@ App.views.pos = {
   async _add(id) {
     const p = this.cache.products.find((x) => x.id === id);
     if (!p) return;
+    const defaultUnit = (p.units && p.units[0] && p.units[0].unit) || p.base_unit;
+    if (this._isOpenPrice(p, defaultUnit) && !this._canSetOpenPrice(p, defaultUnit)) {
+      App.ui.toast('Cashiers can set prices only for Newly Added Items', 'err');
+      return;
+    }
     if (App.isService(p)) {
       // Use a styled modal instead of the blocking native prompt() — the
       // native prompt is theme-inconsistent and can be disabled by sandbox
@@ -428,22 +486,27 @@ App.views.pos = {
         let unitPrice = Number(u.price) || 0;
         let priceEditable = false;
         let sellUnit = u.unit;
+        let sellUnits = units;
         if (openPrice) {
-          unitPrice = parseFloat(priceInput.value);
-          if (!Number.isFinite(unitPrice) || unitPrice <= 0) { App.ui.toast('Enter a valid price', 'err'); return; }
+          const enteredPrice = parseFloat(priceInput.value);
+          unitPrice = Math.round((enteredPrice + Number.EPSILON) * 100) / 100;
+          if (!Number.isFinite(unitPrice) || unitPrice < 0.01) { App.ui.toast('Price must be at least ₱0.01', 'err'); return; }
           sellUnit = String(unitInput.value || '').trim() || u.unit;
           if (!sellUnit) { App.ui.toast('Enter a unit', 'err'); return; }
           priceEditable = true;
           if (sellUnit !== String(u.unit || '').trim()) {
             try {
+              const previousBaseUnit = String(p.base_unit || '').trim();
               const updated = await App.pos.products.updateOpenDetails(p.id, {
                 base_unit: sellUnit,
                 reason: 'Cashier open-price unit correction',
               });
+              this._syncCartProductDetails(p.id, previousBaseUnit, updated);
               p.base_unit = updated.base_unit;
               p.units = updated.units;
               p.price = 0;
               sellUnit = updated.base_unit;
+              sellUnits = updated.units;
             } catch (e) {
               App.ui.toast(e.message || 'Could not update unit', 'err');
               return;
@@ -451,10 +514,11 @@ App.views.pos = {
           }
         }
         App.cart.push({
-          productId: p.id, sku: p.sku, name: p.name, unit: sellUnit, factor: 1,
+          productId: p.id, sku: p.sku, name: p.name, unit: sellUnit, factor: u.factor || 1,
           unitPrice, qty: n, isService: true, lineType: 'service',
-          units: [{ unit: sellUnit, factor: 1, price: openPrice ? 0 : unitPrice }],
+          units: sellUnits,
           base_unit: sellUnit, priceEditable,
+          openUnitPrice: priceEditable ? unitPrice : undefined,
         });
         m.close();
         this._renderCart();
@@ -472,6 +536,7 @@ App.views.pos = {
     let priceEditable = false;
     let sellUnit = u.unit;
     let factor = u.factor || 1;
+    let sellUnits = p.units;
 
     if (openPrice) {
       const entered = await this._promptOpenDetails(p);
@@ -482,6 +547,7 @@ App.views.pos = {
         factor = 1;
         unitPrice = entered.unitPrice;
         priceEditable = true;
+        sellUnits = updated.units;
         this._renderGrid();
       } catch (e) {
         App.ui.toast(e.message || 'Could not update item', 'err');
@@ -505,8 +571,9 @@ App.views.pos = {
       App.cart.push({
         productId: p.id, sku: p.sku, name: p.name, unit: sellUnit, factor,
         unitPrice, qty: 1, isService: false, lineType: 'product',
-        units: priceEditable ? [{ unit: sellUnit, factor: 1, price: 0 }] : p.units,
+        units: sellUnits,
         base_unit: sellUnit, stock: p.stock, priceEditable,
+        openUnitPrice: priceEditable ? unitPrice : undefined,
       });
     }
     this._renderCart();
@@ -550,14 +617,31 @@ App.views.pos = {
   _setUnit(i, unit) {
     const it = App.cart[i]; if (!it) return;
     const u = (it.units || []).find((x) => x.unit === unit) || { unit, factor: 1, price: it.unitPrice };
-    it.unit = u.unit; it.factor = u.factor;
     const catalogPrice = Number(u.price) || 0;
+    const p = this.cache.products.find((x) => x.id === it.productId);
+    if (!(catalogPrice > 0) && !this._canSetOpenPrice(p, u.unit)) {
+      App.ui.toast('Cashiers can set prices only for Newly Added Items', 'err');
+      this._renderCart();
+      return;
+    }
+    const previousPriceEditable = !!it.priceEditable;
+    const previousUnitPrice = Number(it.unitPrice);
+    it.unit = u.unit; it.factor = u.factor;
     if (catalogPrice > 0) {
+      if (previousPriceEditable && previousUnitPrice >= 0.01) {
+        it.openUnitPrice = previousUnitPrice;
+      }
       it.unitPrice = catalogPrice;
       it.priceEditable = false;
     } else {
+      const rememberedOpenPrice = Number(it.openUnitPrice);
+      it.unitPrice = rememberedOpenPrice >= 0.01
+        ? rememberedOpenPrice
+        : (previousPriceEditable && previousUnitPrice >= 0.01 ? previousUnitPrice : 0);
+      if (it.unitPrice >= 0.01) it.openUnitPrice = it.unitPrice;
       it.priceEditable = true;
-      // Keep the cashier-entered price when switching among open-price units.
+      // Restore the cashier-entered amount instead of carrying a fixed
+      // alternate's catalog price back into the open unit.
     }
     this._renderCart();
   },
@@ -569,6 +653,7 @@ App.views.pos = {
     try {
       const p = this.cache.products.find((x) => x.id === it.productId);
       const stock = p ? Number(p.stock) : Number(it.stock) || 0;
+      const previousBaseUnit = String((p && p.base_unit) || it.base_unit || it.unit).trim();
       const updated = await App.pos.products.updateOpenDetails(it.productId, {
         base_unit: baseUnit,
         stock,
@@ -580,11 +665,7 @@ App.views.pos = {
         p.units = updated.units;
         p.price = 0;
       }
-      it.unit = updated.base_unit;
-      it.base_unit = updated.base_unit;
-      it.factor = 1;
-      it.units = updated.units;
-      it.stock = updated.stock;
+      this._syncCartProductDetails(it.productId, previousBaseUnit, updated);
       this._renderGrid();
       this._renderCart();
     } catch (e) {
@@ -594,10 +675,17 @@ App.views.pos = {
   },
   _setPrice(i, v) {
     const it = App.cart[i]; if (!it || !it.priceEditable) return;
-    const n = parseFloat(v);
-    if (!Number.isFinite(n) || n < 0) { this._renderCart(); return; }
+    const entered = parseFloat(v);
+    const n = Math.round((entered + Number.EPSILON) * 100) / 100;
+    if (!Number.isFinite(n) || n < 0.01) {
+      it.unitPrice = 0;
+      App.ui.toast('Price must be at least ₱0.01', 'err');
+      this._renderCart();
+      return;
+    }
     it.unitPrice = n;
-    this._compute();
+    it.openUnitPrice = n;
+    this._renderCart();
   },
 
   _renderCart() {
@@ -607,7 +695,7 @@ App.views.pos = {
       el.innerHTML = App.cart.map((i, idx) => {
         const amt = i.qty * i.unitPrice;
         let unitSel;
-        if (i.priceEditable && !i.isService) {
+        if (i.priceEditable && !i.isService && (!i.units || i.units.length <= 1)) {
           unitSel = `<input data-field="openUnit" type="text" maxlength="32" value="${App.ui.esc(i.unit)}" aria-label="Base unit for ${App.ui.esc(i.name)}" title="Edit base unit">`;
         } else if (i.units && i.units.length > 1) {
           unitSel = `<select data-field="unit" aria-label="Unit for ${App.ui.esc(i.name)}">${i.units.map((u) => `<option ${u.unit === i.unit ? 'selected' : ''}>${App.ui.esc(u.unit)}</option>`).join('')}</select>`;

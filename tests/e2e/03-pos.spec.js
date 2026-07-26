@@ -3,15 +3,21 @@
 const { test, expect } = require('@playwright/test');
 const { launchApp, login } = require('./helpers');
 
-// Restock one in-stock product so cart tests can add it.
-// The seeded catalog ships with stock=0 on all products.
-async function restockFirstProduct(page) {
+// Restock one fixed-price product so cart tests do not accidentally select
+// an open-price item and wait on its price-entry modal.
+async function restockPricedProduct(page) {
   const result = await page.evaluate(async () => {
     const list = await window.pos.products.list({ includeServices: false });
-    const prod = list.find((p) => !p.is_service && p.active !== false && p.active !== 0);
+    const prod = list.find((p) =>
+      !p.is_service &&
+      p.active !== false &&
+      p.active !== 0 &&
+      Array.isArray(p.units) &&
+      p.units.some((unit) => Number(unit.price) > 0)
+    );
     if (!prod) return null;
     await window.pos.products.setStock(prod.id, 100, 'E2E restock', null, null);
-    return prod.id;
+    return { id: prod.id, name: prod.name };
   });
   return result;
 }
@@ -55,13 +61,22 @@ test.describe('POS — Catalog & Navigation', () => {
       await page.click('#posChipsToggle');
       const chip = page.locator('#posChips .chip[data-cat="Newly Added Items"]');
       await expect(chip).toBeVisible();
+      await expect(chip).toContainText(/Newly Added Items\s*1592/);
       await chip.click();
-      await expect(page.locator('#posGrid .prod-card')).toHaveCount(1592);
-      await expect(page.locator('#posGrid')).toContainText('GOLDEN CUP Brass Plated Iron Hinges Loose Pin 4x4');
-      await expect(page.locator('#posGrid')).toContainText('Weltex cement 100cc');
-      await expect(page.locator('#posGrid')).toContainText('Bowl small');
-      await expect(page.locator('#posGrid')).toContainText('Firefly led bulb 9w');
-      await expect(page.locator('#posGrid')).toContainText('UNIDEX TEE 3x2');
+      // The grid intentionally keeps one 100-card batch in the DOM. Verify
+      // distant catalog entries through the user-facing search interaction.
+      await expect(page.locator('#posGrid .prod-card')).toHaveCount(100);
+      for (const name of [
+        'GOLDEN CUP Brass Plated Iron Hinges Loose Pin 4x4',
+        'Weltex cement 100cc',
+        'Bowl small',
+        'Firefly led bulb 9w',
+        'UNIDEX TEE 3x2',
+      ]) {
+        await page.fill('#posSearch', name);
+        await expect(page.locator('#posGrid .prod-card')).toHaveCount(1);
+        await expect(page.locator('#posGrid .prod-card').first()).toContainText(name);
+      }
     } finally { await electron.close(); }
   });
 
@@ -107,27 +122,121 @@ test.describe('POS — Catalog & Navigation', () => {
       expect(count2).toBeGreaterThan(0);
     } finally { await electron.close(); }
   });
+
+  test('cashier sees outside-category open-price items as unavailable', async () => {
+    const { electron, page } = await launchApp();
+    try {
+      await login(page, 'cashier', 'cashier123');
+      await page.fill('#posSearch', 'LF Paint Brush #2');
+      const card = page.locator('#posGrid .prod-card', { hasText: 'LF Paint Brush #2' });
+      await expect(card).toHaveCount(1);
+      await expect(card).toBeDisabled();
+      await expect(card).toContainText('Price unavailable');
+      await expect(card).toContainText('PRICE UNAVAILABLE');
+
+      // Programmatic activation mirrors an unexpected delegated click while
+      // proving that the disabled card cannot open the correction modal.
+      await card.evaluate((element) => element.click());
+      await expect(page.locator('.modal')).toHaveCount(0);
+      await expect(page.locator('#posCart [data-idx]')).toHaveCount(0);
+    } finally { await electron.close(); }
+  });
 });
 
 test.describe('POS — Cart', () => {
+  test('cashier can price and correct a Newly Added open-price item', async () => {
+    const { electron, page } = await launchApp();
+    try {
+      await login(page, 'cashier', 'cashier123');
+      await page.fill('#posSearch', 'AMERROCK Concealed Hinge');
+      const card = page.locator('#posGrid .prod-card', { hasText: 'AMERROCK Concealed Hinge' });
+      await expect(card).toBeVisible();
+      await expect(card).toContainText('Set price');
+      await card.click();
+
+      await expect(page.locator('.modal')).toContainText('Set details');
+      await page.fill('#openPrice', '12.50');
+      await page.fill('#openUnit', 'box');
+      await page.fill('#openStock', '113');
+      await page.locator('.modal [data-a="ok"]').click();
+
+      await expect(page.locator('#posCart [data-idx]')).toHaveCount(1);
+      await expect(page.locator('#posCart')).toContainText('AMERROCK Concealed Hinge');
+      await expect(page.locator('#posCart input[data-field="price"]')).toHaveValue('12.5');
+      await expect(page.locator('#posCart input[data-field="openUnit"]')).toHaveValue('box');
+      const saved = await page.evaluate(async () => {
+        const products = await window.pos.products.list({ includeServices: false, q: 'AMERROCK Concealed Hinge' });
+        return products[0];
+      });
+      expect(saved.base_unit).toBe('box');
+      expect(saved.stock).toBe(113);
+      expect(saved.price).toBe(0);
+    } finally { await electron.close(); }
+  });
+
+  test('mixed-price alternate units survive a base rename and checkout', async () => {
+    const { electron, page } = await launchApp();
+    try {
+      await login(page, 'cashier', 'cashier123');
+      await page.fill('#posSearch', 'concrete nails #3');
+      const card = page.locator('#posGrid .prod-card', { hasText: 'concrete nails #3' });
+      await expect(card).toBeVisible();
+      await expect(card).toContainText('Set price');
+
+      // First line uses the open-price base unit.
+      await card.click();
+      await page.fill('#openPrice', '100');
+      await page.fill('#openStock', '3');
+      await page.getByRole('button', { name: 'Add to cart' }).click();
+      await expect(page.locator('#posCart [data-idx]')).toHaveCount(1);
+      await expect(page.locator('#posCart select[data-field="unit"]')).toHaveValue('carton');
+
+      // A second price plus a corrected base label creates a second line.
+      // The first line must follow the rename instead of retaining a deleted
+      // unit that would make checkout fail.
+      await card.click();
+      await page.fill('#openPrice', '110');
+      await page.fill('#openUnit', 'box');
+      await page.getByRole('button', { name: 'Add to cart' }).click();
+      await expect(page.locator('#posCart [data-idx]')).toHaveCount(2);
+      const unitSelects = page.locator('#posCart select[data-field="unit"]');
+      await expect(unitSelects).toHaveCount(2);
+      await expect(unitSelects.nth(0)).toHaveValue('box');
+      await expect(unitSelects.nth(1)).toHaveValue('box');
+
+      // The separately priced alternate remains available and authoritative.
+      const firstLine = page.locator('#posCart [data-idx]').first();
+      await firstLine.locator('select[data-field="unit"]').selectOption('kg');
+      await expect(firstLine.locator('.meta')).toContainText('₱90.00 / kg');
+      await expect(page.locator('#posCharge')).toContainText('₱200.00');
+      await firstLine.locator('select[data-field="unit"]').selectOption('box');
+      await expect(firstLine.locator('input[data-field="price"]')).toHaveValue('100');
+      await expect(page.locator('#posCharge')).toContainText('₱210.00');
+      await firstLine.locator('select[data-field="unit"]').selectOption('kg');
+      await expect(firstLine.locator('.meta')).toContainText('₱90.00 / kg');
+      await expect(page.locator('#posCharge')).toContainText('₱200.00');
+
+      await page.locator('#posCharge').click();
+      await page.getByRole('button', { name: 'Confirm & Print' }).click();
+      await expect(page.locator('.modal-h span')).toContainText('Receipt');
+      await page.locator('.modal .x').click();
+    } finally { await electron.close(); }
+  });
+
   test('clicking a product adds it to cart', async () => {
     const { electron, page } = await launchApp();
     try {
       await login(page, 'admin', 'admin123');
       await page.waitForSelector('#posGrid .prod-card');
-      await restockFirstProduct(page);
+      const product = await restockPricedProduct(page);
+      expect(product).toBeTruthy();
       // Refresh the POS cache + grid in-place (reload() drops the session)
       await page.evaluate(async () => { if (window.App && App.views && App.views.pos) { await App.views.pos.render(App.views.pos.viewEl); } });
-      await page.waitForSelector('#posGrid .prod-card:not(.out-of-stock)', { timeout: 15000 });
-      const cards = page.locator('#posGrid .prod-card:not(.out-of-stock)');
-      const n = await cards.count();
-      let added = false;
-      for (let i = 0; i < Math.min(n, 5); i++) {
-        await cards.nth(i).click({ force: true });
-        await page.waitForTimeout(200);
-        if ((await page.locator('#posCart [data-idx]').count()) > 0) { added = true; break; }
-      }
-      expect(added).toBe(true);
+      await page.fill('#posSearch', product.name);
+      const card = page.locator('#posGrid .prod-card', { hasText: product.name });
+      await expect(card).toBeVisible();
+      await card.click();
+      await expect(page.locator('#posCart [data-idx]')).toHaveCount(1);
       await expect(page.locator('#posCart [data-act="minus"]')).toHaveAttribute('aria-label', /Decrease quantity/);
       await expect(page.locator('#posCart [data-act="plus"]')).toHaveAttribute('aria-label', /Increase quantity/);
       await expect(page.locator('#posCart [data-act="rm"]')).toHaveAttribute('aria-label', /Remove .* from cart/);
@@ -140,18 +249,14 @@ test.describe('POS — Cart', () => {
     try {
       await login(page, 'admin', 'admin123');
       await page.waitForSelector('#posGrid .prod-card');
-      await restockFirstProduct(page);
+      const product = await restockPricedProduct(page);
+      expect(product).toBeTruthy();
       await page.evaluate(async () => { if (window.App && App.views && App.views.pos) { await App.views.pos.render(App.views.pos.viewEl); } });
-      await page.waitForSelector('#posGrid .prod-card:not(.out-of-stock)', { timeout: 15000 });
-      const cards = page.locator('#posGrid .prod-card:not(.out-of-stock)');
-      const n = await cards.count();
-      let added = false;
-      for (let i = 0; i < Math.min(n, 5); i++) {
-        await cards.nth(i).click({ force: true });
-        await page.waitForTimeout(200);
-        if ((await page.locator('#posCart [data-idx]').count()) > 0) { added = true; break; }
-      }
-      expect(added).toBe(true);
+      await page.fill('#posSearch', product.name);
+      const card = page.locator('#posGrid .prod-card', { hasText: product.name });
+      await expect(card).toBeVisible();
+      await card.click();
+      await expect(page.locator('#posCart [data-idx]')).toHaveCount(1);
       // Void opens an App.ui.confirm modal — click OK (data-a="yes")
       await page.click('#posVoid');
       await page.waitForTimeout(400);
@@ -261,10 +366,16 @@ test.describe('POS — Cashier refund controls', () => {
       await login(adminApp.page, 'admin', 'admin123');
       txnId = await adminApp.page.evaluate(async () => {
         const products = await window.pos.products.list({ includeServices: false });
-        const product = products.find((p) => !p.is_service && p.active !== false && p.active !== 0);
-        if (!product) throw new Error('No product available for refund test');
+        const candidate = products
+          .filter((p) => !p.is_service && p.active !== false && p.active !== 0)
+          .map((product) => ({
+            product,
+            unit: (product.units || []).find((entry) => Number(entry.price) > 0),
+          }))
+          .find((entry) => entry.unit);
+        if (!candidate) throw new Error('No fixed-price product available for refund test');
+        const { product, unit } = candidate;
         await window.pos.products.setStock(product.id, 5, 'Refund E2E stock', null, null);
-        const unit = (product.units && product.units[0]) || { unit: product.base_unit, price: product.price };
         const sale = await window.pos.sales.create({
           items: [{ productId: product.id, unit: unit.unit, qty: 1 }],
           paymentMethod: 'cash',

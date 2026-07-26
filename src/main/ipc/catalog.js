@@ -288,9 +288,20 @@ function register(ipcMain, ctx) {
       throw new Error('Cashier inventory access is limited to Newly Added Items');
     }
 
-    const unitRows = db.prepare('SELECT unit, price FROM product_units WHERE product_id=?').all(productId);
+    const unitRows = db.prepare(
+      'SELECT id, unit, factor, price FROM product_units WHERE product_id=? ORDER BY id'
+    ).all(productId);
     const catalogPrice = Number(product.price) || 0;
-    const openPrice = catalogPrice <= 0 && unitRows.every((u) => !(Number(u.price) > 0));
+    const currentBaseUnit = String(product.base_unit || '').trim();
+    const currentBaseRow = unitRows.find(
+      (u) => u.unit === currentBaseUnit && Math.abs(Number(u.factor) - 1) < 1e-9
+    ) || unitRows.find((u) => u.unit === currentBaseUnit);
+    // The editable details belong to the product's base/default unit. A
+    // separately priced alternate (for example, ₱90/kg alongside an
+    // open-price carton) must neither block stock correction nor have its
+    // catalog price rewritten.
+    const openPrice = catalogPrice <= 0
+      && (!currentBaseRow || !(Number(currentBaseRow.price) > 0));
     if (!openPrice) {
       throw new Error('Only items with no catalog price can be edited by cashier');
     }
@@ -298,6 +309,18 @@ function register(ipcMain, ctx) {
     const baseUnit = String(p.base_unit != null ? p.base_unit : product.base_unit).trim();
     if (!baseUnit) throw new Error('Base unit is required');
     if (baseUnit.length > 32) throw new Error('Base unit is too long');
+    const baseUnitChanged = baseUnit !== String(product.base_unit || '').trim();
+    const oldBaseRow = currentBaseRow
+      && Math.abs(Number(currentBaseRow.factor) - 1) < 1e-9
+      ? currentBaseRow
+      : null;
+    const targetUnitRow = unitRows.find((u) => u.unit === baseUnit);
+    // Never promote/overwrite an existing alternate while correcting the
+    // base-unit label. This also covers malformed legacy rows whose declared
+    // base unit is missing; the old condition could zero a priced alternate.
+    if (baseUnitChanged && targetUnitRow) {
+      throw new Error('Base unit already exists as an alternate unit');
+    }
 
     const isService = !!product.is_service;
     let stock = Number(product.stock) || 0;
@@ -317,9 +340,21 @@ function register(ipcMain, ctx) {
 
     db.transaction(() => {
       db.prepare('UPDATE products SET base_unit=?, stock=? WHERE id=?').run(baseUnit, stock, productId);
-      db.prepare('DELETE FROM product_units WHERE product_id=?').run(productId);
-      db.prepare('INSERT INTO product_units(product_id,unit,factor,price) VALUES(?,?,?,?)')
-        .run(productId, baseUnit, 1, 0);
+      if (!unitRows.length) {
+        db.prepare('INSERT INTO product_units(product_id,unit,factor,price) VALUES(?,?,?,?)')
+          .run(productId, baseUnit, 1, 0);
+      } else if (baseUnitChanged && oldBaseRow) {
+        db.prepare('UPDATE product_units SET unit=?,factor=1,price=0 WHERE id=?')
+          .run(baseUnit, oldBaseRow.id);
+      } else if (baseUnitChanged) {
+        db.prepare('INSERT INTO product_units(product_id,unit,factor,price) VALUES(?,?,?,?)')
+          .run(productId, baseUnit, 1, 0);
+      } else if (!currentBaseRow) {
+        // Repair a legacy product whose declared base unit has no matching
+        // sellable row, even when the cashier is only correcting its stock.
+        db.prepare('INSERT INTO product_units(product_id,unit,factor,price) VALUES(?,?,?,?)')
+          .run(productId, baseUnit, 1, 0);
+      }
       if (!isService && delta !== 0) {
         db.prepare(
           'INSERT INTO stock_movements(product_id,movement,qty_change,reason,user_id,datetime,source_location) VALUES(?,?,?,?,?,?,?)'
@@ -335,6 +370,9 @@ function register(ipcMain, ctx) {
       }
     })();
 
+    const updatedUnits = db.prepare(
+      'SELECT unit, factor, price FROM product_units WHERE product_id=? ORDER BY id'
+    ).all(productId);
     return {
       id: productId,
       name: product.name,
@@ -343,12 +381,12 @@ function register(ipcMain, ctx) {
       delta,
       price: 0,
       is_service: isService ? 1 : 0,
-      units: [{ unit: baseUnit, factor: 1, price: 0 }],
+      units: updatedUnits,
     };
   });
 
   guard(ipcMain, 'pos:products:movements', { admin: true }, (_c, id) =>
-    db.prepare('SELECT * FROM stock_movements WHERE product_id=? ORDER BY datetime DESC LIMIT 50').all(id)
+    db.prepare('SELECT * FROM stock_movements WHERE product_id=? ORDER BY datetime DESC, id DESC LIMIT 50').all(id)
   );
 
   // ---- Restock history (Restock History report) ------------------------
@@ -376,7 +414,10 @@ function register(ipcMain, ctx) {
       const like = '%' + f.q + '%';
       params.push(like, like, like, like, like);
     }
-    sql += ` ORDER BY sm.datetime DESC LIMIT ?`;
+    // Many imported products can receive movements in the same second.
+    // Break timestamp ties by id so the newest delivery is not pushed out of
+    // the bounded result by older seed/import rows.
+    sql += ` ORDER BY sm.datetime DESC, sm.id DESC LIMIT ?`;
     params.push(clampLimit(f.limit, 500, 2000));
     return db.prepare(sql).all(...params);
   });

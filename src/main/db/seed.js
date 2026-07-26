@@ -99,8 +99,16 @@ function getNewlyAddedItems(catalog = readProductCatalog()) {
   return items;
 }
 
+function isRetiredNotebook1Sku(sku) {
+  const match = /^NAI-(\d+)$/.exec(String(sku || ''));
+  if (!match) return false;
+  const number = Number(match[1]);
+  return number >= 71 && number <= 215;
+}
+
 /**
- * Soft-delete notebook folder "1" inventory (NAI-071+) from existing installs.
+ * Soft-delete notebook folder "1" inventory (NAI-071 through NAI-215)
+ * from existing installs.
  */
 function removeNotebook1NewlyAddedItems(db) {
   const marker = db.prepare('SELECT value FROM settings WHERE key=?')
@@ -110,10 +118,7 @@ function removeNotebook1NewlyAddedItems(db) {
   let removed = 0;
   db.transaction(() => {
     const rows = db.prepare('SELECT id, sku FROM products WHERE active=1').all()
-      .filter((row) => {
-        const m = /^NAI-(\d+)$/.exec(String(row.sku || ''));
-        return m && Number(m[1]) >= 71;
-      });
+      .filter((row) => isRetiredNotebook1Sku(row.sku));
     const soft = db.prepare('UPDATE products SET active=0 WHERE id=?');
     for (const row of rows) {
       soft.run(row.id);
@@ -133,124 +138,51 @@ function applyNewlyAddedRecount(db) {
   const marker = db.prepare('SELECT value FROM settings WHERE key=?').get(NEWLY_ADDED_ITEMS_RECOUNT_V1);
   if (marker) return { applied: false, alreadyRun: true };
 
+  // v2.2.14 shipped 46 Newly Added Items. Only these five stock baselines
+  // changed afterward; every later SKU is inserted from the current catalog.
+  // Apply the baseline difference to live stock so sales, refunds, and manual
+  // restocks made since installation remain intact.
   const fixes = [
-    { sku: 'NAI-289', stock: 18, price: 95 },
-    { sku: 'NAI-295', stock: 136, price: 56 },
-    { sku: 'NAI-557', stock: 50, price: 15 },
-    { sku: 'NAI-377', stock: 16, price: 130 },
-    { sku: 'NAI-013', stock: 28, price: 60 },
-    { sku: 'NAI-016', stock: 26, price: 50 },
-    { sku: 'NAI-015', stock: 5, price: 25 },
-    { sku: 'NAI-014', stock: 15, price: 35 },
-    { sku: 'NAI-035', stock: 1, price: 995 },
-    { sku: 'NAI-062', stock: 2, price: 0 },
-    { sku: 'NAI-026', stock: 1, price: 165 },
-    { sku: 'NAI-025', stock: 3, price: 242 },
-    { sku: 'NAI-024', stock: 5, price: 198 },
-    { sku: 'NAI-027', stock: 5, price: 523 },
-    { sku: 'NAI-030', stock: 1, price: 325 },
-    { sku: 'NAI-032', stock: 4, price: 265 },
-    { sku: 'NAI-031', stock: 6, price: 310 },
-    { sku: 'NAI-029', stock: 6, price: 215 },
-    { sku: 'NAI-022', stock: 5, price: 145 },
-    { sku: 'NAI-021', stock: 24, price: 245 },
-    { sku: 'NAI-039', stock: 207, price: 35 },
-    { sku: 'NAI-041', stock: 13, price: 30 },
-    { sku: 'NAI-006', stock: 2, price: 50 },
-    { sku: 'NAI-068', stock: 18, price: 0 },
-    { sku: 'NAI-070', stock: 16, price: 0 },
-    { sku: 'NAI-069', stock: 2, price: 0 },
-    { sku: 'NAI-045', stock: 2, price: 720 },
-    { sku: 'NAI-001', stock: 12, price: 75 },
-    { sku: 'NAI-050', stock: 24, price: 5 },
-    { sku: 'NAI-051', stock: 24, price: 3 },
-    { sku: 'NAI-049', stock: 24, price: 8 },
-    { sku: 'NAI-023', stock: 12, price: 60 },
-    { sku: 'NAI-011', stock: 1, price: 85 },
-    { sku: 'NAI-004', stock: 2, price: 140 },
-    { sku: 'NAI-005', stock: 7, price: 41 },
-    { sku: 'NAI-028', stock: 2, price: 250 },
-    { sku: 'NAI-040', stock: 8, price: 35 },
-    { sku: 'NAI-038', stock: 145, price: 50 },
-    { sku: 'NAI-042', stock: 5, price: 900 },
-    { sku: 'NAI-046', stock: 3, price: 720 },
-    { sku: 'NAI-017', stock: 45, price: 40 },
-    { sku: 'NAI-018', stock: 4, price: 25 },
-    { sku: 'NAI-019', stock: 50, price: 30 },
-    { sku: 'NAI-037', stock: 292, price: 2 },
-    { sku: 'NAI-047', stock: 26, price: 20 },
-    { sku: 'NAI-048', stock: 7, price: 25 },
-    { sku: 'NAI-060', stock: 4, price: 0 },
-    { sku: 'NAI-034', stock: 6, price: 250 },
-    { sku: 'NAI-002', stock: 2, price: 105 },
-    { sku: 'NAI-012', stock: 61, price: 180 },
-    { sku: 'NAI-003', stock: 33, price: 120 },
-    { sku: 'NAI-009', stock: 65, price: 180 },
-    { sku: 'NAI-007', stock: 15, price: 80 },
-    { sku: 'NAI-008', stock: 1, price: 90 },
-    { sku: 'NAI-058', stock: 8, price: 85 },
-    { sku: 'NAI-064', stock: 9, price: 285 },
-    { sku: 'NAI-061', stock: 12, price: 0 },
-    { sku: 'NAI-063', stock: 32, price: 285 },
-    { sku: 'NAI-044', stock: 5, price: 360 },
-    { sku: 'NAI-043', stock: 7, price: 470 },
-    { sku: 'NAI-294', stock: 50, price: 45 },
-    { sku: 'NAI-325', stock: 50, price: 0 },
-    { sku: 'NAI-293', stock: 50, price: 0 },
-    { sku: 'NAI-748', stock: 24, price: 35 },
-    { sku: 'NAI-1001', stock: 300, price: 30 },
-    { sku: 'NAI-242', stock: 7, price: 70 },
-    { sku: 'NAI-900', stock: 10, price: 0 },
-    { sku: 'NAI-898', stock: 1, price: 0 },
-    { sku: 'NAI-895', stock: 1, price: 0 },
-    { sku: 'NAI-899', stock: 35, price: 0 },
-    { sku: 'NAI-1261', stock: 8, price: 200 },
-    { sku: 'NAI-1316', stock: 17, price: 85 },
-    { sku: 'NAI-950', stock: 1, price: 55 },
-    { sku: 'NAI-881', stock: 1, price: 15 },
-    { sku: 'NAI-862', stock: 10, price: 0 },
-    { sku: 'NAI-956', stock: 8, price: 185 },
-    { sku: 'NAI-235', stock: 62, price: 25 },
-    { sku: 'NAI-861', stock: 152, price: 0 },
-    { sku: 'NAI-897', stock: 25, price: 0 },
-    { sku: 'NAI-892', stock: 9, price: 0 },
-    // Suspicious overprice / swapped-size corrections (2026 catalog review)
-    { sku: 'NAI-1350', stock: 1400, price: 2 },
-    { sku: 'NAI-1351', stock: 1250, price: 2 },
-    { sku: 'NAI-1737', stock: 12, price: 30 },
-    { sku: 'NAI-1239', stock: 4, price: 105, unit: 'cans' },
-    { sku: 'NAI-1492', stock: 2, price: 60 },
-    { sku: 'NAI-1493', stock: 4, price: 450 },
-    { sku: 'NAI-1460', stock: 4, price: 80 },
-    { sku: 'NAI-1461', stock: 4, price: 50 },
-    { sku: 'NAI-1642', stock: 3, price: 0 },
-    { sku: 'NAI-1424', stock: 12, price: 10 },
+    { sku: 'NAI-007', stockDelta: 10 },
+    { sku: 'NAI-009', stockDelta: 36 },
+    {
+      sku: 'NAI-021',
+      stockDelta: 18,
+      oldPrice: 265,
+      newPrice: 245,
+      oldUnit: 'pcs',
+    },
+    { sku: 'NAI-037', stockDelta: 37 },
+    { sku: 'NAI-045', stockDelta: 1 },
   ];
 
   let updated = 0;
   db.transaction(() => {
-    const find = db.prepare('SELECT id, stock FROM products WHERE sku=? AND active=1');
-    const upd = db.prepare('UPDATE products SET stock=?, price=? WHERE id=?');
-    const updWithUnit = db.prepare('UPDATE products SET stock=?, price=?, base_unit=? WHERE id=?');
-    const updUnit = db.prepare('UPDATE product_units SET price=? WHERE product_id=?');
-    const updUnitWithName = db.prepare('UPDATE product_units SET unit=?, price=? WHERE product_id=?');
+    const find = db.prepare('SELECT id FROM products WHERE sku=? AND active=1');
+    const addStock = db.prepare('UPDATE products SET stock=stock+? WHERE id=?');
+    const updateProductPrice = db.prepare(
+      'UPDATE products SET price=? WHERE id=? AND base_unit=? AND price=?'
+    );
+    const updateUnitPrice = db.prepare(
+      'UPDATE product_units SET price=? WHERE product_id=? AND unit=? AND factor=1 AND price=?'
+    );
     const move = db.prepare(
       'INSERT INTO stock_movements(product_id,movement,qty_change,reason,user_id) VALUES(?,?,?,?,NULL)'
     );
     for (const fix of fixes) {
       const row = find.get(fix.sku);
       if (!row) continue;
-      const delta = Number(fix.stock) - Number(row.stock);
-      if (fix.unit) {
-        updWithUnit.run(fix.stock, fix.price, fix.unit, row.id);
-        updUnitWithName.run(fix.unit, fix.price, row.id);
-      } else {
-        upd.run(fix.stock, fix.price, row.id);
-        updUnit.run(fix.price, row.id);
+      addStock.run(fix.stockDelta, row.id);
+      if (fix.oldPrice != null) {
+        updateProductPrice.run(fix.newPrice, row.id, fix.oldUnit, fix.oldPrice);
+        updateUnitPrice.run(fix.newPrice, row.id, fix.oldUnit, fix.oldPrice);
       }
-      if (delta !== 0) {
-        move.run(row.id, 'adjustment', delta, 'Newly Added Items recount');
-      }
+      move.run(
+        row.id,
+        'adjustment',
+        fix.stockDelta,
+        'Newly Added Items catalog stock correction'
+      );
       updated++;
     }
     db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)')
@@ -281,7 +213,7 @@ function applyNewlyAddedUnitPriceFix(db) {
 
   let updated = 0;
   db.transaction(() => {
-    const find = db.prepare('SELECT id, stock FROM products WHERE sku=?');
+    const find = db.prepare('SELECT id, stock FROM products WHERE sku=? AND active=1');
     const upd = db.prepare(
       'UPDATE products SET name=?, stock=?, price=?, base_unit=? WHERE id=?'
     );
@@ -304,7 +236,7 @@ function applyNewlyAddedUnitPriceFix(db) {
       if (delta !== 0) {
         insMovement.run(
           row.id,
-          delta > 0 ? 'restock' : 'adjust',
+          delta > 0 ? 'restock' : 'adjustment',
           delta,
           'Unit price fix: sell per piece at ₱1'
         );
@@ -326,8 +258,8 @@ function applyNewlyAddedUnitPriceFix(db) {
  * marker prevents later user edits or deletions from being undone at startup.
  */
 function ensureNewlyAddedItems(db) {
-  applyNewlyAddedUnitPriceFix(db);
   removeNotebook1NewlyAddedItems(db);
+  applyNewlyAddedUnitPriceFix(db);
   applyNewlyAddedRecount(db);
 
   const marker = db.prepare('SELECT value FROM settings WHERE key=?').get(NEWLY_ADDED_ITEMS_SETTING);
@@ -348,14 +280,14 @@ function ensureNewlyAddedItems(db) {
     }
     categoryId = category.id;
 
-    // Only skip active names already in this category so later inventory pages
-    // can still add an item even when a similar product exists elsewhere.
-    // Soft-deleted rows (e.g. prior notebook cleanup) must not block re-adds.
-    const findName = db.prepare(
-      'SELECT id FROM products WHERE category_id=? AND active=1 AND TRIM(name)=? COLLATE NOCASE LIMIT 1'
+    // Preserve administrator-deactivated products across catalog-marker bumps.
+    // Only rows retired by the notebook cleanup may be ignored so a genuinely
+    // current catalog item with the same name can still be inserted.
+    const findNames = db.prepare(
+      'SELECT id,sku,active FROM products WHERE category_id=? AND TRIM(name)=? COLLATE NOCASE'
     );
     // SKUs are unique across active and inactive rows — always avoid collisions.
-    const findSku = db.prepare('SELECT id FROM products WHERE sku=?');
+    const findSku = db.prepare('SELECT id,category_id FROM products WHERE sku=?');
     const insertProduct = db.prepare(
       `INSERT INTO products(sku,name,category_id,base_unit,stock,cost,price,low_stock_threshold,is_service,active)
        VALUES(?,?,?,?,?,?,?,10,0,1)`
@@ -369,9 +301,19 @@ function ensureNewlyAddedItems(db) {
 
     for (const item of items) {
       const name = String(item.name).trim();
-      if (findName.get(categoryId, name)) continue;
-
       const preferredSku = String(item.sku).trim();
+      const sameSkuRow = findSku.get(preferredSku);
+      // SKU is the stable identity when an administrator has renamed or
+      // deactivated an item. Do not recreate its former catalog name during
+      // a later marker bump.
+      if (sameSkuRow && Number(sameSkuRow.category_id) === Number(categoryId)) continue;
+
+      const sameNameRows = findNames.all(categoryId, name);
+      const hasBlockingName = sameNameRows.some(
+        (row) => Number(row.active) !== 0 || !isRetiredNotebook1Sku(row.sku)
+      );
+      if (hasBlockingName) continue;
+
       let sku = preferredSku;
       let suffix = 2;
       while (findSku.get(sku)) {

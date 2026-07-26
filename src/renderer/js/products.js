@@ -16,6 +16,7 @@ App.views.products = {
   _gridShown: 0,
   _gridBatch: 100,
   _gridObserver: null,
+  _sessionGeneration: null,
 
   _isAdmin() {
     return !!(App.current && App.current.user && App.current.user.role === 'admin');
@@ -25,16 +26,36 @@ App.views.products = {
     return !this._isAdmin();
   },
 
+  _isOpenBasePrice(p) {
+    if (!p || Number(p.price) > 0) return false;
+    const baseUnit = String(p.base_unit || '').trim();
+    const units = Array.isArray(p.units) ? p.units : [];
+    const baseRow = units.find(
+      (u) => u.unit === baseUnit && Math.abs(Number(u.factor) - 1) < 1e-9
+    ) || units.find((u) => u.unit === baseUnit);
+    return !baseRow || !(Number(baseRow.price) > 0);
+  },
+
   async render(view) {
+    const generation = App.captureSessionGeneration();
+    const newSession = this._sessionGeneration !== generation;
+    this._sessionGeneration = generation;
     this.viewEl = view;
     this.q = '';
     const cashierInventory = this._isCashierInventory();
-    this.tab = cashierInventory ? 'products' : (this.tab === 'services' ? 'services' : 'products');
     if (cashierInventory) {
+      this.tab = 'products';
       this.cat = CASHIER_INVENTORY_CATEGORY;
       this.chipsOpen = true;
+    } else if (newSession) {
+      this.tab = 'products';
+      this.cat = 'all';
+      this.chipsOpen = false;
+    } else {
+      this.tab = this.tab === 'services' ? 'services' : 'products';
     }
     await this._load();
+    if (!App.isSessionGenerationCurrent(generation) || this.viewEl !== view) return;
     view.innerHTML = `
       <div class="toolbar">
         <input id="pSearch" placeholder="Search name…" class="fill" style="max-width:300px">
@@ -160,9 +181,7 @@ App.views.products = {
   _cardHtml(p) {
     const isSvc = App.isService(p);
     const def = (p.units && p.units[0]) || { unit: p.base_unit || (isSvc ? 'svc' : 'pc'), price: p.price };
-    const openPrice = !isSvc &&
-      !(Number(p.price) > 0) &&
-      (!p.units || p.units.every((u) => !(Number(u.price) > 0)));
+    const openPrice = !isSvc && this._isOpenBasePrice(p);
     const cashierInventory = this._isCashierInventory();
     const low = !isSvc && p.stock <= (p.low || 10);
     const col = isSvc ? App.catColor('Services') : App.catColor(p.category);

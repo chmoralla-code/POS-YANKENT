@@ -10,6 +10,9 @@ const {
   NEWLY_ADDED_ITEMS_CATEGORY,
   NEWLY_ADDED_ITEMS_SETTING,
   NEWLY_ADDED_ITEMS_COUNT,
+  NEWLY_ADDED_ITEMS_UNIT_PRICE_FIX,
+  NEWLY_ADDED_ITEMS_NOTEBOOK1_REMOVED,
+  NEWLY_ADDED_ITEMS_RECOUNT_V1,
 } = require('../src/main/db/seed');
 const { makeApi } = require('./ipc-harness');
 
@@ -28,6 +31,26 @@ async function setup() {
   const admin = api.db.prepare('SELECT * FROM users WHERE username=?').get('admin');
   const cashier = api.db.prepare('SELECT * FROM users WHERE username=?').get('cashier');
   return { api, adminSession: createSession(admin), cashierSession: createSession(cashier) };
+}
+
+function prepareReleasedCatalogCorrection(db) {
+  db.transaction(() => {
+    const releasedStocks = [
+      ['NAI-007', 5],
+      ['NAI-009', 29],
+      ['NAI-021', 6],
+      ['NAI-037', 255],
+      ['NAI-045', 1],
+    ];
+    const setStock = db.prepare('UPDATE products SET stock=? WHERE sku=?');
+    for (const [sku, stock] of releasedStocks) setStock.run(stock, sku);
+
+    const nai021 = db.prepare('SELECT id FROM products WHERE sku=?').get('NAI-021');
+    db.prepare('UPDATE products SET base_unit=?,price=? WHERE id=?').run('pcs', 265, nai021.id);
+    db.prepare('UPDATE product_units SET price=? WHERE product_id=? AND unit=? AND factor=1')
+      .run(265, nai021.id, 'pcs');
+    db.prepare('DELETE FROM settings WHERE key=?').run(NEWLY_ADDED_ITEMS_RECOUNT_V1);
+  })();
 }
 
 test('fresh catalog contains all Newly Added Items with the requested stock, unit, and price', async () => {
@@ -114,6 +137,174 @@ test('existing-database catalog update runs once and preserves later edits or de
   const third = ensureNewlyAddedItems(t.api.db);
   assert.equal(third.alreadyRun, true);
   assert.equal(t.api.db.prepare('SELECT id FROM products WHERE sku=?').get('NAI-020'), undefined);
+  t.api.close();
+});
+
+test('catalog marker bumps preserve administrator-deactivated Newly Added Items', async () => {
+  const t = await setup();
+  const original = t.api.db.prepare('SELECT id,name FROM products WHERE sku=?').get('NAI-020');
+  const renamed = t.api.db.prepare('SELECT id,name FROM products WHERE sku=?').get('NAI-019');
+  t.api.db.prepare('UPDATE products SET active=0 WHERE id=?').run(original.id);
+  t.api.db.prepare('UPDATE products SET name=? WHERE id=?').run('Administrator renamed item', renamed.id);
+  t.api.db.prepare('DELETE FROM settings WHERE key=?').run(NEWLY_ADDED_ITEMS_SETTING);
+
+  const result = ensureNewlyAddedItems(t.api.db);
+
+  assert.equal(result.inserted, 0);
+  assert.equal(result.skipped, EXPECTED_NEWLY_ADDED_ITEMS.length);
+  assert.deepEqual(
+    t.api.db.prepare(
+      'SELECT id,sku,name,active FROM products WHERE name=? COLLATE NOCASE ORDER BY id'
+    ).all(original.name),
+    [{ id: original.id, sku: 'NAI-020', name: original.name, active: 0 }]
+  );
+  assert.deepEqual(
+    t.api.db.prepare(
+      `SELECT id,sku,name,active FROM products
+        WHERE sku=? OR name=? COLLATE NOCASE
+        ORDER BY id`
+    ).all('NAI-019', renamed.name),
+    [{ id: renamed.id, sku: 'NAI-019', name: 'Administrator renamed item', active: 1 }]
+  );
+  t.api.close();
+});
+
+test('released catalog correction preserves live sales and restocks by applying stock deltas', async () => {
+  const t = await setup();
+  prepareReleasedCatalogCorrection(t.api.db);
+
+  const nai007 = t.api.db.prepare('SELECT id FROM products WHERE sku=?').get('NAI-007');
+  t.api.db.prepare('UPDATE products SET stock=stock-? WHERE id=?').run(2, nai007.id);
+  t.api.db.prepare(
+    'INSERT INTO stock_movements(product_id,movement,qty_change,reason,user_id) VALUES(?,?,?,?,NULL)'
+  ).run(nai007.id, 'sale', -2, 'Sale before catalog correction');
+  t.api.db.prepare('UPDATE products SET stock=stock+? WHERE id=?').run(4, nai007.id);
+  t.api.db.prepare(
+    'INSERT INTO stock_movements(product_id,movement,qty_change,reason,user_id) VALUES(?,?,?,?,NULL)'
+  ).run(nai007.id, 'restock', 4, 'Restock before catalog correction');
+
+  assert.doesNotThrow(() => ensureNewlyAddedItems(t.api.db));
+  assert.deepEqual(
+    t.api.db.prepare(
+      `SELECT sku,stock,price FROM products
+        WHERE sku IN ('NAI-007','NAI-009','NAI-021','NAI-037','NAI-045')
+        ORDER BY sku`
+    ).all(),
+    [
+      { sku: 'NAI-007', stock: 17, price: 80 },
+      { sku: 'NAI-009', stock: 65, price: 180 },
+      { sku: 'NAI-021', stock: 24, price: 245 },
+      { sku: 'NAI-037', stock: 292, price: 2 },
+      { sku: 'NAI-045', stock: 2, price: 720 },
+    ]
+  );
+  assert.equal(
+    t.api.db.prepare(
+      'SELECT price FROM product_units WHERE product_id=(SELECT id FROM products WHERE sku=?) AND unit=?'
+    ).get('NAI-021', 'pcs').price,
+    245
+  );
+
+  const corrections = t.api.db.prepare(
+    `SELECT p.sku,m.movement,m.qty_change,m.reason
+       FROM stock_movements m
+       JOIN products p ON p.id=m.product_id
+      WHERE m.reason=?
+      ORDER BY p.sku`
+  ).all('Newly Added Items catalog stock correction');
+  assert.deepEqual(corrections, [
+    { sku: 'NAI-007', movement: 'adjustment', qty_change: 10, reason: 'Newly Added Items catalog stock correction' },
+    { sku: 'NAI-009', movement: 'adjustment', qty_change: 36, reason: 'Newly Added Items catalog stock correction' },
+    { sku: 'NAI-021', movement: 'adjustment', qty_change: 18, reason: 'Newly Added Items catalog stock correction' },
+    { sku: 'NAI-037', movement: 'adjustment', qty_change: 37, reason: 'Newly Added Items catalog stock correction' },
+    { sku: 'NAI-045', movement: 'adjustment', qty_change: 1, reason: 'Newly Added Items catalog stock correction' },
+  ]);
+  assert.deepEqual(
+    t.api.db.prepare(
+      'SELECT movement,qty_change,reason FROM stock_movements WHERE product_id=? AND reason LIKE ? ORDER BY id'
+    ).all(nai007.id, '%before catalog correction'),
+    [
+      { movement: 'sale', qty_change: -2, reason: 'Sale before catalog correction' },
+      { movement: 'restock', qty_change: 4, reason: 'Restock before catalog correction' },
+    ]
+  );
+
+  ensureNewlyAddedItems(t.api.db);
+  assert.equal(
+    t.api.db.prepare('SELECT stock FROM products WHERE sku=?').get('NAI-007').stock,
+    17
+  );
+  assert.equal(
+    t.api.db.prepare('SELECT COUNT(*) AS count FROM stock_movements WHERE reason=?')
+      .get('Newly Added Items catalog stock correction').count,
+    5
+  );
+  t.api.close();
+});
+
+test('released catalog correction preserves administrator price edits', async () => {
+  const t = await setup();
+  prepareReleasedCatalogCorrection(t.api.db);
+  const product = t.api.db.prepare('SELECT id FROM products WHERE sku=?').get('NAI-021');
+  t.api.db.prepare('UPDATE products SET price=? WHERE id=?').run(299, product.id);
+  t.api.db.prepare('UPDATE product_units SET price=? WHERE product_id=? AND unit=?')
+    .run(299, product.id, 'pcs');
+
+  ensureNewlyAddedItems(t.api.db);
+
+  assert.deepEqual(
+    t.api.db.prepare('SELECT stock,price,base_unit FROM products WHERE id=?').get(product.id),
+    { stock: 24, price: 299, base_unit: 'pcs' }
+  );
+  assert.equal(
+    t.api.db.prepare('SELECT price FROM product_units WHERE product_id=? AND unit=?')
+      .get(product.id, 'pcs').price,
+    299
+  );
+  t.api.close();
+});
+
+test('retired NAI-208 is deactivated without rewriting inventory or recording a correction', async () => {
+  const t = await setup();
+  const category = t.api.db.prepare('SELECT id FROM categories WHERE name=?').get(NEWLY_ADDED_ITEMS_CATEGORY);
+  const productId = Number(t.api.db.prepare(
+    `INSERT INTO products(sku,name,category_id,base_unit,stock,cost,price,low_stock_threshold,is_service,active)
+     VALUES(?,?,?,?,?,?,?,?,0,1)`
+  ).run('NAI-208', 'Legacy Blackscrew Wood', category.id, 'pack', 1000, 0, 10, 10).lastInsertRowid);
+  t.api.db.prepare('INSERT INTO product_units(product_id,unit,factor,price) VALUES(?,?,?,?)')
+    .run(productId, 'pack', 1, 10);
+  t.api.db.prepare('DELETE FROM settings WHERE key=?').run(NEWLY_ADDED_ITEMS_UNIT_PRICE_FIX);
+  t.api.db.prepare('DELETE FROM settings WHERE key=?').run(NEWLY_ADDED_ITEMS_NOTEBOOK1_REMOVED);
+
+  assert.doesNotThrow(() => ensureNewlyAddedItems(t.api.db));
+  assert.deepEqual(
+    t.api.db.prepare(
+      'SELECT active,name,stock,price,base_unit FROM products WHERE id=?'
+    ).get(productId),
+    {
+      active: 0,
+      name: 'Legacy Blackscrew Wood',
+      stock: 1000,
+      price: 10,
+      base_unit: 'pack',
+    }
+  );
+  assert.deepEqual(
+    t.api.db.prepare(
+      'SELECT unit,factor,price FROM product_units WHERE product_id=? ORDER BY id'
+    ).all(productId),
+    [{ unit: 'pack', factor: 1, price: 10 }]
+  );
+  assert.equal(
+    t.api.db.prepare(
+      'SELECT COUNT(*) AS count FROM stock_movements WHERE product_id=? AND reason LIKE ?'
+    ).get(productId, 'Unit price fix:%').count,
+    0
+  );
+  assert.equal(
+    t.api.db.prepare('SELECT active FROM products WHERE sku=?').get('NAI-216').active,
+    1
+  );
   t.api.close();
 });
 
@@ -278,6 +469,8 @@ test('cashier can update open-price details only within Newly Added Items', asyn
   ).run('OPEN-UNIT-1', 'Open Unit Item', catId, 'pcs', 3, 0, 0, 5).lastInsertRowid);
   api.db.prepare('INSERT INTO product_units(product_id,unit,factor,price) VALUES(?,?,?,?)')
     .run(openId, 'pcs', 1, 0);
+  api.db.prepare('INSERT INTO product_units(product_id,unit,factor,price) VALUES(?,?,?,?)')
+    .run(openId, 'crate', 10, 0);
 
   const updated = await api.call('pos:products:updateOpenDetails', cashierSession, openId, {
     base_unit: 'kg',
@@ -289,13 +482,83 @@ test('cashier can update open-price details only within Newly Added Items', asyn
   assert.equal(updated.delta, 9.5);
   const row = api.db.prepare('SELECT base_unit, stock, price FROM products WHERE id=?').get(openId);
   assert.deepEqual(row, { base_unit: 'kg', stock: 12.5, price: 0 });
-  const units = api.db.prepare('SELECT unit, factor, price FROM product_units WHERE product_id=?').all(openId);
-  assert.deepEqual(units, [{ unit: 'kg', factor: 1, price: 0 }]);
+  const units = api.db.prepare(
+    'SELECT unit, factor, price FROM product_units WHERE product_id=? ORDER BY id'
+  ).all(openId);
+  assert.deepEqual(units, [
+    { unit: 'kg', factor: 1, price: 0 },
+    { unit: 'crate', factor: 10, price: 0 },
+  ]);
   const movement = api.db.prepare(
     'SELECT qty_change, reason FROM stock_movements WHERE product_id=? ORDER BY id DESC LIMIT 1'
   ).get(openId);
   assert.equal(movement.qty_change, 9.5);
   assert.match(movement.reason, /Cashier/);
+
+  const mixedId = Number(api.db.prepare(
+    `INSERT INTO products(sku,name,category_id,base_unit,stock,cost,price,low_stock_threshold,is_service,active)
+     VALUES(?,?,?,?,?,?,?,?,0,1)`
+  ).run('OPEN-MIXED-1', 'Mixed Open Unit Item', catId, 'carton', 1, 0, 0, 5).lastInsertRowid);
+  api.db.prepare('INSERT INTO product_units(product_id,unit,factor,price) VALUES(?,?,?,?)')
+    .run(mixedId, 'carton', 1, 0);
+  api.db.prepare('INSERT INTO product_units(product_id,unit,factor,price) VALUES(?,?,?,?)')
+    .run(mixedId, 'kg', 1, 90);
+
+  const mixedUpdated = await api.call('pos:products:updateOpenDetails', cashierSession, mixedId, {
+    base_unit: 'box',
+    stock: 3,
+    reason: 'Cashier mixed-unit correction',
+  });
+  assert.equal(mixedUpdated.base_unit, 'box');
+  assert.equal(mixedUpdated.stock, 3);
+  assert.deepEqual(
+    api.db.prepare(
+      'SELECT unit,factor,price FROM product_units WHERE product_id=? ORDER BY id'
+    ).all(mixedId),
+    [
+      { unit: 'box', factor: 1, price: 0 },
+      { unit: 'kg', factor: 1, price: 90 },
+    ]
+  );
+
+  // A malformed legacy row can declare a missing base unit. Renaming it to
+  // an existing alternate must not silently erase that alternate's price.
+  const missingBaseId = Number(api.db.prepare(
+    `INSERT INTO products(sku,name,category_id,base_unit,stock,cost,price,low_stock_threshold,is_service,active)
+     VALUES(?,?,?,?,?,?,?,?,0,1)`
+  ).run('OPEN-MISSING-BASE-1', 'Missing Base Unit Item', catId, 'carton', 2, 0, 0, 5).lastInsertRowid);
+  api.db.prepare('INSERT INTO product_units(product_id,unit,factor,price) VALUES(?,?,?,?)')
+    .run(missingBaseId, 'kg', 1, 90);
+  await assert.rejects(() => api.call(
+    'pos:products:updateOpenDetails',
+    cashierSession,
+    missingBaseId,
+    { base_unit: 'kg', stock: 2 }
+  ), /already exists as an alternate unit/);
+  assert.deepEqual(
+    api.db.prepare('SELECT base_unit,stock,price FROM products WHERE id=?').get(missingBaseId),
+    { base_unit: 'carton', stock: 2, price: 0 }
+  );
+  assert.deepEqual(
+    api.db.prepare('SELECT unit,factor,price FROM product_units WHERE product_id=?').all(missingBaseId),
+    [{ unit: 'kg', factor: 1, price: 90 }]
+  );
+  const repairedMissingBase = await api.call(
+    'pos:products:updateOpenDetails',
+    cashierSession,
+    missingBaseId,
+    { base_unit: 'carton', stock: 3 }
+  );
+  assert.equal(repairedMissingBase.stock, 3);
+  assert.deepEqual(
+    api.db.prepare(
+      'SELECT unit,factor,price FROM product_units WHERE product_id=? ORDER BY id'
+    ).all(missingBaseId),
+    [
+      { unit: 'kg', factor: 1, price: 90 },
+      { unit: 'carton', factor: 1, price: 0 },
+    ]
+  );
 
   const fixedPrice = api.db.prepare(
     `SELECT p.* FROM products p JOIN categories c ON c.id=p.category_id
