@@ -48,7 +48,7 @@ test.describe('POS — Catalog & Navigation', () => {
     } finally { await electron.close(); }
   });
 
-  test('Newly Added Items chip filters the POS grid to the 20 requested products', async () => {
+  test('Newly Added Items chip filters the POS grid to the 46 requested products', async () => {
     const { electron, page } = await launchApp();
     try {
       await login(page, 'admin', 'admin123');
@@ -56,9 +56,10 @@ test.describe('POS — Catalog & Navigation', () => {
       const chip = page.locator('#posChips .chip[data-cat="Newly Added Items"]');
       await expect(chip).toBeVisible();
       await chip.click();
-      await expect(page.locator('#posGrid .prod-card')).toHaveCount(20);
+      await expect(page.locator('#posGrid .prod-card')).toHaveCount(46);
       await expect(page.locator('#posGrid')).toContainText('GOLDEN CUP Brass Plated Iron Hinges Loose Pin 4x4');
       await expect(page.locator('#posGrid')).toContainText('LENOX Gabot');
+      await expect(page.locator('#posGrid')).toContainText('REGINA Shower Valve');
     } finally { await electron.close(); }
   });
 

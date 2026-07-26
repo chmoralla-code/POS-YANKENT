@@ -13304,5 +13304,395 @@
         "price": 50
       }
     ]
+  },
+  {
+    "sku": "NAI-021",
+    "name": "CMART Measuring Tape 7.5m",
+    "category": "Newly Added Items",
+    "baseUnit": "pcs",
+    "stock": 6,
+    "price": 265,
+    "units": [
+      {
+        "unit": "pcs",
+        "factor": 1,
+        "price": 265
+      }
+    ]
+  },
+  {
+    "sku": "NAI-022",
+    "name": "CMART Measuring Tape 5m",
+    "category": "Newly Added Items",
+    "baseUnit": "pcs",
+    "stock": 5,
+    "price": 145,
+    "units": [
+      {
+        "unit": "pcs",
+        "factor": 1,
+        "price": 145
+      }
+    ]
+  },
+  {
+    "sku": "NAI-023",
+    "name": "HOTECHE Cutter Knife 18mm",
+    "category": "Newly Added Items",
+    "baseUnit": "pcs",
+    "stock": 12,
+    "price": 60,
+    "units": [
+      {
+        "unit": "pcs",
+        "factor": 1,
+        "price": 60
+      }
+    ]
+  },
+  {
+    "sku": "NAI-024",
+    "name": "CMART Glue Gun 20W",
+    "category": "Newly Added Items",
+    "baseUnit": "pcs",
+    "stock": 5,
+    "price": 198,
+    "units": [
+      {
+        "unit": "pcs",
+        "factor": 1,
+        "price": 198
+      }
+    ]
+  },
+  {
+    "sku": "NAI-025",
+    "name": "CMART Eurotype Stapler",
+    "category": "Newly Added Items",
+    "baseUnit": "pcs",
+    "stock": 3,
+    "price": 242,
+    "units": [
+      {
+        "unit": "pcs",
+        "factor": 1,
+        "price": 242
+      }
+    ]
+  },
+  {
+    "sku": "NAI-026",
+    "name": "CMART Adjustable Wrench",
+    "category": "Newly Added Items",
+    "baseUnit": "pcs",
+    "stock": 1,
+    "price": 165,
+    "units": [
+      {
+        "unit": "pcs",
+        "factor": 1,
+        "price": 165
+      }
+    ]
+  },
+  {
+    "sku": "NAI-027",
+    "name": "CMART Heavy Duty Staple Gun",
+    "category": "Newly Added Items",
+    "baseUnit": "pcs",
+    "stock": 5,
+    "price": 523,
+    "units": [
+      {
+        "unit": "pcs",
+        "factor": 1,
+        "price": 523
+      }
+    ]
+  },
+  {
+    "sku": "NAI-028",
+    "name": "KYK Glue Gun 10W orange",
+    "category": "Newly Added Items",
+    "baseUnit": "pcs",
+    "stock": 2,
+    "price": 250,
+    "units": [
+      {
+        "unit": "pcs",
+        "factor": 1,
+        "price": 250
+      }
+    ]
+  },
+  {
+    "sku": "NAI-029",
+    "name": "CMART Lineman Pliers",
+    "category": "Newly Added Items",
+    "baseUnit": "pcs",
+    "stock": 6,
+    "price": 215,
+    "units": [
+      {
+        "unit": "pcs",
+        "factor": 1,
+        "price": 215
+      }
+    ]
+  },
+  {
+    "sku": "NAI-030",
+    "name": "CMART High Carbon Steel 1\"",
+    "category": "Newly Added Items",
+    "baseUnit": "pcs",
+    "stock": 1,
+    "price": 325,
+    "units": [
+      {
+        "unit": "pcs",
+        "factor": 1,
+        "price": 325
+      }
+    ]
+  },
+  {
+    "sku": "NAI-031",
+    "name": "CMART High Carbon Steel 3/4\"",
+    "category": "Newly Added Items",
+    "baseUnit": "pcs",
+    "stock": 6,
+    "price": 310,
+    "units": [
+      {
+        "unit": "pcs",
+        "factor": 1,
+        "price": 310
+      }
+    ]
+  },
+  {
+    "sku": "NAI-032",
+    "name": "CMART High Carbon Steel 1/2\"",
+    "category": "Newly Added Items",
+    "baseUnit": "pcs",
+    "stock": 4,
+    "price": 265,
+    "units": [
+      {
+        "unit": "pcs",
+        "factor": 1,
+        "price": 265
+      }
+    ]
+  },
+  {
+    "sku": "NAI-033",
+    "name": "CMART Two Way Screw Drivers",
+    "category": "Newly Added Items",
+    "baseUnit": "pcs",
+    "stock": 7,
+    "price": 130,
+    "units": [
+      {
+        "unit": "pcs",
+        "factor": 1,
+        "price": 130
+      }
+    ]
+  },
+  {
+    "sku": "NAI-034",
+    "name": "SHARK Steel Floor Drain 4x4",
+    "category": "Newly Added Items",
+    "baseUnit": "pcs",
+    "stock": 6,
+    "price": 250,
+    "units": [
+      {
+        "unit": "pcs",
+        "factor": 1,
+        "price": 250
+      }
+    ]
+  },
+  {
+    "sku": "NAI-035",
+    "name": "ASTERIA Mountain Surface Faucet",
+    "category": "Newly Added Items",
+    "baseUnit": "pcs",
+    "stock": 1,
+    "price": 995,
+    "units": [
+      {
+        "unit": "pcs",
+        "factor": 1,
+        "price": 995
+      }
+    ]
+  },
+  {
+    "sku": "NAI-036",
+    "name": "AMERROCK Concealed Hinge",
+    "category": "Newly Added Items",
+    "baseUnit": "pcs",
+    "stock": 112,
+    "price": 0,
+    "units": [
+      {
+        "unit": "pcs",
+        "factor": 1,
+        "price": 0
+      }
+    ]
+  },
+  {
+    "sku": "NAI-037",
+    "name": "Sachet Tox with Screw",
+    "category": "Newly Added Items",
+    "baseUnit": "pcs",
+    "stock": 255,
+    "price": 2,
+    "units": [
+      {
+        "unit": "pcs",
+        "factor": 1,
+        "price": 2
+      }
+    ]
+  },
+  {
+    "sku": "NAI-038",
+    "name": "Naylon",
+    "category": "Newly Added Items",
+    "baseUnit": "rolls",
+    "stock": 145,
+    "price": 50,
+    "units": [
+      {
+        "unit": "rolls",
+        "factor": 1,
+        "price": 50
+      }
+    ]
+  },
+  {
+    "sku": "NAI-039",
+    "name": "Dolphin Naylon Blue",
+    "category": "Newly Added Items",
+    "baseUnit": "rolls",
+    "stock": 207,
+    "price": 35,
+    "units": [
+      {
+        "unit": "rolls",
+        "factor": 1,
+        "price": 35
+      }
+    ]
+  },
+  {
+    "sku": "NAI-040",
+    "name": "MAKI HOME Naylon",
+    "category": "Newly Added Items",
+    "baseUnit": "rolls",
+    "stock": 8,
+    "price": 35,
+    "units": [
+      {
+        "unit": "rolls",
+        "factor": 1,
+        "price": 35
+      }
+    ]
+  },
+  {
+    "sku": "NAI-041",
+    "name": "Dolphin Naylon Green",
+    "category": "Newly Added Items",
+    "baseUnit": "rolls",
+    "stock": 13,
+    "price": 30,
+    "units": [
+      {
+        "unit": "rolls",
+        "factor": 1,
+        "price": 30
+      }
+    ]
+  },
+  {
+    "sku": "NAI-042",
+    "name": "REGINA Faucet Lavatory Big",
+    "category": "Newly Added Items",
+    "baseUnit": "pcs",
+    "stock": 5,
+    "price": 900,
+    "units": [
+      {
+        "unit": "pcs",
+        "factor": 1,
+        "price": 900
+      }
+    ]
+  },
+  {
+    "sku": "NAI-043",
+    "name": "XPERT Hand Shower Set",
+    "category": "Newly Added Items",
+    "baseUnit": "pcs",
+    "stock": 7,
+    "price": 470,
+    "units": [
+      {
+        "unit": "pcs",
+        "factor": 1,
+        "price": 470
+      }
+    ]
+  },
+  {
+    "sku": "NAI-044",
+    "name": "XPERT Bidet Head",
+    "category": "Newly Added Items",
+    "baseUnit": "pcs",
+    "stock": 5,
+    "price": 360,
+    "units": [
+      {
+        "unit": "pcs",
+        "factor": 1,
+        "price": 360
+      }
+    ]
+  },
+  {
+    "sku": "NAI-045",
+    "name": "FASHION Shower Head",
+    "category": "Newly Added Items",
+    "baseUnit": "pcs",
+    "stock": 1,
+    "price": 720,
+    "units": [
+      {
+        "unit": "pcs",
+        "factor": 1,
+        "price": 720
+      }
+    ]
+  },
+  {
+    "sku": "NAI-046",
+    "name": "REGINA Shower Valve",
+    "category": "Newly Added Items",
+    "baseUnit": "pcs",
+    "stock": 3,
+    "price": 720,
+    "units": [
+      {
+        "unit": "pcs",
+        "factor": 1,
+        "price": 720
+      }
+    ]
   }
 ]

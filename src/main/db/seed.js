@@ -5,8 +5,10 @@ const path = require('path');
 
 const LEGACY_DEMO_CLEANUP_SETTING = 'legacy_demo_customers_removed_v1';
 const NEWLY_ADDED_ITEMS_CATEGORY = 'Newly Added Items';
-const NEWLY_ADDED_ITEMS_SETTING = 'newly_added_items_catalog_v1';
-const NEWLY_ADDED_ITEMS_COUNT = 20;
+// Bump when a new handwritten inventory page is added so existing DBs re-run
+// the inserter (it skips names already present in this category).
+const NEWLY_ADDED_ITEMS_SETTING = 'newly_added_items_catalog_v2';
+const NEWLY_ADDED_ITEMS_COUNT = 46;
 const PRODUCT_CATALOG_PATH = path.join(
   __dirname,
   '..',
@@ -119,7 +121,11 @@ function ensureNewlyAddedItems(db) {
     }
     categoryId = category.id;
 
-    const findName = db.prepare('SELECT id FROM products WHERE TRIM(name)=? COLLATE NOCASE LIMIT 1');
+    // Only skip names already in this category so a second inventory page can
+    // still be added even when a similar product exists elsewhere.
+    const findName = db.prepare(
+      'SELECT id FROM products WHERE category_id=? AND TRIM(name)=? COLLATE NOCASE LIMIT 1'
+    );
     const findSku = db.prepare('SELECT id FROM products WHERE sku=?');
     const insertProduct = db.prepare(
       `INSERT INTO products(sku,name,category_id,base_unit,stock,cost,price,low_stock_threshold,is_service,active)
@@ -134,7 +140,7 @@ function ensureNewlyAddedItems(db) {
 
     for (const item of items) {
       const name = String(item.name).trim();
-      if (findName.get(name)) continue;
+      if (findName.get(categoryId, name)) continue;
 
       const preferredSku = String(item.sku).trim();
       let sku = preferredSku;
