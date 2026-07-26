@@ -526,7 +526,7 @@ test('refunds list caps the limit (cannot request unbounded rows)', async () => 
   t.api.close();
 });
 
-test('reset all sales wipes sales/items/refunds/movements and resets sequence', async () => {
+test('reset all sales wipes sales/items/refunds but preserves stock quantities and movements', async () => {
   const t = await setup();
   const { api, cement, cashierSession, adminSession } = t;
   const res = await api.call('pos:sales:create', cashierSession, {
@@ -534,17 +534,31 @@ test('reset all sales wipes sales/items/refunds/movements and resets sequence', 
     paymentMethod: 'cash', amountTendered: 700,
   });
   await api.call('pos:sales:commit', cashierSession, res.txnId);
+  const movementCountBefore = api.db.prepare('SELECT COUNT(*) AS c FROM stock_movements').get().c;
+  const cementMovementsBefore = api.db.prepare(
+    'SELECT id,movement,qty_change,reason,datetime FROM stock_movements WHERE product_id=? ORDER BY id'
+  ).all(cement.id);
   await api.call('pos:sales:reset', adminSession);
   assert.equal(api.db.prepare('SELECT COUNT(*) AS c FROM sales').get().c, 0);
   assert.equal(api.db.prepare('SELECT COUNT(*) AS c FROM sale_items').get().c, 0);
   assert.equal(api.db.prepare('SELECT COUNT(*) AS c FROM refunds').get().c, 0);
-  assert.equal(api.db.prepare('SELECT COUNT(*) AS c FROM stock_movements').get().c, 0);
+  assert.equal(
+    api.db.prepare('SELECT COUNT(*) AS c FROM stock_movements').get().c,
+    movementCountBefore
+  );
+  assert.deepEqual(
+    api.db.prepare(
+      'SELECT id,movement,qty_change,reason,datetime FROM stock_movements WHERE product_id=? ORDER BY id'
+    ).all(cement.id),
+    cementMovementsBefore
+  );
   // users/products/categories/settings preserved
   assert.ok(api.db.prepare('SELECT COUNT(*) AS c FROM users').get().c > 0);
   assert.ok(api.db.prepare('SELECT COUNT(*) AS c FROM products').get().c > 0);
   assert.ok(api.db.prepare('SELECT COUNT(*) AS c FROM categories').get().c > 0);
   assert.ok(api.db.prepare('SELECT COUNT(*) AS c FROM settings').get().c > 0);
-  // product stock is preserved (sale of 2 bags deducted from initial stock; not zeroed by reset)
+  // Product stock is preserved (sale of 2 bags deducted from initial stock;
+  // neither the quantity nor its movement history is erased by reset).
   const s = api.db.prepare('SELECT stock FROM products WHERE id=?').get(cement.id).stock;
   assert.equal(s, cement.stock - 2);
   // next valid sale starts fresh at YK-000001

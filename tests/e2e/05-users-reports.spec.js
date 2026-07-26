@@ -71,6 +71,20 @@ test.describe('Reports (admin)', () => {
     } finally { await electron.close(); }
   });
 
+  test('erase-sales confirmation promises to preserve quantities and stock history', async () => {
+    const { electron, page } = await launchApp();
+    try {
+      await login(page, 'admin', 'admin123');
+      await navigate(page, 'reports');
+      await page.click('#rReset');
+      const modal = page.locator('.modal');
+      await expect(modal).toContainText('Stock quantities');
+      await expect(modal).toContainText('complete stock movement/restock history will be preserved');
+      await expect(modal).not.toContainText('erase ALL sales, sale items, refunds and stock movements');
+      await modal.locator('[data-a="no"]').click();
+    } finally { await electron.close(); }
+  });
+
   test('CSV export is a separate action and does not toggle its section', async () => {
     const { electron, page } = await launchApp();
     try {

@@ -664,8 +664,9 @@ function register(ipcMain, ctx) {
   });
 
   // ---- Reset all sales (admin) -----------------------------------------
-  // Wipes sales and all dependent stock/refund/Loan ledger history while
-  // preserving users, products, customer profiles, categories, and settings.
+  // Wipes sales and dependent refund/Loan ledger history while preserving
+  // users, products, stock quantities, stock movements/restock history,
+  // customer profiles, categories, and settings.
   guard(ipcMain, 'pos:sales:reset', { admin: true }, () => {
     // A destructive reset must not remove/reuse Loan ids while an asynchronous
     // Telegram delivery is in flight; ask the administrator to retry instead.
@@ -679,15 +680,14 @@ function register(ipcMain, ctx) {
       db.exec('DELETE FROM loans;');
       db.exec('DELETE FROM sale_items;');
       db.exec('DELETE FROM refunds;');
-      db.exec('DELETE FROM stock_movements;');
       db.exec('DELETE FROM sales;');
       const resetTables = [
         'loan_reminders','loan_events','loan_payments','loans',
-        'sales','sale_items','refunds','stock_movements',
+        'sales','sale_items','refunds',
       ];
       db.prepare(`DELETE FROM sqlite_sequence WHERE name IN (${resetTables.map(() => '?').join(',')})`)
         .run(...resetTables);
-      // Keep current product stock — only sales history / movements are wiped.
+      // Keep both current quantities and the complete stock audit/restock history.
       db.prepare("UPDATE customers SET credit_used = 0,updated_at=datetime('now')").run();
     });
     tx();
