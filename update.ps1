@@ -111,6 +111,33 @@ function Historical-Version([string]$Value, [string]$Label) {
   Fail "$Label '$Value' is not a stable numeric version. Refusing to guess the release order."
 }
 
+function Utc-DateTime([object]$Value, [string]$Label) {
+  if ($Value -is [DateTimeOffset]) {
+    return ([DateTimeOffset]$Value).UtcDateTime
+  }
+  if ($Value -is [DateTime]) {
+    $date = [DateTime]$Value
+    if ($date.Kind -eq [DateTimeKind]::Unspecified) {
+      return [DateTime]::SpecifyKind($date, [DateTimeKind]::Utc)
+    }
+    return $date.ToUniversalTime()
+  }
+
+  $text = ([string]$Value).Trim()
+  $parsed = [DateTimeOffset]::MinValue
+  $styles = [Globalization.DateTimeStyles]::AssumeUniversal -bor
+    [Globalization.DateTimeStyles]::AdjustToUniversal
+  if (-not [DateTimeOffset]::TryParse(
+    $text,
+    [Globalization.CultureInfo]::InvariantCulture,
+    $styles,
+    [ref]$parsed
+  )) {
+    Fail "$Label '$text' is not a valid timestamp."
+  }
+  return $parsed.UtcDateTime
+}
+
 function Version-Text([version]$Value) {
   return "$($Value.Major).$($Value.Minor).$($Value.Build)"
 }
@@ -530,7 +557,7 @@ try {
           $matchingRuns = @(
             $runs |
               Where-Object {
-                $runCreatedAt = [DateTimeOffset]::Parse([string]$_.createdAt).UtcDateTime
+                $runCreatedAt = Utc-DateTime $_.createdAt 'Workflow creation time'
                 $event = [string]$_.event
                 $sameRelease = [string]$_.displayTitle -eq "Release $tag"
                 $freshRun = $runCreatedAt -ge $releasePushStartedAt.AddSeconds(-10)
