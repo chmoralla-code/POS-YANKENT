@@ -29,6 +29,23 @@ test.describe('Products & Inventory', () => {
     } finally { await electron.close(); }
   });
 
+  test('Newly Added Items chip shows and filters all 46 requested products', async () => {
+    const { electron, page } = await launchApp();
+    try {
+      await login(page, 'admin', 'admin123');
+      await navigate(page, 'products');
+      await page.click('#pChipsToggle');
+      const chip = page.locator('#pChips .chip[data-cat="Newly Added Items"]');
+      await expect(chip).toBeVisible();
+      await expect(chip).toContainText(/Newly Added Items\s*46/);
+      await chip.click();
+      await expect(page.locator('#pGrid .prod-card')).toHaveCount(46);
+      await expect(page.locator('#pGrid')).toContainText('GOLDEN CUP Brass Plated Iron Hinges Loose Pin 4x4');
+      await expect(page.locator('#pGrid')).toContainText('LENOX Gabot');
+      await expect(page.locator('#pGrid')).toContainText('REGINA Shower Valve');
+    } finally { await electron.close(); }
+  });
+
   test('search filters product list', async () => {
     const { electron, page } = await launchApp();
     try {

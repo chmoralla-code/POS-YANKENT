@@ -25,7 +25,7 @@ App.views.products = {
         <input id="pSearch" placeholder="Search name…" class="fill" style="max-width:300px">
         <div class="fill"></div>
         <button class="btn btn-ghost btn-sm" id="catManage">Manage Categories</button>
-        <button class="btn btn-ghost btn-sm" id="pImportCatalog" title="Bulk-import the saved product catalog (889 items, ₱0 price, 0 stock)">Import Catalog</button>
+        <button class="btn btn-ghost btn-sm" id="pImportCatalog" title="Bulk-import the saved product catalog">Import Catalog</button>
         <button class="btn btn-danger btn-sm" id="pDeleteAll" title="Erase ALL products (and their units / stock movements). Category names are preserved.">Delete All Products</button>
         <button class="btn btn-primary btn-sm" id="pAdd">+ Add Product</button>
         <button class="btn btn-primary btn-sm" id="pAddSvc" title="Add a service (labor, delivery, etc.) — no stock tracking">+ Add Service</button>
@@ -519,7 +519,7 @@ App.views.products = {
 
   async _importCatalog() {
     const ok = await App.ui.confirm(
-      'Import the saved product catalog (889 construction-supply items across 11 categories)?\n\nEach item is created with ₱0 price and 0 stock — you will edit those afterward. Categories are created automatically. Duplicate names are skipped.',
+      'Import the saved product catalog?\n\nNew items retain their saved prices and stock quantities. Categories are created automatically, and duplicate names are skipped.',
       { title: 'Import product catalog' }
     );
     if (!ok) return;
