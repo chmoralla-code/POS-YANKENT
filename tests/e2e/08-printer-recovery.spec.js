@@ -70,12 +70,37 @@ function replacementFixture() {
       code: 'configured',
       status: 'ready',
       ready: true,
+      canTest: true,
       canAutoRecover: false,
       needsSelection: false,
       repaired: true,
       previousPrinter: 'POS-58',
       message: 'YANKENT switched from "POS-58" to "POS-58 (1)" on USB003.',
     },
+  };
+}
+
+function unverifiedFixture() {
+  const printer = { name: 'POS-58', port: 'USB006', driver: 'POS-58', connected: null };
+  return {
+    status: {
+      configured: 'POS-58',
+      configuredPrinter: printer,
+      printers: [printer],
+      connectedThermalPrinters: [],
+      staleThermalPrinters: [],
+      selected: printer,
+      autoSelected: false,
+      code: 'configured-unverified',
+      status: 'unverified',
+      ready: false,
+      canTest: true,
+      canAutoRecover: false,
+      needsSelection: false,
+      message: 'Windows found the saved printer queue, but could not verify its physical connection. Run a test print and confirm that paper prints.',
+    },
+    repair: {},
+    testPrinter: 'POS-58',
   };
 }
 
@@ -113,7 +138,7 @@ test.describe('Printer Recovery', () => {
 
       await expect(page.locator('#printerRecoveryDialog')).toBeVisible();
       await expect(page.locator('#printerRecovery')).toContainText('Replacement printer found');
-      await expect(page.locator('#printerRecovery')).toContainText('POS-58 · disconnected');
+      await expect(page.locator('#printerRecovery')).toContainText('POS-58 · USB002 · disconnected');
       await expect(page.locator('#printerRecovery')).toContainText('POS-58 (1) · USB003');
       await screenshot(page, 'printer-recovery-replacement');
 
@@ -126,8 +151,36 @@ test.describe('Printer Recovery', () => {
       expect(calls.test).toBe(0);
 
       await page.click('#printerRecoveryTest');
-      await expect(page.locator('#printerRecoveryFeedback')).toContainText('Test print sent to POS-58 (1).');
+      await expect(page.locator('#printerRecoveryFeedback')).toContainText('Windows accepted the test job for POS-58 (1).');
+      await expect(page.locator('#printerRecoveryFeedback')).toContainText('Confirm that paper printed.');
       calls = await electron.evaluate(() => globalThis.__printerRecoveryCalls);
+      expect(calls.test).toBe(1);
+    } finally {
+      await electron.close();
+    }
+  });
+
+  test('cashier can test an installed USB queue whose physical state is unverified', async () => {
+    const { electron, page } = await launchApp();
+    try {
+      await mockPrinterRecoveryIpc(electron, unverifiedFixture());
+      await login(page, 'cashier', 'cashier123');
+      await page.click('#printerRecoveryBtn');
+
+      await expect(page.locator('#printerRecovery')).toContainText('Printer connection not verified');
+      await expect(page.locator('#printerRecovery')).toContainText('POS-58 · USB006 · connection unverified');
+      await expect(page.locator('#printerRecovery')).not.toContainText('None detected');
+      await expect(page.locator('#printerRecovery')).not.toContainText('disconnected');
+      await expect(page.locator('#printerRecoveryRepair')).toHaveCount(0);
+      await expect(page.locator('#printerRecoveryTest')).toBeVisible();
+      await screenshot(page, 'printer-recovery-unverified-usb');
+
+      await page.click('#printerRecoveryTest');
+      await expect(page.locator('#printerRecoveryFeedback')).toContainText('Windows accepted the test job for POS-58');
+      await expect(page.locator('#printerRecoveryFeedback')).toContainText('Confirm that paper printed');
+
+      const calls = await electron.evaluate(() => globalThis.__printerRecoveryCalls);
+      expect(calls.repair).toBe(0);
       expect(calls.test).toBe(1);
     } finally {
       await electron.close();

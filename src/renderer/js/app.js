@@ -165,6 +165,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else if (state === 'repair-available') {
       barText = 'Replacement found · click to fix';
       buttonText = 'Fix printer';
+    } else if (state === 'unverified') {
+      barText = 'Printer installed · run test';
+      buttonText = 'Test printer';
     } else if (state === 'needs-selection') {
       barText = 'Choose a printer';
       buttonText = 'Choose printer';
@@ -264,7 +267,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const queueText = (printer) => {
       if (!printer) return 'None detected';
-      return printer.name + (printer.port ? ' · ' + printer.port : '');
+      return printer.name + (printer.port ? ' · ' + printer.port : '') +
+        (printer.connected === false
+          ? ' · disconnected'
+          : (printer.connected == null ? ' · connection unverified' : ''));
     };
 
     const render = (health) => {
@@ -272,7 +278,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const selected = health.selected || null;
       const choices = Array.isArray(health.connectedThermalPrinters) ? health.connectedThermalPrinters : [];
       const saved = health.configured || 'Not configured';
-      const savedState = health.configuredPrinter && health.configuredPrinter.connected === false ? ' · disconnected' : '';
+      const savedText = health.configuredPrinter ? queueText(health.configuredPrinter) : saved;
       let headline = 'Printer needs attention';
       let summary = health.message || health.error || 'No connected thermal printer was found.';
       let tone = 'needs-attention';
@@ -284,6 +290,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       } else if (status === 'repair-available') {
         headline = 'Replacement printer found';
         summary = 'Windows kept the old queue, but YANKENT found one safe connected replacement.';
+      } else if (status === 'unverified') {
+        headline = 'Printer connection not verified';
+        summary = health.message || 'Windows found the saved queue. Run a test print and confirm that paper prints.';
       } else if (status === 'needs-selection') {
         headline = 'Choose which printer to use';
         summary = 'More than one thermal printer is connected, so YANKENT will not guess.';
@@ -302,7 +311,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           '</ul></div>'
         : '';
       const activeLabel = selected
-        ? (status === 'repair-available' ? 'Safe replacement' : (status === 'ready' ? 'Active printer' : 'Detected Windows printer'))
+        ? (status === 'repair-available'
+          ? 'Safe replacement'
+          : (status === 'ready' ? 'Active printer' : (status === 'unverified' ? 'Saved Windows queue' : 'Detected Windows printer')))
         : 'Connected printer';
       const canOpenSettings = App.current.user && App.current.user.role === 'admin';
 
@@ -313,7 +324,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             '<div><h3>' + App.ui.esc(headline) + '</h3><p>' + App.ui.esc(summary) + '</p></div>' +
           '</section>' +
           '<div class="printer-recovery-route">' +
-            '<div class="printer-recovery-row"><span class="printer-recovery-k">Saved printer</span><span class="printer-recovery-v">' + App.ui.esc(saved + savedState) + '</span></div>' +
+            '<div class="printer-recovery-row"><span class="printer-recovery-k">Saved printer</span><span class="printer-recovery-v">' + App.ui.esc(savedText) + '</span></div>' +
             '<div class="printer-recovery-arrow" aria-hidden="true">↓</div>' +
             '<div class="printer-recovery-row"><span class="printer-recovery-k">' + App.ui.esc(activeLabel) + '</span><span class="printer-recovery-v">' + App.ui.esc(queueText(selected)) + '</span></div>' +
           '</div>' +
@@ -321,11 +332,11 @@ document.addEventListener('DOMContentLoaded', async () => {
           '<div id="printerRecoveryFeedback" class="printer-recovery-feedback" aria-live="polite"></div>' +
           '<div class="printer-recovery-actions">' +
             (health.canAutoRecover ? '<button type="button" class="btn btn-primary" id="printerRecoveryRepair">Use Connected Printer</button>' : '') +
-            (health.ready && App.current.user ? '<button type="button" class="btn btn-primary" id="printerRecoveryTest">Run Test Print</button>' : '') +
+            (health.canTest && App.current.user ? '<button type="button" class="btn btn-primary" id="printerRecoveryTest">Run Test Print</button>' : '') +
             '<button type="button" class="btn btn-ghost" id="printerRecoveryRefresh">Refresh</button>' +
             (canOpenSettings ? '<button type="button" class="btn btn-ghost" id="printerRecoverySettings">Printer Settings</button>' : '') +
           '</div>' +
-          (!canOpenSettings && status !== 'ready' && status !== 'repair-available'
+          (!canOpenSettings && !health.canTest && status !== 'repair-available'
             ? '<p class="printer-recovery-guidance">Ask an administrator to select the correct queue in Settings.</p>'
             : '') +
           '<p class="printer-recovery-note">Recovery changes only where new receipts are sent. It never clears old queued print jobs and never prints a test automatically.</p>' +
@@ -381,8 +392,8 @@ document.addEventListener('DOMContentLoaded', async () => {
           const feedback = m.el.querySelector('#printerRecoveryFeedback');
           try {
             const result = await App.pos.printer.startupTest();
-            if (feedback) feedback.textContent = 'Test print sent to ' + result.printer + '.';
-            App.ui.toast('Test print sent to "' + result.printer + '" ✓', 'ok');
+            if (feedback) feedback.textContent = 'Windows accepted the test job for ' + result.printer + '. Confirm that paper printed.';
+            App.ui.toast('Test job sent to "' + result.printer + '" — confirm paper printed', 'ok');
           } catch (error) {
             if (feedback) feedback.textContent = 'Test print failed: ' + error.message;
           } finally {

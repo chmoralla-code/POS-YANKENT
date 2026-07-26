@@ -373,7 +373,9 @@ App.views.settings = {
         }
         if (routeEl) {
           if (status.selected) {
-            routeEl.textContent = status.reason || ('Ready: ' + status.selected.name + (status.selected.port ? ' on ' + status.selected.port : ''));
+            routeEl.textContent = status.status === 'unverified'
+              ? status.message
+              : (status.reason || ('Ready: ' + status.selected.name + (status.selected.port ? ' on ' + status.selected.port : '')));
           } else {
             routeEl.textContent = status.error || 'Choose an installed Windows printer.';
           }
@@ -404,8 +406,8 @@ App.views.settings = {
         v.querySelector('#s_printer_type').value = 'system';
         const res = await App.pos.printer.startupTest();
         const routeEl = v.querySelector('#sPrinterRoute');
-        if (routeEl) routeEl.textContent = 'Ready: ' + res.printer;
-        App.ui.toast('Test print sent to "' + res.printer + '" ✓', 'ok');
+        if (routeEl) routeEl.textContent = 'Test job sent to ' + res.printer + '. Confirm that paper printed.';
+        App.ui.toast('Test job sent to "' + res.printer + '" — confirm paper printed', 'ok');
       } catch (e) {
         App.ui.toast(e.message, 'err');
       } finally {

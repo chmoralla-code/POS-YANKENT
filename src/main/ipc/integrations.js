@@ -108,53 +108,68 @@ function sendRawFileToPrinter(filePath, printerName) {
  * status/offline flags are unreliable for these drivers, so each USB00x port
  * is mapped to its PnP device and checked through cfgmgr32.
  */
+const WINDOWS_DN_STARTED = 0x00000008;
+const WINDOWS_DN_HAS_PROBLEM = 0x00000400;
+const WINDOWS_CR_NO_SUCH_DEVNODE = 0x0000000d;
+
+function windowsPrinterDiscoveryScript() {
+  const hex = (value) => '0x' + value.toString(16).padStart(8, '0');
+  return [
+    '$ErrorActionPreference = "Stop"',
+    "Add-Type -TypeDefinition @'",
+    'using System;',
+    'using System.Runtime.InteropServices;',
+    'public static class YankentUsbDeviceState {',
+    '  [DllImport("cfgmgr32.dll", CharSet = CharSet.Unicode)]',
+    '  private static extern int CM_Locate_DevNodeW(out uint node, string id, uint flags);',
+    '  [DllImport("cfgmgr32.dll")]',
+    '  private static extern int CM_Get_DevNode_Status(out uint status, out uint problem, uint node, uint flags);',
+    '  public static int ConnectionState(string id) {',
+    '    if (String.IsNullOrWhiteSpace(id)) return -1;',
+    '    uint node, status, problem;',
+    '    int locate = CM_Locate_DevNodeW(out node, id, 0);',
+    '    if (locate == ' + hex(WINDOWS_CR_NO_SUCH_DEVNODE) + ') return 0;',
+    '    if (locate != 0) return -1;',
+    '    if (CM_Get_DevNode_Status(out status, out problem, node, 0) != 0) return -1;',
+    '    bool started = (status & ' + hex(WINDOWS_DN_STARTED) + ') != 0;',
+    '    bool hasProblem = (status & ' + hex(WINDOWS_DN_HAS_PROBLEM) + ') != 0;',
+    '    return started && !hasProblem ? 1 : -1;',
+    '  }',
+    '}',
+    "'@",
+    "$printerRoot = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Print\\Printers'",
+    "$portsRoot = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Print\\Monitors\\USB Monitor\\Ports'",
+    '$defaultPrinter = ""',
+    'try {',
+    '  Add-Type -AssemblyName System.Drawing -ErrorAction Stop',
+    '  $defaultPrinter = (New-Object System.Drawing.Printing.PrinterSettings).PrinterName',
+    '} catch {}',
+    '$items = @(Get-ChildItem -LiteralPath $printerRoot | ForEach-Object {',
+    '  $p = Get-ItemProperty -LiteralPath $_.PSPath',
+    '  $port = [string]$p.Port',
+    '  $connected = $null',
+    "  if ($port -match '^USB\\d+$') {",
+    '    $deviceId = (Get-ItemProperty -LiteralPath (Join-Path $portsRoot $port) -Name "Device Id" -ErrorAction SilentlyContinue)."Device Id"',
+    '    $state = [YankentUsbDeviceState]::ConnectionState([string]$deviceId)',
+    '    if ($state -gt 0) { $connected = $true }',
+    '    elseif ($state -eq 0) { $connected = $false }',
+    '  }',
+    '  [pscustomobject]@{',
+    '    name = [string]$p.Name',
+    '    port = $port',
+    '    driver = [string]$p."Printer Driver"',
+    '    connected = $connected',
+    '    isDefault = ([string]$p.Name -ieq $defaultPrinter)',
+    '  }',
+    '})',
+    '$json = ConvertTo-Json -InputObject $items -Compress -Depth 3',
+    '[Console]::Out.Write($json)',
+  ].join('\n');
+}
+
 function listWindowsPrinterDetails() {
   return new Promise((resolve) => {
-    const psScript = [
-      '$ErrorActionPreference = "Stop"',
-      "Add-Type -TypeDefinition @'",
-      'using System;',
-      'using System.Runtime.InteropServices;',
-      'public static class YankentUsbDeviceState {',
-      '  [DllImport("cfgmgr32.dll", CharSet = CharSet.Unicode)]',
-      '  private static extern int CM_Locate_DevNodeW(out uint node, string id, uint flags);',
-      '  [DllImport("cfgmgr32.dll")]',
-      '  private static extern int CM_Get_DevNode_Status(out uint status, out uint problem, uint node, uint flags);',
-      '  public static bool IsConnected(string id) {',
-      '    if (String.IsNullOrWhiteSpace(id)) return false;',
-      '    uint node, status, problem;',
-      '    return CM_Locate_DevNodeW(out node, id, 0) == 0',
-      '      && CM_Get_DevNode_Status(out status, out problem, node, 0) == 0',
-      '      && (status & 0x00000002) != 0;',
-      '  }',
-      '}',
-      "'@",
-      "$printerRoot = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Print\\Printers'",
-      "$portsRoot = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Print\\Monitors\\USB Monitor\\Ports'",
-      '$defaultPrinter = ""',
-      'try {',
-      '  Add-Type -AssemblyName System.Drawing -ErrorAction Stop',
-      '  $defaultPrinter = (New-Object System.Drawing.Printing.PrinterSettings).PrinterName',
-      '} catch {}',
-      '$items = @(Get-ChildItem -LiteralPath $printerRoot | ForEach-Object {',
-      '  $p = Get-ItemProperty -LiteralPath $_.PSPath',
-      '  $port = [string]$p.Port',
-      '  $connected = $null',
-      "  if ($port -match '^USB\\d+$') {",
-      '    $deviceId = (Get-ItemProperty -LiteralPath (Join-Path $portsRoot $port) -Name "Device Id" -ErrorAction SilentlyContinue)."Device Id"',
-      '    $connected = [YankentUsbDeviceState]::IsConnected([string]$deviceId)',
-      '  }',
-      '  [pscustomobject]@{',
-      '    name = [string]$p.Name',
-      '    port = $port',
-      '    driver = [string]$p."Printer Driver"',
-      '    connected = $connected',
-      '    isDefault = ([string]$p.Name -ieq $defaultPrinter)',
-      '  }',
-      '})',
-      '$json = ConvertTo-Json -InputObject $items -Compress -Depth 3',
-      '[Console]::Out.Write($json)',
-    ].join('\n');
+    const psScript = windowsPrinterDiscoveryScript();
 
     let out = '';
     let settled = false;
@@ -228,9 +243,15 @@ function resolveWindowsPrinter(printers, configuredName) {
   const exact = list.find((p) => p.name.toLowerCase() === configured.toLowerCase());
 
   // For non-USB queues, null means installed/unknown and remains a valid exact
-  // choice. Only a definitive USB disconnection triggers replacement.
+  // choice. USB probes can also be unknown when a vendor omits Device Id; keep
+  // the exact saved queue available for an explicit test rather than guessing.
+  // Only a definitive USB disconnection triggers replacement.
   if (exact && exact.connected !== false) {
-    return { selected: exact, autoSelected: false, code: 'configured' };
+    return {
+      selected: exact,
+      autoSelected: false,
+      code: exact.connected === true ? 'configured' : 'configured-unverified',
+    };
   }
 
   const connectedThermal = list.filter((p) => p.connected === true && isThermalPrinter(p));
@@ -302,6 +323,7 @@ function buildWindowsPrinterHealth(printers, configuredName) {
 
   let status = 'offline';
   if (resolution.selected && resolution.autoSelected) status = 'repair-available';
+  else if (resolution.selected && resolution.selected.connected == null) status = 'unverified';
   else if (resolution.selected) status = 'ready';
   else if (connectedThermal.length > 1) status = 'needs-selection';
 
@@ -309,8 +331,11 @@ function buildWindowsPrinterHealth(printers, configuredName) {
     && resolution.selected
     && resolution.selected.connected === true
     && isThermalPrinter(resolution.selected);
+  const canTest = !!resolution.selected && (status === 'ready' || status === 'unverified');
   const message = status === 'ready'
     ? 'Printer is ready.'
+    : status === 'unverified'
+      ? 'Windows found the saved printer queue, but could not verify its physical connection. Run a test print and confirm that paper prints.'
     : status === 'repair-available'
       ? (resolution.reason || 'A connected replacement printer was found.')
       : status === 'needs-selection'
@@ -328,6 +353,7 @@ function buildWindowsPrinterHealth(printers, configuredName) {
     code: resolution.code,
     status,
     ready: status === 'ready',
+    canTest,
     canAutoRecover,
     needsSelection: status === 'needs-selection',
     reason: resolution.reason || '',
@@ -792,6 +818,7 @@ module.exports = {
   _sendStartupTestPrint: sendStartupTestPrint,
   _listWindowsPrinters: listWindowsPrinters,
   _listWindowsPrinterDetails: listWindowsPrinterDetails,
+  _windowsPrinterDiscoveryScript: windowsPrinterDiscoveryScript,
   _resolveWindowsPrinter: resolveWindowsPrinter,
   _buildWindowsPrinterHealth: buildWindowsPrinterHealth,
   _autoRecoverWindowsPrinter: autoRecoverWindowsPrinter,

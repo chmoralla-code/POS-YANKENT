@@ -10,6 +10,7 @@ const {
   _resolveWindowsPrinter: resolveWindowsPrinter,
   _buildWindowsPrinterHealth: buildWindowsPrinterHealth,
   _autoRecoverWindowsPrinter: autoRecoverWindowsPrinter,
+  _windowsPrinterDiscoveryScript: windowsPrinterDiscoveryScript,
 } = require('../src/main/ipc/integrations');
 
 test('stale POS-58 queue is replaced by its only connected sibling', () => {
@@ -43,6 +44,30 @@ test('an installed non-USB queue remains usable when physical state is unknown',
 
   assert.equal(result.selected.name, 'Bluetooth Receipt Printer');
   assert.equal(result.autoSelected, false);
+});
+
+test('saved USB queue with unknown physical state remains selected but unverified', () => {
+  const printer = { name: 'POS-58', port: 'USB006', driver: 'POS-58', connected: null };
+  const result = resolveWindowsPrinter([printer], 'POS-58');
+  const health = buildWindowsPrinterHealth([printer], 'POS-58');
+
+  assert.equal(result.selected.name, 'POS-58');
+  assert.equal(result.selected.port, 'USB006');
+  assert.equal(result.autoSelected, false);
+  assert.equal(result.code, 'configured-unverified');
+  assert.equal(health.status, 'unverified');
+  assert.equal(health.ready, false);
+  assert.equal(health.canTest, true);
+  assert.equal(health.canAutoRecover, false);
+});
+
+test('Windows USB probe uses DN_STARTED and preserves inconclusive state', () => {
+  const script = windowsPrinterDiscoveryScript();
+  assert.match(script, /status & 0x00000008/);
+  assert.doesNotMatch(script, /status & 0x00000002/);
+  assert.match(script, /String\.IsNullOrWhiteSpace\(id\)\) return -1/);
+  assert.match(script, /locate == 0x0000000d\) return 0/);
+  assert.match(script, /\$connected = \$null/);
 });
 
 test('a disconnected queue reports a useful error when replacement is ambiguous', () => {
@@ -154,6 +179,24 @@ test('automatic recovery makes no changes when the configured printer is ready',
 
   assert.equal(result.repaired, false);
   assert.equal(result.status, 'ready');
+  assert.deepEqual(writes, []);
+});
+
+test('automatic recovery does not rewrite an unverified saved USB queue', async () => {
+  const writes = [];
+  const ctx = {
+    db: {},
+    getSetting: (_db, key) => key === 'startup_test_printer' ? 'POS-58' : 'system',
+    setSetting: (_db, key, value) => writes.push([key, value]),
+  };
+
+  const result = await autoRecoverWindowsPrinter(ctx, async () => [
+    { name: 'POS-58', port: 'USB006', driver: 'POS-58', connected: null },
+  ]);
+
+  assert.equal(result.repaired, false);
+  assert.equal(result.status, 'unverified');
+  assert.equal(result.canTest, true);
   assert.deepEqual(writes, []);
 });
 test('automatic recovery preserves disabled printing and a configured Bluetooth printer', async () => {
