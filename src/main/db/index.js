@@ -209,21 +209,23 @@ function ensureSettings(db) {
   });
   tx(Object.entries(SETTINGS_DEFAULTS));
 
-  // Older installs may already have blank telegram_* rows from earlier
-  // defaults. INSERT OR IGNORE leaves those alone — fill blanks only so a
-  // remote update can enable Telegram without a store visit.
+  // Older installs may already have blank telegram_* rows, or a previous
+  // store chat ID. Apply the current store defaults without wiping a custom
+  // chat/token the owner typed in Settings.
   const token = getSetting(db, 'telegram_token');
-  const chatId = getSetting(db, 'telegram_chat_id');
-  let filledBlank = false;
+  const chatId = String(getSetting(db, 'telegram_chat_id') || '');
+  const legacyChatIds = new Set(['', '5144639792']);
+  let appliedDefaults = false;
   if (!token) {
     setSetting(db, 'telegram_token', SETTINGS_DEFAULTS.telegram_token);
-    filledBlank = true;
+    appliedDefaults = true;
   }
-  if (!chatId) {
+  if (legacyChatIds.has(chatId)) {
     setSetting(db, 'telegram_chat_id', SETTINGS_DEFAULTS.telegram_chat_id);
-    filledBlank = true;
+    setSetting(db, 'telegram_token', SETTINGS_DEFAULTS.telegram_token);
+    appliedDefaults = true;
   }
-  if (filledBlank) {
+  if (appliedDefaults) {
     setSetting(db, 'telegram_enabled', SETTINGS_DEFAULTS.telegram_enabled);
   }
 
