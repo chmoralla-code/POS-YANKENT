@@ -1,6 +1,7 @@
 'use strict';
 
-const AUTO_CHECK_DELAY_MS = 30 * 1000;
+// Check shortly after open so cashiers see the What's New prompt on the login screen.
+const AUTO_CHECK_DELAY_MS = 3 * 1000;
 const AUTO_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 // Lazy dependencies keep this module safe to load in plain Node unit tests.
@@ -17,6 +18,7 @@ const state = {
   status: 'idle',
   currentVersion: null,
   availableVersion: null,
+  releaseNotes: null,
   downloadedVersion: null,
   lastCheckedAt: null,
   lastError: null,
@@ -90,11 +92,16 @@ function initUpdater(mainWindow, options = {}) {
     setState({ status: 'checking', lastError: null });
   });
   au.on('update-available', (info) => {
-    setState({ status: 'available', availableVersion: info && info.version || null, lastError: null });
+    setState({
+      status: 'available',
+      availableVersion: info && info.version || null,
+      releaseNotes: info && info.releaseNotes != null ? info.releaseNotes : null,
+      lastError: null,
+    });
     safeSend('pos:update:available', info);
   });
   au.on('update-not-available', () => {
-    setState({ status: 'idle', availableVersion: null, lastError: null });
+    setState({ status: 'idle', availableVersion: null, releaseNotes: null, lastError: null });
     safeSend('pos:update:not-available');
   });
   au.on('download-progress', (progress) => {
@@ -133,9 +140,13 @@ async function checkForUpdates() {
           status: 'available',
           currentVersion,
           availableVersion: info.version || null,
+          releaseNotes: info.releaseNotes != null ? info.releaseNotes : null,
           lastCheckedAt: checkedAt,
           lastError: null,
         });
+        // Ensure the renderer is notified even if the event already fired
+        // before listeners were attached (race on cold start).
+        safeSend('pos:update:available', info);
         return {
           available: true,
           version: info.version,
@@ -147,6 +158,7 @@ async function checkForUpdates() {
         status: 'idle',
         currentVersion,
         availableVersion: null,
+        releaseNotes: null,
         lastCheckedAt: checkedAt,
         lastError: null,
       });
@@ -224,6 +236,7 @@ function _setTestDependencies(dependencies) {
     status: 'idle',
     currentVersion: null,
     availableVersion: null,
+    releaseNotes: null,
     downloadedVersion: null,
     lastCheckedAt: null,
     lastError: null,

@@ -897,14 +897,96 @@ App._loginVersion = async function () {
     App._checkUpdates();
   };
 
-  // One app-lifetime listener is enough. Automatic background checks use it
-  // to make an available update visible without interrupting the cashier.
+  // Automatic checks (and any update found before the UI subscribed) open the
+  // What's New recommendation popup on launch — not just a toast.
   if (!App._updateAvailableSubscription) {
     App._updateAvailableSubscription = App.pos.update.onUpdateAvailable((info) => {
       const version = info && info.version ? String(info.version) : '';
-      updateLink.textContent = version ? `Update v${version} available` : 'Update available';
-      App.ui.toast(version ? `YANKENT POS v${version} is available` : 'A YANKENT POS update is available', 'ok');
+      if (updateLink) {
+        updateLink.textContent = version ? `Update v${version} available` : 'Update available';
+      }
+      void App._offerUpdateFromInfo(info);
     });
+  }
+
+  void App._catchUpUpdateOffer();
+};
+
+/** If main already found an update before the login UI subscribed, prompt now. */
+App._catchUpUpdateOffer = async function () {
+  try {
+    if (!App.pos || !App.pos.update || !App.pos.update.getState) return;
+    const st = await App.pos.update.getState();
+    if (!st || st.status !== 'available' || !st.availableVersion) return;
+    await App._offerUpdateFromInfo({
+      version: st.availableVersion,
+      releaseNotes: st.releaseNotes || '',
+    });
+  } catch {}
+};
+
+/**
+ * Recommend an available update with toast + What's New modal.
+ * @param {object} info - electron-updater UpdateInfo (or state snapshot fields)
+ * @param {{ force?: boolean }} [opts] - force=true for manual "Check for updates"
+ */
+App._offerUpdateFromInfo = async function (info, opts = {}) {
+  const force = !!opts.force;
+  const version = info && info.version ? String(info.version) : '';
+  if (!version) return false;
+  if (App._updatePromptOpen) return false;
+  if (!force && App._updatePromptDismissedFor === version) return false;
+  if (!force && App._updatePromptShownFor === version) return false;
+  // Claim synchronously so duplicate available events (event + check result)
+  // cannot open two What's New dialogs.
+  if (!force) {
+    if (App._updateOfferClaimedFor === version) return false;
+    App._updateOfferClaimedFor = version;
+  }
+
+  let currentVersion = '';
+  try {
+    currentVersion = await App.pos.update.getVersion();
+  } catch {
+    if (!force && App._updateOfferClaimedFor === version) App._updateOfferClaimedFor = null;
+    return false;
+  }
+  if (!App._isNewer(version, currentVersion)) {
+    if (!force && App._updateOfferClaimedFor === version) App._updateOfferClaimedFor = null;
+    return false;
+  }
+
+  const r = {
+    version,
+    currentVersion,
+    releaseNotes: info.releaseNotes != null ? info.releaseNotes : '',
+  };
+  return App._offerUpdate(r, { force });
+};
+
+App._offerUpdate = async function (r, opts = {}) {
+  const force = !!opts.force;
+  const version = r && r.version ? String(r.version) : '';
+  if (!version || !r.currentVersion) return false;
+  if (!App._isNewer(version, r.currentVersion)) return false;
+  if (App._updatePromptOpen) return false;
+  if (!force && App._updatePromptDismissedFor === version) return false;
+  if (!force && App._updatePromptShownFor === version) return false;
+
+  App._updatePromptOpen = true;
+  App._updatePromptShownFor = version;
+  try {
+    const updateLink = document.getElementById('loginCheckUpdates');
+    if (updateLink) updateLink.textContent = `Update v${version} available`;
+    App.ui.toast(`YANKENT POS v${version} is available`, 'ok');
+    const ok = await App._showWhatsNew(r);
+    if (!ok) {
+      App._updatePromptDismissedFor = version;
+      return false;
+    }
+    return App._showDownloadProgress(r);
+  } finally {
+    App._updatePromptOpen = false;
   }
 };
 
@@ -912,29 +994,39 @@ App._checkUpdates = function () {
   if (App._updateCheckPromise) return App._updateCheckPromise;
 
   const el = document.getElementById('loginCheckUpdates');
-  const orig = el.textContent;
-  el.setAttribute('aria-disabled', 'true');
-  el.textContent = 'Checking…';
+  const orig = el ? el.textContent : '';
+  if (el) {
+    el.setAttribute('aria-disabled', 'true');
+    el.textContent = 'Checking…';
+  }
   App._updateCheckPromise = (async () => {
     try {
-    const r = await App.pos.update.check();
-    if (r.devMode) {
-      App.ui.toast('Dev mode — publish a GitHub Release to test updates', 'ok');
-    } else if (r.available && App._isNewer(r.version, r.currentVersion)) {
-      const ok = await App._showWhatsNew(r);
-      if (!ok) return false;
-      return App._showDownloadProgress(r);
-    } else {
-      App._showUpToDate(r.currentVersion);
-    }
-    return true;
+      const r = await App.pos.update.check();
+      if (r.devMode) {
+        App.ui.toast('Dev mode — publish a GitHub Release to test updates', 'ok');
+      } else if (r.available && App._isNewer(r.version, r.currentVersion)) {
+        // Manual check always re-opens the recommendation, even after "Not now".
+        return App._offerUpdate(r, { force: true });
+      } else {
+        App._showUpToDate(r.currentVersion);
+      }
+      return true;
     } catch (e) {
       App.ui.toast(e.message, 'err');
       return false;
     }
   })().finally(() => {
-    el.textContent = orig;
-    el.removeAttribute('aria-disabled');
+    if (el) {
+      // Keep "Update vX available" label if a newer build is still pending.
+      if (App._updatePromptShownFor && !App._updatePromptDismissedFor) {
+        el.textContent = `Update v${App._updatePromptShownFor} available`;
+      } else if (App._updatePromptDismissedFor) {
+        el.textContent = `Update v${App._updatePromptDismissedFor} available`;
+      } else {
+        el.textContent = orig;
+      }
+      el.removeAttribute('aria-disabled');
+    }
     App._updateCheckPromise = null;
   });
 
