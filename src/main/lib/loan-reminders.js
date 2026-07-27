@@ -413,8 +413,12 @@ function isLoanReminderRunActive() {
 }
 
 function assertLoanReminderRunIdle(action = 'perform this operation') {
+  const { isLoanEmailReminderRunActive } = require('./loan-email-reminders');
   if (isLoanReminderRunActive()) {
     throw new Error(`Cannot ${action} while Telegram loan reminders are being sent. Try again in a moment.`);
+  }
+  if (isLoanEmailReminderRunActive()) {
+    throw new Error(`Cannot ${action} while customer email reminders are being sent. Try again in a moment.`);
   }
 }
 

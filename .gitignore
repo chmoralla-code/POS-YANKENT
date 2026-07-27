@@ -13,6 +13,7 @@ data/backups/
 Thumbs.db
 .env
 build/telegram-defaults.local.json
+build/resend-defaults.local.json
 .vscode/
 .idea/
 playwright-report/

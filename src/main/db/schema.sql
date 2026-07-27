@@ -66,6 +66,8 @@ CREATE TABLE IF NOT EXISTS customers (
   contact_person TEXT,
   phone          TEXT,
   email          TEXT,
+  email_reminder_enabled INTEGER NOT NULL DEFAULT 0,
+  email_reminder_days INTEGER NOT NULL DEFAULT 15 CHECK (email_reminder_days BETWEEN 1 AND 365),
   address        TEXT,
   notes          TEXT,
   credit_limit   REAL NOT NULL DEFAULT 0,
@@ -221,7 +223,22 @@ CREATE TABLE IF NOT EXISTS loan_reminders (
   UNIQUE (loan_id, reminder_date)
 );
 
--- Key/value store for store info, printer config, telegram config, etc.
+CREATE TABLE IF NOT EXISTS loan_email_reminders (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  loan_id         INTEGER NOT NULL REFERENCES loans(id),
+  due_date        TEXT NOT NULL,
+  lead_days       INTEGER NOT NULL CHECK (lead_days BETWEEN 1 AND 365),
+  recipient_email TEXT NOT NULL,
+  state           TEXT NOT NULL DEFAULT 'pending' CHECK (state IN ('pending','sent','failed','uncertain')),
+  attempt_count   INTEGER NOT NULL DEFAULT 0,
+  last_error      TEXT,
+  resend_email_id TEXT,
+  created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+  sent_at         TEXT,
+  UNIQUE (loan_id, due_date)
+);
+
+-- Key/value store for store info, printer config, Telegram, Resend, etc.
 CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY,
   value TEXT
@@ -242,3 +259,4 @@ CREATE INDEX IF NOT EXISTS idx_loans_sale ON loans(sale_id);
 CREATE INDEX IF NOT EXISTS idx_loan_payments_loan_date ON loan_payments(loan_id, paid_at);
 CREATE INDEX IF NOT EXISTS idx_loan_events_loan_date ON loan_events(loan_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_loan_reminders_date_state ON loan_reminders(reminder_date, state);
+CREATE INDEX IF NOT EXISTS idx_loan_email_reminders_due_state ON loan_email_reminders(due_date, state);

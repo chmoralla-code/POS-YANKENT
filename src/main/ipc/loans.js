@@ -157,15 +157,17 @@ function register(ipcMain, ctx) {
       WHERE type='contractor' AND LOWER(TRIM(name))=LOWER(TRIM(?)) AND active=1`).get(profile.name);
     if (duplicate) throw new Error('An active credit customer/company with this name already exists');
     const info = db.prepare(`INSERT INTO customers(
-      name,type,entity_kind,contact_person,phone,email,address,notes,
-      credit_limit,credit_used,active,updated_at
-    ) VALUES(?,?,?,?,?,?,?,?,?,0,1,datetime('now'))`).run(
+      name,type,entity_kind,contact_person,phone,email,email_reminder_enabled,
+      email_reminder_days,address,notes,credit_limit,credit_used,active,updated_at
+    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,0,1,datetime('now'))`).run(
       profile.name,
       profile.type,
       profile.entity_kind,
       profile.contact_person,
       profile.phone,
       profile.email,
+      profile.email_reminder_enabled ? 1 : 0,
+      profile.email_reminder_days,
       profile.address,
       profile.notes,
       profile.credit_limit
@@ -184,12 +186,15 @@ function register(ipcMain, ctx) {
       .get(profile.name, current.id);
     if (duplicate) throw new Error('An active credit customer/company with this name already exists');
     db.prepare(`UPDATE customers SET name=?,type='contractor',entity_kind=?,contact_person=?,
-      phone=?,email=?,address=?,notes=?,credit_limit=?,updated_at=datetime('now') WHERE id=?`).run(
+      phone=?,email=?,email_reminder_enabled=?,email_reminder_days=?,address=?,notes=?,
+      credit_limit=?,updated_at=datetime('now') WHERE id=?`).run(
       profile.name,
       profile.entity_kind,
       profile.contact_person,
       profile.phone,
       profile.email,
+      profile.email_reminder_enabled ? 1 : 0,
+      profile.email_reminder_days,
       profile.address,
       profile.notes,
       profile.credit_limit,
@@ -311,24 +316,58 @@ function register(ipcMain, ctx) {
   });
 
   guard(ipcMain, 'pos:loans:reminderStatus', { auth: true }, () => {
-    const enabled = ctx.getSetting(db, 'telegram_enabled') === '1';
-    const configured = !!(ctx.getSetting(db, 'telegram_token') && ctx.getSetting(db, 'telegram_chat_id'));
-    const lastSent = db.prepare(`SELECT sent_at FROM loan_reminders WHERE state='sent'
+    const telegramEnabled = ctx.getSetting(db, 'telegram_enabled') === '1';
+    const telegramConfigured = !!(ctx.getSetting(db, 'telegram_token') && ctx.getSetting(db, 'telegram_chat_id'));
+    const telegramLastSent = db.prepare(`SELECT sent_at FROM loan_reminders WHERE state='sent'
       ORDER BY sent_at DESC,id DESC LIMIT 1`).get();
-    const lastFailure = db.prepare(`SELECT last_error,created_at FROM loan_reminders WHERE state IN ('failed','uncertain')
+    const telegramLastFailure = db.prepare(`SELECT last_error,created_at FROM loan_reminders WHERE state IN ('failed','uncertain')
       ORDER BY created_at DESC,id DESC LIMIT 1`).get();
+    const emailEnabled = ctx.getSetting(db, 'email_reminders_enabled') === '1';
+    const emailConfigured = !!(
+      ctx.getSetting(db, 'resend_api_key') &&
+      ctx.getSetting(db, 'resend_from_email')
+    );
+    const emailLastSent = db.prepare(`SELECT sent_at FROM loan_email_reminders WHERE state='sent'
+      ORDER BY sent_at DESC,id DESC LIMIT 1`).get();
+    const emailLastFailure = db.prepare(`SELECT last_error,created_at FROM loan_email_reminders
+      WHERE state IN ('failed','uncertain') ORDER BY created_at DESC,id DESC LIMIT 1`).get();
+    const telegram = {
+      enabled: telegramEnabled,
+      configured: telegramConfigured,
+      last_sent_at: telegramLastSent ? telegramLastSent.sent_at : null,
+      last_error: telegramLastFailure ? telegramLastFailure.last_error : null,
+      last_error_at: telegramLastFailure ? telegramLastFailure.created_at : null,
+    };
+    const email = {
+      enabled: emailEnabled,
+      configured: emailConfigured,
+      from_email: ctx.getSetting(db, 'resend_from_email') || '',
+      last_sent_at: emailLastSent ? emailLastSent.sent_at : null,
+      last_error: emailLastFailure ? emailLastFailure.last_error : null,
+      last_error_at: emailLastFailure ? emailLastFailure.created_at : null,
+    };
     return {
-      enabled,
-      configured,
-      last_sent_at: lastSent ? lastSent.sent_at : null,
-      last_error: lastFailure ? lastFailure.last_error : null,
-      last_error_at: lastFailure ? lastFailure.created_at : null,
+      ...telegram,
+      telegram,
+      email,
     };
   });
 
   guard(ipcMain, 'pos:loans:runReminders', { admin: true }, async () => {
     const { runLoanReminders } = require('../lib/loan-reminders');
-    return runLoanReminders({ db, getSetting: ctx.getSetting });
+    const { runLoanEmailReminders } = require('../lib/loan-email-reminders');
+    const [telegram, email] = await Promise.all([
+      runLoanReminders({ db, getSetting: ctx.getSetting }),
+      runLoanEmailReminders({ db, getSetting: ctx.getSetting }),
+    ]);
+    return {
+      telegram,
+      email,
+      eligible: Number(telegram.eligible || 0) + Number(email.eligible || 0),
+      sent: Number(telegram.sent || 0) + Number(email.sent || 0),
+      failed: Number(telegram.failed || 0) + Number(email.failed || 0),
+      skipped: Number(telegram.skipped || 0) + Number(email.skipped || 0),
+    };
   });
 }
 

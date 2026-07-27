@@ -766,7 +766,7 @@ function register(ipcMain, ctx) {
     importAll(db, data);
     if (typeof ctx.clearPendingSaleOwners === 'function') ctx.clearPendingSaleOwners();
     const counts = {};
-    for (const t of ['users','categories','products','product_units','customers','sales','sale_items','stock_movements','loans','loan_payments','loan_events','loan_reminders','settings']) {
+    for (const t of ['users','categories','products','product_units','customers','sales','sale_items','stock_movements','loans','loan_payments','loan_events','loan_reminders','loan_email_reminders','settings']) {
       counts[t] = db.prepare(`SELECT COUNT(*) AS c FROM ${t}`).get().c;
     }
     return { path: file, tables: counts };

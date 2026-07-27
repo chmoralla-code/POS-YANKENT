@@ -1547,6 +1547,7 @@ html.theme-dark .login-submit {
 .utang-stat b { font-size: 22px; line-height: 1.1; }
 .utang-stat.due { border-left: 4px solid #8a6d1a; }
 .utang-stat.overdue { border-left: 4px solid var(--danger); }
+.utang-reminder { display: grid; gap: 8px; }
 .utang-reminder-card {
   display: flex; align-items: center; justify-content: space-between; gap: 14px;
   padding: 11px 14px; border: 1px solid var(--line); border-left: 4px solid var(--ok);
@@ -1579,6 +1580,22 @@ html.theme-dark .login-submit {
 .utang-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .utang-form .field { margin: 0; }
 .utang-span-2 { grid-column: 1 / -1; }
+.utang-email-reminder-controls {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(150px, 220px);
+  align-items: end;
+  gap: 7px 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+.utang-email-reminder-controls > .row { align-self: center; }
+.utang-email-reminder-controls input[type="checkbox"] { width: auto; flex: 0 0 auto; }
+.utang-reminder-days { display: flex; flex-direction: column; gap: 5px; }
+.utang-reminder-days > .fl { margin: 0; }
+.utang-reminder-days > input { width: 100%; }
+.utang-email-reminder-controls > .hint { grid-column: 1 / -1; }
 .utang-detail { display: flex; flex-direction: column; gap: 12px; }
 .utang-profile-card { display: grid; grid-template-columns: minmax(0, 1fr) 230px; gap: 12px; }
 .utang-profile-main, .utang-credit-card { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; background: var(--bg); }
@@ -1647,4 +1664,3 @@ html.theme-dark .login-submit {
 .pos-credit-meta b { color: var(--ink); font-family: var(--mono); }
 .pos-due-field { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
 .pos-due-field label { display: block; margin-bottom: 5px; }
-

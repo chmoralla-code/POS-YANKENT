@@ -34,6 +34,9 @@ App.views.settings = {
     const tgPreview = online
       ? `● Online · Chat ID ${this.s.telegram_chat_id || '—'}`
       : `● Offline · ${this.s.telegram_token ? 'token set' : 'not configured'}`;
+    const emailPreview = this.s.email_reminders_enabled === '1'
+      ? `${this.s.resend_api_key && this.s.resend_from_email ? '● Enabled' : '○ Setup required'} · YANKENT CONSTRUCTION`
+      : '○ Customer email reminders disabled';
     const autoStartPreview = this._autoStart ? '● Enabled — POS launches on login' : '○ Disabled';
 
     // All sections start closed; preserve which ones the user had open
@@ -136,6 +139,24 @@ App.views.settings = {
               <button class="btn btn-ghost btn-sm" id="sTgReport">Send report now</button>
             </div>
             <pre class="receipt" id="sTgPreview" style="font-size:11px"></pre>
+          </div>
+        </div>
+
+        <div class="collapse-section${isOpen('email') ? ' open' : ''}" data-key="email">
+          <div class="collapse-h" role="button" tabindex="0">
+            <div class="collapse-arrow">▸</div>
+            <div class="collapse-info">
+              <div class="collapse-title">Customer Email Reminders</div>
+              <div class="collapse-preview muted">${App.ui.esc(emailPreview)}</div>
+            </div>
+          </div>
+          <div class="collapse-b">
+            ${this._row('Resend API key', 'resend_api_key', this.s.resend_api_key || '', 'password')}
+            ${this._row('Verified sender email', 'resend_from_email', this.s.resend_from_email || '', 'email')}
+            <div class="field"><label class="fl">Sender shown to customers</label><input value="YANKENT CONSTRUCTION" readonly></div>
+            <label class="row gap-sm"><input type="checkbox" id="sEmailEnabled" ${this.s.email_reminders_enabled === '1' ? 'checked' : ''}> Enable automatic customer Utang emails</label>
+            <div class="hint">The API key is stored only on this laptop and is excluded from backups. Each customer controls whether reminders are on and how many days before due date to send. Emails are sent once per loan due date while the POS is open and online.</div>
+            <button class="btn btn-primary btn-sm" id="sSaveEmail" style="margin-top:10px">Save email settings</button>
           </div>
         </div>
 
@@ -283,6 +304,28 @@ App.views.settings = {
       } catch (error) {
         v.querySelector('#sTgEnabled').checked = false;
         App.ui.toast('Telegram settings were left disabled: ' + error.message, 'err');
+      }
+    };
+    v.querySelector('#sSaveEmail').onclick = async () => {
+      const enabled = v.querySelector('#sEmailEnabled').checked ? '1' : '0';
+      // Disable before changing credentials so an in-flight scheduler recheck
+      // never continues with a partially updated sender configuration.
+      await App.pos.settings.set('email_reminders_enabled', '0');
+      App.settingsCache.email_reminders_enabled = '0';
+      this.s.email_reminders_enabled = '0';
+      try {
+        await save(['resend_api_key','resend_from_email']);
+        if (enabled === '1' && (!this.s.resend_api_key || !this.s.resend_from_email)) {
+          throw new Error('Resend API key and verified sender email are required');
+        }
+        await App.pos.settings.set('email_reminders_enabled', enabled);
+        App.settingsCache.email_reminders_enabled = enabled;
+        this.s.email_reminders_enabled = enabled;
+        App.ui.toast('Customer email settings saved ✓', 'ok');
+        this._updatePreview('email');
+      } catch (error) {
+        v.querySelector('#sEmailEnabled').checked = false;
+        App.ui.toast('Customer email reminders were left disabled: ' + error.message, 'err');
       }
     };
     v.querySelector('#sSaveAutoStart').onclick = async () => {
@@ -477,6 +520,11 @@ App.views.settings = {
         const net = this.viewEl.querySelector('#sNet');
         if (net) net.textContent = online ? '● Online' : '● Offline (POS still works)';
       } catch {}
+    } else if (key === 'email') {
+      const ready = !!(this.s.resend_api_key && this.s.resend_from_email);
+      previewEl.textContent = this.s.email_reminders_enabled === '1'
+        ? `${ready ? '● Enabled' : '○ Setup required'} · YANKENT CONSTRUCTION`
+        : '○ Customer email reminders disabled';
     } else if (key === 'system') {
       try { this._autoStart = (await App.pos.autostart.get()).enabled; } catch {}
       previewEl.textContent = this._autoStart ? '● Enabled — POS launches on login' : '○ Disabled';

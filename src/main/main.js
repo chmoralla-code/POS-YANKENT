@@ -11,6 +11,7 @@ const { registerAll } = require('./ipc');
 const { initUpdater } = require('./updater');
 const { exportAll } = require('./backup');
 const { startLoanReminderScheduler, DEFAULT_DRAIN_TIMEOUT_MS } = require('./lib/loan-reminders');
+const { startLoanEmailReminderScheduler } = require('./lib/loan-email-reminders');
 const {
   bootIdFrom,
   isPathInside,
@@ -44,6 +45,7 @@ let db;
 let mainWindow;
 let backupTimer = null;
 let loanReminderScheduler = null;
+let loanEmailReminderScheduler = null;
 let isQuitting = false;
 let shutdownPromise = null;
 let shutdownComplete = false;
@@ -458,14 +460,15 @@ if (!gotTheLock) {
   // ---- Auto-backup every 5 minutes ----------------------------------
   backupTimer = setInterval(doAutoBackup, BACKUP_INTERVAL_MS);
 
-  // ---- Daily Utang Telegram reminders --------------------------------
-  // This scheduler is independent of renderer login state. It starts after
-  // the local DB is ready, retries every 30 minutes while the app is open,
-  // and records successful Loan/date pairs to prevent duplicate messages.
+  // ---- Automatic Utang reminders -------------------------------------
+  // These schedulers are independent of renderer login state. They start
+  // after the local DB is ready, retry every 30 minutes while the app is open,
+  // and keep separate Telegram/day and customer-email/due-date delivery logs.
   // Network work is skipped in smoke/e2e runs so validation never contacts
   // an installation's real Telegram account.
   if (!process.env.YANKENT_SMOKE && !process.env.YANKENT_E2E) {
     loanReminderScheduler = startLoanReminderScheduler({ db, getSetting });
+    loanEmailReminderScheduler = startLoanEmailReminderScheduler({ db, getSetting });
   }
 
   // ---- Startup auto test-print (once per OS boot) --------------------
@@ -581,18 +584,27 @@ async function prepareForShutdown() {
     clearInterval(backupTimer);
     backupTimer = null;
   }
-  const scheduler = loanReminderScheduler;
-  if (scheduler) {
+  const schedulers = [
+    { name: 'Telegram', scheduler: loanReminderScheduler },
+    { name: 'email', scheduler: loanEmailReminderScheduler },
+  ].filter((entry) => entry.scheduler);
+  if (schedulers.length) {
     try {
-      const drain = await scheduler.stop(DEFAULT_DRAIN_TIMEOUT_MS);
-      if (drain && drain.timedOut) {
-        console.warn('[main] Loan reminder shutdown drain timed out; delivery remains marked uncertain.');
+      const drains = await Promise.all(schedulers.map(async (entry) => ({
+        name: entry.name,
+        drain: await entry.scheduler.stop(DEFAULT_DRAIN_TIMEOUT_MS),
+      })));
+      for (const entry of drains) {
+        if (entry.drain && entry.drain.timedOut) {
+          console.warn(`[main] ${entry.name} reminder shutdown drain timed out; delivery remains marked uncertain.`);
+        }
       }
-      if (!drain || drain.safeToClose !== true) {
-        console.error('[main] Shutdown cancelled: Telegram delivery state was not durably saved.');
+      if (drains.some((entry) => !entry.drain || entry.drain.safeToClose !== true)) {
+        console.error('[main] Shutdown cancelled: a reminder delivery state was not durably saved.');
         return false;
       }
       loanReminderScheduler = null;
+      loanEmailReminderScheduler = null;
     } catch (error) {
       console.error('[main] Loan reminder shutdown error:', error.message);
       return false;
@@ -617,12 +629,13 @@ function cancelUnsafeShutdown(error) {
   if (db && !backupTimer) backupTimer = setInterval(doAutoBackup, BACKUP_INTERVAL_MS);
   if (db && !process.env.YANKENT_SMOKE && !process.env.YANKENT_E2E) {
     loanReminderScheduler = startLoanReminderScheduler({ db, getSetting });
+    loanEmailReminderScheduler = startLoanEmailReminderScheduler({ db, getSetting });
   }
-  const detail = error && error.message ? error.message : String(error || 'Telegram delivery state could not be saved');
+  const detail = error && error.message ? error.message : String(error || 'Reminder delivery state could not be saved');
   try {
     dialog.showErrorBox(
       'YANKENT POS could not close safely',
-      `A Telegram reminder may still be in delivery and its status could not be saved. The POS will remain open to prevent a duplicate reminder.\n\n${detail}`
+      `A reminder may still be in delivery and its status could not be saved. The POS will remain open to prevent a duplicate reminder.\n\n${detail}`
     );
   } catch {}
   if (BrowserWindow.getAllWindows().length === 0) createWindow();

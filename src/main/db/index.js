@@ -99,6 +99,8 @@ function migrate(db) {
   addColumn('customers', 'entity_kind', "TEXT NOT NULL DEFAULT 'individual'");
   addColumn('customers', 'contact_person', 'TEXT');
   addColumn('customers', 'email', 'TEXT');
+  addColumn('customers', 'email_reminder_enabled', 'INTEGER NOT NULL DEFAULT 0');
+  addColumn('customers', 'email_reminder_days', 'INTEGER NOT NULL DEFAULT 15');
   addColumn('customers', 'address', 'TEXT');
   addColumn('customers', 'notes', 'TEXT');
   addColumn('customers', 'active', 'INTEGER NOT NULL DEFAULT 1');
@@ -192,6 +194,11 @@ const SETTINGS_DEFAULTS = {
   telegram_token: '',
   telegram_chat_id: '5161011730',
   telegram_enabled: '0',
+  // Customer-facing Utang email reminders. The Resend API key is a password:
+  // it is entered in Settings and stored only in the local settings table.
+  resend_api_key: '',
+  resend_from_email: '',
+  email_reminders_enabled: '0',
   // Owner-entered store expenses for the simple Analytics earnings card.
   // Earnings = this month's sales − this value (beginner-friendly, one blank).
   analytics_total_expenses: '0',
@@ -235,6 +242,28 @@ function readInstallerTelegramDefaults() {
   return null;
 }
 
+/**
+ * Optional local Resend defaults. This is intentionally dev/local only and
+ * gitignored; packaged installs configure the credential once in Settings.
+ */
+function readLocalResendDefaults() {
+  const root = path.join(__dirname, '..', '..', '..');
+  const file = path.join(root, 'build', 'resend-defaults.local.json');
+  try {
+    if (!fs.existsSync(file)) return null;
+    const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return {
+      resend_api_key: String(raw.resend_api_key || ''),
+      resend_from_email: String(raw.resend_from_email || ''),
+      email_reminders_enabled: raw.email_reminders_enabled == null
+        ? ''
+        : String(raw.email_reminders_enabled),
+    };
+  } catch {
+    return null;
+  }
+}
+
 function ensureSettings(db) {
   // Seed every missing key, not only an entirely empty settings table.
   // Existing installations predate newer settings (for example the selected
@@ -271,6 +300,22 @@ function ensureSettings(db) {
   }
   if (appliedDefaults) {
     setSetting(db, 'telegram_enabled', defaultEnabled);
+  }
+
+  const resend = readLocalResendDefaults() || {};
+  const currentResendKey = String(getSetting(db, 'resend_api_key') || '');
+  const currentResendFrom = String(getSetting(db, 'resend_from_email') || '');
+  let appliedResendDefaults = false;
+  if (!currentResendKey && resend.resend_api_key) {
+    setSetting(db, 'resend_api_key', resend.resend_api_key);
+    appliedResendDefaults = true;
+  }
+  if (!currentResendFrom && resend.resend_from_email) {
+    setSetting(db, 'resend_from_email', resend.resend_from_email);
+    appliedResendDefaults = true;
+  }
+  if (appliedResendDefaults && resend.email_reminders_enabled) {
+    setSetting(db, 'email_reminders_enabled', resend.email_reminders_enabled);
   }
 
   return SETTINGS_DEFAULTS;

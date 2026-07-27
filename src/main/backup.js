@@ -13,12 +13,13 @@
 const { preserveImportedCreditDifferences } = require('./lib/loans');
 const { assertLoanReminderRunIdle } = require('./lib/loan-reminders');
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 const LEGACY_TABLES = [
   'users', 'categories', 'products', 'product_units', 'customers',
   'sales', 'sale_items', 'refunds', 'stock_movements', 'settings',
 ];
-const LOAN_TABLES = ['loans', 'loan_payments', 'loan_events', 'loan_reminders'];
+const LOAN_TABLES_V2 = ['loans', 'loan_payments', 'loan_events', 'loan_reminders'];
+const LOAN_TABLES = [...LOAN_TABLES_V2, 'loan_email_reminders'];
 const TABLES = [
   'users', 'categories', 'products', 'product_units', 'customers',
   'sales', 'sale_items', 'refunds', 'stock_movements',
@@ -30,7 +31,7 @@ const SEQ_TABLES = TABLES.filter((table) => table !== 'settings');
 // Wipe order: children first so restore remains valid with foreign-key
 // enforcement enabled during all normal database work.
 const WIPE_ORDER = [
-  'loan_reminders', 'loan_events', 'loan_payments', 'loans',
+  'loan_email_reminders', 'loan_reminders', 'loan_events', 'loan_payments', 'loans',
   'sale_items', 'stock_movements', 'refunds', 'sales', 'product_units',
   'products', 'customers', 'categories', 'users', 'settings',
 ];
@@ -44,6 +45,11 @@ function exportAll(db) {
     tables: {},
   };
   for (const table of TABLES) out.tables[table] = db.prepare(`SELECT * FROM ${table}`).all();
+  // API credentials are machine-local secrets. Backups preserve the setting
+  // key but require the administrator to re-enter its value after restore.
+  out.tables.settings = out.tables.settings.map((row) =>
+    row.key === 'resend_api_key' ? { ...row, value: '' } : row
+  );
   return out;
 }
 
@@ -61,9 +67,12 @@ function validateBackup(data) {
     if (!Array.isArray(data.tables[table])) throw new Error(`Backup missing table: ${table}`);
   }
   if (version >= 2) {
-    for (const table of LOAN_TABLES) {
+    for (const table of LOAN_TABLES_V2) {
       if (!Array.isArray(data.tables[table])) throw new Error(`Backup missing table: ${table}`);
     }
+  }
+  if (version >= 3 && !Array.isArray(data.tables.loan_email_reminders)) {
+    throw new Error('Backup missing table: loan_email_reminders');
   }
   return version;
 }

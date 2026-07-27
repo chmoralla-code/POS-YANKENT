@@ -96,7 +96,9 @@ App.views.utang = {
       try {
         const result = await App.pos.loans.runReminders();
         if (!this._isViewCurrent(generation, view)) return;
-        App.ui.toast(`Reminder check complete: ${result.sent || 0} sent`, 'ok');
+        const emailSent = result.email ? Number(result.email.sent || 0) : 0;
+        const telegramSent = result.telegram ? Number(result.telegram.sent || 0) : 0;
+        App.ui.toast(`Reminder check complete: ${emailSent} email, ${telegramSent} Telegram sent`, 'ok');
         await this._loadReminder();
       } catch (error) {
         if (this._isViewCurrent(generation, view)) App.ui.toast(error.message, 'err');
@@ -173,18 +175,26 @@ App.views.utang = {
       if (!this._isViewCurrent(generation, view)) return;
       this.reminder = status;
       this.online = !!online;
-      let message;
-      let kind = 'ok';
-      if (!status.enabled) { message = 'Telegram loan reminders are disabled in Settings.'; kind = 'warn'; }
-      else if (!status.configured) { message = 'Telegram token or chat ID is not configured.'; kind = 'warn'; }
-      else if (!online) { message = 'Offline: reminders will retry when this POS is online.'; kind = 'warn'; }
-      else if (status.last_sent_at) { message = `Reminders active. Last sent ${App.ui.fmtDate(status.last_sent_at)}.`; }
-      else { message = 'Reminders active. Eligible loans are checked automatically every 30 minutes.'; }
-      const manual = this.isAdmin && status.enabled && status.configured
+      const telegram = status.telegram || status;
+      const email = status.email || { enabled: false, configured: false };
+      const channelMessage = (channel, label) => {
+        if (!channel.enabled) return { message: `${label} are disabled in Settings.`, kind: 'warn' };
+        if (!channel.configured) return { message: `${label} are not configured.`, kind: 'warn' };
+        if (!online) return { message: 'Offline: reminders will retry when this POS is online.', kind: 'warn' };
+        if (channel.last_sent_at) return { message: `Active. Last sent ${App.ui.fmtDate(channel.last_sent_at)}.`, kind: 'ok' };
+        return { message: 'Active. Eligible loans are checked automatically every 30 minutes.', kind: 'ok' };
+      };
+      const emailInfo = channelMessage(email, 'Customer email reminders');
+      const telegramInfo = channelMessage(telegram, 'Telegram owner reminders');
+      const manual = this.isAdmin && (
+        (email.enabled && email.configured) ||
+        (telegram.enabled && telegram.configured)
+      )
         ? '<button type="button" class="btn btn-sm btn-ghost" id="utangRunReminders">Check reminders now</button>'
         : '';
       view.querySelector('#utangReminder').innerHTML = `
-        <div class="utang-reminder-card ${kind}"><div><b>Telegram reminders</b><span>${App.ui.esc(message)}</span>${status.last_error ? `<small>Last issue: ${App.ui.esc(status.last_error)}</small>` : ''}</div>${manual}</div>`;
+        <div class="utang-reminder-card ${emailInfo.kind}"><div><b>Customer email reminders</b><span>${App.ui.esc(emailInfo.message)}</span>${email.from_email ? `<small>From YANKENT CONSTRUCTION &lt;${App.ui.esc(email.from_email)}&gt;</small>` : ''}${email.last_error ? `<small>Last issue: ${App.ui.esc(email.last_error)}</small>` : ''}</div>${manual}</div>
+        <div class="utang-reminder-card ${telegramInfo.kind}"><div><b>Telegram owner reminders</b><span>${App.ui.esc(telegramInfo.message)}</span>${telegram.last_error ? `<small>Last issue: ${App.ui.esc(telegram.last_error)}</small>` : ''}</div></div>`;
     } catch (error) {
       if (this._isViewCurrent(generation, view)) {
         view.querySelector('#utangReminder').innerHTML = `<div class="utang-reminder-card warn">Reminder status unavailable: ${App.ui.esc(error.message)}</div>`;
@@ -203,6 +213,8 @@ App.views.utang = {
     const generation = App.captureSessionGeneration();
     const editing = !!profile;
     const current = profile || {};
+    const reminderEnabled = editing ? !!current.email_reminder_enabled : true;
+    const reminderDays = Number(current.email_reminder_days || 15);
     const m = App.ui.modal({
       title: editing ? 'Edit Customer / Company' : 'Add Customer / Company',
       wide: true,
@@ -215,6 +227,14 @@ App.views.utang = {
           <div class="field"><label class="fl">Phone</label><input id="upPhone" maxlength="60" value="${App.ui.esc(current.phone || '')}"></div>
           <div class="field"><label class="fl">Email</label><input id="upEmail" type="email" maxlength="160" value="${App.ui.esc(current.email || '')}"></div>
           <div class="field"><label class="fl">Credit limit</label><input id="upLimit" type="number" min="0" step="0.01" value="${Number(current.credit_limit || 0).toFixed(2)}" required></div>
+          <div class="field utang-span-2 utang-email-reminder-controls">
+            <label class="row gap-sm"><input type="checkbox" id="upEmailReminder" ${reminderEnabled ? 'checked' : ''}> Email this customer before each Utang due date</label>
+            <div class="utang-reminder-days">
+              <label class="fl" for="upReminderDays">Days before due date</label>
+              <input id="upReminderDays" type="number" min="1" max="365" step="1" value="${Number.isInteger(reminderDays) ? reminderDays : 15}" ${reminderEnabled ? '' : 'disabled'}>
+            </div>
+            <div class="hint">Default: 15 days. One email is sent per loan due date; changing a due date allows a new reminder.</div>
+          </div>
           <div class="field utang-span-2"><label class="fl">Address</label><textarea id="upAddress" maxlength="500" rows="2">${App.ui.esc(current.address || '')}</textarea></div>
           <div class="field utang-span-2"><label class="fl">Notes</label><textarea id="upNotes" maxlength="1500" rows="3">${App.ui.esc(current.notes || '')}</textarea></div>
         </div>
@@ -222,6 +242,13 @@ App.views.utang = {
       footerHtml: '<button type="button" class="btn btn-ghost" data-a="cancel">Cancel</button><button type="button" class="btn btn-primary" data-a="save">Save account</button>',
     });
     m.el.querySelector('[data-a="cancel"]').onclick = () => m.close();
+    const reminderToggle = m.el.querySelector('#upEmailReminder');
+    const reminderDaysInput = m.el.querySelector('#upReminderDays');
+    reminderToggle.onchange = () => {
+      reminderDaysInput.disabled = !reminderToggle.checked;
+      m.el.querySelector('#upEmail').required = reminderToggle.checked;
+    };
+    m.el.querySelector('#upEmail').required = reminderToggle.checked;
     const save = async () => {
       const payload = {
         entity_kind: m.el.querySelector('#upKind').value,
@@ -229,6 +256,8 @@ App.views.utang = {
         contact_person: m.el.querySelector('#upContact').value,
         phone: m.el.querySelector('#upPhone').value,
         email: m.el.querySelector('#upEmail').value,
+        email_reminder_enabled: reminderToggle.checked,
+        email_reminder_days: reminderDaysInput.value || '15',
         address: m.el.querySelector('#upAddress').value,
         notes: m.el.querySelector('#upNotes').value,
         credit_limit: m.el.querySelector('#upLimit').value,
@@ -280,6 +309,7 @@ App.views.utang = {
                 <div><small>Phone</small><b>${App.ui.esc(customer.phone || '—')}</b></div>
                 <div><small>Email</small><b>${App.ui.esc(customer.email || '—')}</b></div>
                 <div><small>Address</small><b>${App.ui.esc(customer.address || '—')}</b></div>
+                <div><small>Email reminder</small><b>${customer.email_reminder_enabled ? `${customer.email_reminder_days} day${Number(customer.email_reminder_days) === 1 ? '' : 's'} before due` : 'Off'}</b></div>
               </div>
               ${customer.notes ? `<div class="utang-notes"><small>Notes</small><p>${App.ui.esc(customer.notes)}</p></div>` : ''}
             </div>

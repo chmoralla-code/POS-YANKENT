@@ -96,6 +96,19 @@ function validateProfile(input = {}) {
   const phone = optionalText(input.phone, 'Phone', 60);
   const email = optionalText(input.email, 'Email', 160);
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('Email address is invalid');
+  const reminderValue = input.email_reminder_enabled ?? input.emailReminderEnabled ?? false;
+  let emailReminderEnabled;
+  if ([true, 1, '1', 'true', 'on'].includes(reminderValue)) emailReminderEnabled = true;
+  else if ([false, 0, '0', 'false', 'off', '', null].includes(reminderValue)) emailReminderEnabled = false;
+  else throw new Error('Email reminder setting must be on or off');
+  const reminderDaysRaw = input.email_reminder_days ?? input.emailReminderDays ?? 15;
+  const emailReminderDays = Number(reminderDaysRaw);
+  if (!Number.isInteger(emailReminderDays) || emailReminderDays < 1 || emailReminderDays > 365) {
+    throw new Error('Email reminder must be between 1 and 365 days before the due date');
+  }
+  if (emailReminderEnabled && !email) {
+    throw new Error('Email address is required when email reminders are enabled');
+  }
   const address = optionalText(input.address, 'Address', 500);
   const notes = optionalText(input.notes, 'Notes', 1500);
   const creditLimit = nonNegativeMoney(input.credit_limit ?? input.creditLimit, 'Credit limit', 0);
@@ -106,6 +119,8 @@ function validateProfile(input = {}) {
     contact_person: contactPerson,
     phone,
     email,
+    email_reminder_enabled: emailReminderEnabled,
+    email_reminder_days: emailReminderDays,
     address,
     notes,
     credit_limit: creditLimit,
@@ -116,6 +131,10 @@ function normalizeCustomer(row) {
   if (!row) return null;
   const customer = { ...row };
   customer.active = customer.active === undefined ? true : !!Number(customer.active);
+  customer.email_reminder_enabled = !!Number(customer.email_reminder_enabled);
+  customer.email_reminder_days = Number.isInteger(Number(customer.email_reminder_days))
+    ? Number(customer.email_reminder_days)
+    : 15;
   customer.credit_limit = round2(customer.credit_limit);
   customer.credit_used = round2(customer.credit_used);
   customer.available_credit = round2(Math.max(0, customer.credit_limit - customer.credit_used));
@@ -266,7 +285,8 @@ function hydrateLoan(db, loanOrId) {
     ? { ...loanOrId }
     : db.prepare('SELECT * FROM loans WHERE id=?').get(integerId(loanOrId, 'Loan'));
   if (!loan) return null;
-  const customer = db.prepare(`SELECT id,name,type,entity_kind,contact_person,phone,email,address,notes,
+  const customer = db.prepare(`SELECT id,name,type,entity_kind,contact_person,phone,email,
+    email_reminder_enabled,email_reminder_days,address,notes,
     credit_limit,credit_used,active,created_at,updated_at FROM customers WHERE id=?`).get(loan.customer_id);
   const sale = loan.sale_id
     ? db.prepare('SELECT id,txn_id,datetime,status,total,payment_method,due_date FROM sales WHERE id=?').get(loan.sale_id)

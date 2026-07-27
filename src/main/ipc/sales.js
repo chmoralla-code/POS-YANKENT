@@ -674,6 +674,7 @@ function register(ipcMain, ctx) {
     const tx = db.transaction(() => {
       // Delete in explicit child-first order because the sql.js shim cannot
       // be relied on to enforce every foreign-key cascade.
+      db.exec('DELETE FROM loan_email_reminders;');
       db.exec('DELETE FROM loan_reminders;');
       db.exec('DELETE FROM loan_events;');
       db.exec('DELETE FROM loan_payments;');
@@ -682,7 +683,7 @@ function register(ipcMain, ctx) {
       db.exec('DELETE FROM refunds;');
       db.exec('DELETE FROM sales;');
       const resetTables = [
-        'loan_reminders','loan_events','loan_payments','loans',
+        'loan_email_reminders','loan_reminders','loan_events','loan_payments','loans',
         'sales','sale_items','refunds',
       ];
       db.prepare(`DELETE FROM sqlite_sequence WHERE name IN (${resetTables.map(() => '?').join(',')})`)

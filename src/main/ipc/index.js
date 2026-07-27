@@ -11,8 +11,13 @@
 
 const { SETTINGS_DEFAULTS } = require('../db');
 
-const SECRET_SETTING_KEYS = new Set(['telegram_token', 'telegram_chat_id']);
-const BOOLEAN_SETTING_KEYS = new Set(['printer_auto_print', 'startup_test_print', 'telegram_enabled']);
+const SECRET_SETTING_KEYS = new Set(['telegram_token', 'telegram_chat_id', 'resend_api_key']);
+const BOOLEAN_SETTING_KEYS = new Set([
+  'printer_auto_print',
+  'startup_test_print',
+  'telegram_enabled',
+  'email_reminders_enabled',
+]);
 
 function validatedSettingValue(key, value) {
   if (!Object.prototype.hasOwnProperty.call(SETTINGS_DEFAULTS, key)) {
@@ -32,6 +37,17 @@ function validatedSettingValue(key, value) {
   if (key === 'receipt_width') {
     if (!['32', '48'].includes(text)) throw new Error('Receipt width must be 32 or 48');
     return text;
+  }
+  if (key === 'resend_api_key') {
+    if (text && !/^re_[A-Za-z0-9_-]+$/.test(text)) throw new Error('Resend API key is invalid');
+    return text;
+  }
+  if (key === 'resend_from_email') {
+    const email = text.trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new Error('Resend sender email is invalid');
+    }
+    return email;
   }
 
   const numericRanges = {

@@ -233,7 +233,7 @@ test('protected calls revoke deactivated users and refresh changed roles', async
   t.api.close();
 });
 
-test('cashiers cannot read Telegram credentials and invalid settings are rejected', async () => {
+test('cashiers cannot read messaging credentials and invalid settings are rejected', async () => {
   const t = await setup();
   const admin = t.api.db.prepare('SELECT * FROM users WHERE username=?').get('admin');
   const cashier = t.api.db.prepare('SELECT * FROM users WHERE username=?').get('cashier');
@@ -241,15 +241,22 @@ test('cashiers cannot read Telegram credentials and invalid settings are rejecte
   const cashierSession = createSession(cashier);
   await t.api.call('pos:settings:set', adminSession, 'telegram_token', 'secret-token');
   await t.api.call('pos:settings:set', adminSession, 'telegram_chat_id', '123456');
+  await t.api.call('pos:settings:set', adminSession, 'resend_api_key', 're_secret_key');
+  await t.api.call('pos:settings:set', adminSession, 'resend_from_email', 'reminders@example.com');
 
   const cashierSettings = await t.api.call('pos:settings:getAll', cashierSession);
   assert.equal(cashierSettings.telegram_token, '');
   assert.equal(cashierSettings.telegram_chat_id, '');
+  assert.equal(cashierSettings.resend_api_key, '');
+  assert.equal(cashierSettings.resend_from_email, 'reminders@example.com');
   const adminSettings = await t.api.call('pos:settings:getAll', adminSession);
   assert.equal(adminSettings.telegram_token, 'secret-token');
+  assert.equal(adminSettings.resend_api_key, 're_secret_key');
 
   await assert.rejects(() => t.api.call('pos:settings:set', adminSession, 'vat_rate', '-1'), /Invalid value/);
   await assert.rejects(() => t.api.call('pos:settings:set', adminSession, 'receipt_width', '80'), /32 or 48/);
+  await assert.rejects(() => t.api.call('pos:settings:set', adminSession, 'resend_api_key', 'not-a-key'), /invalid/i);
+  await assert.rejects(() => t.api.call('pos:settings:set', adminSession, 'resend_from_email', 'invalid'), /invalid/i);
   await assert.rejects(() => t.api.call('pos:settings:set', adminSession, 'invented_setting', '1'), /Unknown setting/);
   assert.equal(t.api.db.prepare("SELECT value FROM settings WHERE key='vat_rate'").get().value, '12');
   t.api.close();

@@ -22,6 +22,9 @@ test('export/import round-trip restores products, sales, settings', async () => 
   assert.equal(data.app, 'YANKENT POS');
   assert.ok(data.tables.sales.length >= 1);
   assert.equal(data.tables.products.length, beforeProducts);
+  a.db.prepare("INSERT OR REPLACE INTO settings(key,value) VALUES('resend_api_key','re_backup_secret')").run();
+  const redacted = exportAll(a.db);
+  assert.equal(redacted.tables.settings.find((row) => row.key === 'resend_api_key').value, '');
 
   // Restore into a fresh DB (which had its own seed) — should become a's data.
   const b = await freshDb();
