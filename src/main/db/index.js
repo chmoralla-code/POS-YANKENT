@@ -74,6 +74,10 @@ function migrate(db) {
   if (!productCols.some((c) => c.name === 'purchase_source')) {
     db.exec('ALTER TABLE products ADD COLUMN purchase_source TEXT');
   }
+  // Manual original cost (puhunan) for items priced below the fixed margin.
+  if (!productCols.some((c) => c.name === 'margin_original_cost')) {
+    db.exec('ALTER TABLE products ADD COLUMN margin_original_cost REAL');
+  }
 
   // ---- Store info: clear stale defaults on existing databases ----------
   // The bundled DB and fresh-install defaults use "YANKENT POS" + the

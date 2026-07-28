@@ -27,7 +27,7 @@ async function makeSale(api, session, total, method = 'cash') {
   return res;
 }
 
-test('buildReportMessage includes header, today/yesterday/month/year, and footer', async () => {
+test('buildReportMessage includes header, today/yesterday/week/month/year, and footer', async () => {
   const t = await setup();
   const { api, cashierSession } = t;
   await makeSale(api, cashierSession, 560);
@@ -36,6 +36,7 @@ test('buildReportMessage includes header, today/yesterday/month/year, and footer
   assert.ok(msg.includes('VAT included:'), 'report uses the VAT stored on each sale');
   assert.ok(msg.includes('Today:'));
   assert.ok(msg.includes('Yesterday:'));
+  assert.ok(msg.includes('This Week:'));
   assert.ok(msg.includes('This Month:'));
   assert.ok(msg.includes('This Year:'));
   assert.ok(msg.includes('Best Day:'));

@@ -67,6 +67,7 @@ test('margin table generates computed cost and stock gross from live base prices
     retail_value: 1025,
     computed_cost: 930,
     potential_gross_profit: 95,
+    missing_cost_count: 0,
   });
 
   // The result is live, not a saved report snapshot.
@@ -79,22 +80,41 @@ test('margin table generates computed cost and stock gross from live base prices
   t.api.close();
 });
 
-test('margin boundaries use the stored selling price and invalid prices block generation', async () => {
+test('prices below the fixed margin still generate with blank original cost', async () => {
   assert.equal(unitProfitFor(100), 10);
   assert.equal(unitProfitFor(100.01), 15);
   assert.equal(unitProfitFor(200), 15);
   assert.equal(unitProfitFor(200.01), 20);
 
   const t = await setup();
-  t.add({ sku: 'M-LOW', name: 'Too Low', stock: 1, price: 9.99, source: 'Supplier' });
+  const lowId = t.add({ sku: 'M-LOW', name: 'Too Low', stock: 2, price: 9.99, source: 'Supplier' });
   const readiness = await t.api.call('pos:margins:readiness', t.adminSession);
   assert.equal(readiness.eligibleCount, 1);
-  assert.equal(readiness.invalidPriceCount, 1);
-  assert.equal(readiness.canGenerate, false);
-  assert.match(readiness.rows[0].price_error, /at least/i);
+  assert.equal(readiness.manualCostCount, 1);
+  assert.equal(readiness.canGenerate, true);
+  assert.equal(readiness.rows[0].needs_manual_cost, true);
+  assert.equal(readiness.rows[0].computed_cost, null);
+
+  const report = await t.api.call('pos:margins:generate', t.adminSession);
+  assert.equal(report.summary.missing_cost_count, 1);
+  assert.equal(report.rows[0].computed_cost, null);
+  assert.equal(report.rows[0].potential_gross_profit, null);
+
+  const saved = await t.api.call('pos:margins:setOriginalCost', t.adminSession, lowId, 4.5);
+  assert.equal(saved.margin_original_cost, 4.5);
+  assert.equal(saved.row.computed_cost, 4.5);
+  assert.equal(saved.row.unit_profit, 5.49);
+  assert.equal(saved.row.potential_gross_profit, 10.98);
+  assert.equal(saved.row.needs_manual_cost, false);
+
+  const filled = await t.api.call('pos:margins:generate', t.adminSession);
+  assert.equal(filled.summary.missing_cost_count, 0);
+  assert.equal(filled.rows[0].computed_cost, 4.5);
+  assert.equal(filled.summary.potential_gross_profit, 10.98);
+
   await assert.rejects(
-    () => t.api.call('pos:margins:generate', t.adminSession),
-    /invalid selling price/i
+    () => t.api.call('pos:margins:setOriginalCost', t.adminSession, lowId, 20),
+    /lower than the selling price/i
   );
   t.api.close();
 });
@@ -174,6 +194,7 @@ test('margin endpoints are administrator-only', async () => {
     () => t.api.call('pos:margins:generate', t.cashierSession),
     () => t.api.call('pos:margins:setSource', t.cashierSession, productId, 'Other'),
     () => t.api.call('pos:margins:bulkSetSource', t.cashierSession, [productId], 'Other'),
+    () => t.api.call('pos:margins:setOriginalCost', t.cashierSession, productId, 50),
     () => t.api.call('pos:margins:exportExcel', t.cashierSession),
     () => t.api.call('pos:margins:exportPdf', t.cashierSession),
   ]) {

@@ -92,6 +92,7 @@ App.views.analytics = {
       const s = summary || {};
       const today = s.today || { tx: 0, total: 0 };
       const yesterday = s.yesterday || { tx: 0, total: 0 };
+      const week = s.week || { tx: 0, total: 0 };
       const month = s.month || { tx: 0, total: 0 };
       const year = s.year || { tx: 0, total: 0 };
       const best = s.bestDay;
@@ -113,6 +114,11 @@ App.views.analytics = {
           <div class="an-k">Yesterday</div>
           <div class="an-v">${App.ui.money(yesterday.total)}</div>
           <div class="an-sub">${yesterday.tx} transactions</div>
+        </div>
+        <div class="an-card">
+          <div class="an-k">This Week</div>
+          <div class="an-v">${App.ui.money(week.total)}</div>
+          <div class="an-sub">${week.tx} transactions</div>
         </div>
         <div class="an-card">
           <div class="an-k">This Month</div>

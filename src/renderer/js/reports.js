@@ -236,6 +236,11 @@ App.views.reports = {
         <small class="muted">${s.yesterday.tx} transaction${s.yesterday.tx === 1 ? '' : 's'}</small>
       </article>
       <article class="stat report-stat">
+        <div class="k">This Week</div>
+        <div class="v">${App.ui.money(s.week.total)}</div>
+        <small class="muted">${s.week.tx} transaction${s.week.tx === 1 ? '' : 's'}</small>
+      </article>
+      <article class="stat report-stat">
         <div class="k">This Month</div>
         <div class="v">${App.ui.money(s.month.total)}</div>
         <small class="muted">${s.month.tx} transaction${s.month.tx === 1 ? '' : 's'}</small>
@@ -627,6 +632,7 @@ App.views.reports = {
       <body><h1>YANKENT POS — Sales Report</h1><div style="color:#666;font-size:12px">Generated ${new Date().toLocaleString()}</div>
       <p>Today: <b>${App.ui.money(s.today.total)}</b> / ${s.today.tx} transactions<br>
       Yesterday: <b>${App.ui.money(s.yesterday.total)}</b> / ${s.yesterday.tx} transactions<br>
+      This Week: <b>${App.ui.money(s.week.total)}</b> / ${s.week.tx} tx<br>
       This Month: <b>${App.ui.money(s.month.total)}</b> / ${s.month.tx} tx<br>
       This Year: <b>${App.ui.money(s.year.total)}</b> / ${s.year.tx} tx<br>
       Best Day: <b>${s.bestDay ? App.ui.money(s.bestDay.total) + ' (' + s.bestDay.label + ')' : '—'}</b></p>

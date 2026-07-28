@@ -263,6 +263,14 @@ function buildReportMessage(db) {
        AND date(datetime)=date('now','localtime','-1 day')`
   ).get();
 
+  // Calendar week Mon–today (localtime).
+  const week = db.prepare(
+    `SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total FROM sales
+     WHERE status='completed'
+       AND date(datetime) >= date('now','localtime','-' || ((CAST(strftime('%w','now','localtime') AS INTEGER) + 6) % 7) || ' days')
+       AND date(datetime) <= date('now','localtime')`
+  ).get();
+
   const month = db.prepare(
     `SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total,
             COALESCE(SUM(subtotal),0) AS net, COALESCE(SUM(vat),0) AS vat
@@ -295,6 +303,7 @@ function buildReportMessage(db) {
     `📅 Today: ${reportMoney(today.total)} / ${today.tx} transactions`,
     `   Net: ${reportMoney(today.net)} · VAT included: ${reportMoney(today.vat)}`,
     `📆 Yesterday: ${reportMoney(yesterday.total)} / ${yesterday.tx} transactions`,
+    `🗓️ This Week: ${reportMoney(week.total)} / ${week.tx} tx`,
     `📊 This Month: ${reportMoney(month.total)} / ${month.tx} tx`,
     `   Net: ${reportMoney(month.net)} · VAT included: ${reportMoney(month.vat)}`,
     `📈 This Year: ${reportMoney(year.total)} / ${year.tx} tx`,

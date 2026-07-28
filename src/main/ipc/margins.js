@@ -38,10 +38,28 @@ function normalizeProductId(value) {
   return id;
 }
 
+function normalizeOriginalCost(value, sellingPrice) {
+  if (value === '' || value == null) {
+    throw new Error('Enter the original price (puhunan)');
+  }
+  const cost = round2(Number(value));
+  if (!Number.isFinite(cost) || cost < 0) {
+    throw new Error('Original price must be zero or greater');
+  }
+  const price = round2(Number(sellingPrice));
+  if (!Number.isFinite(price) || price <= 0) {
+    throw new Error('Selling price must be greater than zero');
+  }
+  if (cost >= price) {
+    throw new Error('Original price must be lower than the selling price');
+  }
+  return cost;
+}
+
 function eligibleRows(db) {
   return db.prepare(`
     SELECT p.id, p.sku, p.name, p.base_unit AS unit, p.stock,
-           p.purchase_source, p.price AS selling_price
+           p.purchase_source, p.price AS selling_price, p.margin_original_cost
       FROM products p
       JOIN categories c ON c.id = p.category_id
      WHERE c.name = ?
@@ -55,10 +73,40 @@ function eligibleRows(db) {
 function computedRow(row) {
   const price = round2(Number(row.selling_price));
   const stock = Number(row.stock);
-  const unitProfit = unitProfitFor(price);
-  const priceValid = Number.isFinite(price) && price > 0 && price >= unitProfit;
   const source = String(row.purchase_source == null ? '' : row.purchase_source).trim();
-  const computedCost = priceValid ? round2(price - unitProfit) : null;
+  const priceOk = Number.isFinite(price) && price > 0;
+  const autoProfit = priceOk ? unitProfitFor(price) : null;
+  const canAutoCost = priceOk && price >= autoProfit;
+  const rawManual = row.margin_original_cost;
+  const hasManual = rawManual != null && rawManual !== '' && Number.isFinite(Number(rawManual));
+  const manualCost = hasManual ? round2(Number(rawManual)) : null;
+  const manualUsable = hasManual && priceOk && manualCost >= 0 && manualCost < price;
+
+  let computedCost = null;
+  let unitProfit = autoProfit;
+  let needsManualCost = false;
+  let costMode = 'auto';
+
+  if (manualUsable) {
+    // Administrator override (including under-₱10 items and corrections).
+    computedCost = manualCost;
+    unitProfit = round2(price - manualCost);
+    costMode = 'manual';
+    needsManualCost = false;
+  } else if (canAutoCost) {
+    computedCost = round2(price - autoProfit);
+    unitProfit = autoProfit;
+    costMode = 'auto';
+  } else if (priceOk) {
+    // Selling price is below the fixed margin (e.g. under ₱10) — puhunan
+    // must be entered by the administrator after generate.
+    needsManualCost = true;
+    computedCost = null;
+    unitProfit = null;
+    costMode = 'pending';
+  }
+
+  const priceValid = priceOk;
   return {
     id: Number(row.id),
     sku: String(row.sku || ''),
@@ -66,17 +114,19 @@ function computedRow(row) {
     unit: String(row.unit || ''),
     stock,
     purchase_source: source,
-    selling_price: Number.isFinite(price) ? price : null,
+    selling_price: priceOk ? price : null,
     unit_profit: unitProfit,
     computed_cost: computedCost,
-    potential_gross_profit: priceValid ? round2(stock * unitProfit) : null,
+    potential_gross_profit: computedCost != null && unitProfit != null
+      ? round2(stock * unitProfit)
+      : null,
     source_missing: !source,
     price_valid: priceValid,
+    needs_manual_cost: needsManualCost,
+    cost_mode: costMode,
     price_error: priceValid
       ? null
-      : (price <= 0
-        ? 'Selling price must be greater than zero'
-        : `Selling price must be at least ₱${unitProfit.toFixed(2)} for this margin tier`),
+      : 'Selling price must be greater than zero',
   };
 }
 
@@ -85,6 +135,7 @@ function buildReadiness(db) {
   const rows = eligibleRows(db).map(computedRow);
   const missingSourceCount = rows.filter((row) => row.source_missing).length;
   const invalidPriceCount = rows.filter((row) => !row.price_valid).length;
+  const manualCostCount = rows.filter((row) => row.needs_manual_cost).length;
   const completedCount = rows.filter((row) => !row.source_missing && row.price_valid).length;
   return {
     category: CATEGORY_NAME,
@@ -94,6 +145,7 @@ function buildReadiness(db) {
     completedCount,
     missingSourceCount,
     invalidPriceCount,
+    manualCostCount,
     canGenerate: rows.length > 0 && missingSourceCount === 0 && invalidPriceCount === 0,
     rows,
   };
@@ -101,7 +153,7 @@ function buildReadiness(db) {
 
 function assertEligibleProduct(db, id) {
   const row = db.prepare(`
-    SELECT p.id
+    SELECT p.id, p.price
       FROM products p
       JOIN categories c ON c.id = p.category_id
      WHERE p.id = ?
@@ -111,6 +163,7 @@ function assertEligibleProduct(db, id) {
        AND p.stock > 0
   `).get(id, CATEGORY_NAME);
   if (!row) throw new Error('Product is not eligible for the Product Margin Table');
+  return row;
 }
 
 function notReadyError(readiness) {
@@ -137,11 +190,29 @@ function generateTable(db) {
   if (!readiness.canGenerate) throw notReadyError(readiness);
 
   const rows = readiness.rows.map((row) => ({ ...row }));
+  rows.sort((a, b) => {
+    const rank = (row) => {
+      if (row.needs_manual_cost || row.computed_cost == null) return 0;
+      if (row.selling_price != null && row.selling_price < 10) return 1;
+      return 2;
+    };
+    const diff = rank(a) - rank(b);
+    if (diff) return diff;
+    return String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' });
+  });
+
   const summary = rows.reduce((totals, row) => {
     totals.total_stock += row.stock;
-    totals.retail_value += round2(row.stock * row.selling_price);
-    totals.computed_cost += round2(row.stock * row.computed_cost);
-    totals.potential_gross_profit += row.potential_gross_profit;
+    if (row.selling_price != null) {
+      totals.retail_value += round2(row.stock * row.selling_price);
+    }
+    if (row.computed_cost != null) {
+      totals.computed_cost += round2(row.stock * row.computed_cost);
+    }
+    if (row.potential_gross_profit != null) {
+      totals.potential_gross_profit += row.potential_gross_profit;
+    }
+    if (row.needs_manual_cost) totals.missing_cost_count += 1;
     return totals;
   }, {
     item_count: rows.length,
@@ -149,6 +220,7 @@ function generateTable(db) {
     retail_value: 0,
     computed_cost: 0,
     potential_gross_profit: 0,
+    missing_cost_count: 0,
   });
   summary.total_stock = round2(summary.total_stock);
   summary.retail_value = round2(summary.retail_value);
@@ -253,6 +325,19 @@ function register(ipcMain, ctx) {
       for (const id of ids) update.run(source || null, id);
     })();
     return { updated: ids.length, purchase_source: source };
+  });
+
+  guard(ipcMain, 'pos:margins:setOriginalCost', { admin: true }, (_c, productId, value) => {
+    const id = normalizeProductId(productId);
+    const product = assertEligibleProduct(db, id);
+    const cost = normalizeOriginalCost(value, product.price);
+    db.prepare('UPDATE products SET margin_original_cost=? WHERE id=?').run(cost, id);
+    const refreshed = eligibleRows(db).find((entry) => Number(entry.id) === id);
+    return {
+      id,
+      margin_original_cost: cost,
+      row: computedRow(refreshed),
+    };
   });
 
   guard(ipcMain, 'pos:margins:generate', { admin: true }, () => generateTable(db));

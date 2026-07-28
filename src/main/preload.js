@@ -129,6 +129,7 @@ contextBridge.exposeInMainWorld('pos', {
     generate: () => call('pos:margins:generate'),
     exportExcel: () => call('pos:margins:exportExcel'),
     exportPdf: () => call('pos:margins:exportPdf'),
+    setOriginalCost: (productId, cost) => call('pos:margins:setOriginalCost', productId, cost),
   },
 
   // ---- Sales ----

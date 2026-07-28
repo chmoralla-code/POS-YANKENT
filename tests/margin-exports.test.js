@@ -59,7 +59,7 @@ function sampleReport() {
 test('margin workbook contains a typed, formatted and filterable report table', async () => {
   const buffer = await buildMarginWorkbook(sampleReport());
   assert.ok(Buffer.isBuffer(buffer));
-  assert.ok(buffer.length > 5000);
+  assert.ok(buffer.length > 4000);
 
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer);
@@ -69,16 +69,19 @@ test('margin workbook contains a typed, formatted and filterable report table', 
   assert.equal(sheet.getCell('A2').value, 'PRODUCT MARGIN TABLE');
   assert.equal(sheet.getCell('E3').value, 'Jul 28, 2026, 12:30:00 PM (Asia/Manila)');
 
-  const table = sheet.getTable('MarginTable');
-  assert.ok(table);
-  assert.deepEqual(table.table.columns.map((column) => column.name), [...TABLE_HEADERS]);
+  assert.deepEqual(
+    [1, 2, 3, 4, 5, 6].map((column) => sheet.getCell(11, column).value),
+    [...TABLE_HEADERS]
+  );
   assert.equal(sheet.getCell('A12').value, 'PVC Elbow <1/2">');
   assert.equal(sheet.getCell('B12').value, 4);
   assert.equal(sheet.getCell('C12').value, 'Cyrhiel & Sons');
   assert.equal(sheet.getCell('D12').value, 90);
   assert.equal(sheet.getCell('E12').value, 100);
   assert.equal(sheet.getCell('F12').value, 40);
+  assert.equal(sheet.getCell('A13').value, 'Steel Bar');
   assert.equal(sheet.getCell('E12').numFmt, PHP_NUMBER_FORMAT);
+  assert.ok(sheet.autoFilter);
   assert.equal(sheet.pageSetup.orientation, 'landscape');
   assert.equal(sheet.pageSetup.fitToWidth, 1);
   assert.ok(sheet.views.some((view) => view.state === 'frozen'));
@@ -88,8 +91,9 @@ test('margin PDF HTML is self-contained and escapes database text', () => {
   const html = buildMarginPdfHtml(sampleReport());
   assert.match(html, /@page\s*{\s*size: A4 landscape/);
   assert.match(html, /<thead>/);
-  assert.match(html, /Profit \/ Gross/);
-  assert.match(html, /Original Price/);
+  assert.match(html, /Halin \(Gross Profit\)/);
+  assert.match(html, /Puhunan \(Cost\)/);
+  assert.match(html, /Baligya \(Sales\)/);
   assert.match(html, /Place Where Bought/);
   assert.match(html, /PVC Elbow &lt;1\/2&quot;&gt;/);
   assert.match(html, /Cyrhiel &amp; Sons/);

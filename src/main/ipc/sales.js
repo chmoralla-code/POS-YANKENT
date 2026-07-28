@@ -518,6 +518,12 @@ function register(ipcMain, ctx) {
     const yesterday = db.prepare(
       `SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total FROM sales
        WHERE status='completed' AND date(datetime)=date('now','localtime','-1 day')`).get();
+    // Calendar week Mon–today (localtime). %w: 0=Sun … 6=Sat → days since Monday.
+    const week = db.prepare(
+      `SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total FROM sales
+       WHERE status='completed'
+         AND date(datetime) >= date('now','localtime','-' || ((CAST(strftime('%w','now','localtime') AS INTEGER) + 6) % 7) || ' days')
+         AND date(datetime) <= date('now','localtime')`).get();
     const month = db.prepare(
       `SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total FROM sales
        WHERE status='completed' AND strftime('%Y-%m',datetime)=strftime('%Y-%m','now','localtime')`).get();
@@ -532,7 +538,7 @@ function register(ipcMain, ctx) {
       const dt = new Date(best.d + 'T00:00:00');
       bestDay = { date: best.d, label: dt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }), total: best.total };
     }
-    return { today, yesterday, month, year, bestDay };
+    return { today, yesterday, week, month, year, bestDay };
   });
 
   guard(ipcMain, 'pos:reports:bestSelling', { auth: true }, (_c, f = {}) => {

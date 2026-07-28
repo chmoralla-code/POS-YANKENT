@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS products (
   cost               REAL NOT NULL DEFAULT 0,
   price              REAL NOT NULL DEFAULT 0,        -- default unit price
   purchase_source    TEXT,
+  margin_original_cost REAL,             -- manual puhunan when price < fixed margin
   low_stock_threshold REAL NOT NULL DEFAULT 10,
   is_service         INTEGER NOT NULL DEFAULT 0,
   active              INTEGER NOT NULL DEFAULT 1,

@@ -538,6 +538,7 @@ App.views.settings = {
       const txt = `YANKENT POS Sales Report
 Today: ${App.ui.money(s.today.total)} / ${s.today.tx} transactions
 Yesterday: ${App.ui.money(s.yesterday.total)} / ${s.yesterday.tx} transactions
+This Week: ${App.ui.money(s.week.total)} / ${s.week.tx} transactions
 This Month: ${App.ui.money(s.month.total)}
 This Year: ${App.ui.money(s.year.total)}
 Best Day: ${best}`;
