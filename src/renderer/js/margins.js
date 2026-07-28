@@ -1,7 +1,7 @@
 'use strict';
-/* Admin: authoritative margin report for active, in-stock products in the
- * "Newly Added Items" category. Calculations and exports stay in main;
- * this view manages readiness and presents the returned report. */
+/* Admin: simple margin table for active, in-stock "Newly Added Items".
+ * Selling prices already include profit. Original (puhunan) = selling − fixed margin.
+ * Purchase place must be filled before generate. */
 window.App = window.App || {};
 App.views = App.views || {};
 
@@ -36,9 +36,9 @@ App.views.margins = {
       <div class="margin-page">
         <header class="margin-header">
           <div class="margin-heading">
-            <div class="margin-eyebrow">Inventory costing · Newly Added Items</div>
+            <div class="margin-eyebrow">Newly Added Items</div>
             <h2>Generate Margin Table</h2>
-            <p>Prepare purchase sources, then calculate the original cost and potential gross profit of active items currently in stock.</p>
+            <p>Fill where each item was bought, then generate original cost (puhunan) and profit/gross.</p>
           </div>
           <div class="margin-header-actions">
             <button type="button" class="btn btn-sm btn-ghost" id="mRefresh">
@@ -66,15 +66,15 @@ App.views.margins = {
         <div class="margin-scope-note">
           <span class="margin-scope-mark" aria-hidden="true">N</span>
           <div>
-            <strong>Report scope</strong>
-            <span>Active, in-stock products from the <b>Newly Added Items</b> category only. Services and zero-stock items are excluded.</span>
+            <strong>Included items</strong>
+            <span>Active products with stock in <b>Newly Added Items</b> only. Place bought must be filled before generating.</span>
           </div>
         </div>
 
         <section id="mReadiness" aria-live="polite" aria-busy="true">
           <div class="margin-loading">
             <span class="spinner" aria-hidden="true"></span>
-            <div><strong>Checking table readiness</strong><span>Reviewing item prices and purchase sources…</span></div>
+            <div><strong>Checking items</strong><span>Reviewing prices and purchase places…</span></div>
           </div>
         </section>
 
@@ -148,7 +148,7 @@ App.views.margins = {
     if (row && typeof row.priceValid === 'boolean') return row.priceValid;
     const price = this._number(row && (row.selling_price != null ? row.selling_price : row.sellingPrice));
     const profit = this._number(row && (row.unit_profit != null ? row.unit_profit : row.unitProfit));
-    return price > 0 && price > profit;
+    return price > 0 && price >= profit;
   },
 
   _field(row, snake, camel, fallback = '') {
@@ -197,7 +197,7 @@ App.views.margins = {
       region.innerHTML = `
         <div class="margin-loading">
           <span class="spinner" aria-hidden="true"></span>
-          <div><strong>Checking table readiness</strong><span>Reviewing item prices and purchase sources…</span></div>
+          <div><strong>Checking items</strong><span>Reviewing prices and purchase places…</span></div>
         </div>`;
     }
 
@@ -206,14 +206,14 @@ App.views.margins = {
       if (!this._isCurrent(generation)) return;
       this.readiness = data || {};
       this._renderReadiness();
-      this._announce('Product margin readiness check complete.');
+      this._announce('Ready to fill purchase places.');
     } catch (error) {
       if (!this._isCurrent(generation)) return;
-      const message = error && error.message ? error.message : 'Unable to check product margin readiness.';
+      const message = error && error.message ? error.message : 'Unable to check items.';
       region.innerHTML = `
         <div class="margin-error" role="alert">
           <span class="margin-error-mark" aria-hidden="true">!</span>
-          <div><strong>Readiness check failed</strong><p>${App.ui.esc(message)}</p></div>
+          <div><strong>Check failed</strong><p>${App.ui.esc(message)}</p></div>
           <button type="button" class="btn btn-sm btn-ghost" id="mRetry">Try again</button>
         </div>`;
       region.querySelector('#mRetry').addEventListener('click', () => this._loadReadiness());
@@ -244,8 +244,6 @@ App.views.margins = {
       ? data.canGenerate
       : (typeof data.can_generate === 'boolean' ? data.can_generate : eligible > 0 && missing === 0 && invalid === 0);
     const percent = eligible ? Math.min(100, Math.round((completed / eligible) * 100)) : 0;
-    // Keep saved sources editable so a typo, supplier change, or stale value
-    // can be corrected. Rows needing attention stay first in a large catalog.
     const prepRows = [...rows].sort((a, b) => {
       const aNeedsAttention = this._sourceMissing(a) || !this._priceValid(a);
       const bNeedsAttention = this._sourceMissing(b) || !this._priceValid(b);
@@ -259,10 +257,10 @@ App.views.margins = {
       <div class="margin-readiness-top">
         <div class="margin-progress-copy">
           <div class="margin-progress-title">
-            <span>Preparation progress</span>
-            <strong>${App.ui.esc(String(completed))} / ${App.ui.esc(String(eligible))} rows ready</strong>
+            <span>Preparation</span>
+            <strong>${App.ui.esc(String(completed))} / ${App.ui.esc(String(eligible))} ready</strong>
           </div>
-          <div class="margin-progress-track" role="progressbar" aria-label="Table preparation progress"
+          <div class="margin-progress-track" role="progressbar" aria-label="Preparation progress"
             aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}">
             <span style="width:${percent}%"></span>
           </div>
@@ -274,24 +272,24 @@ App.views.margins = {
       </div>
       <p class="margin-generate-hint" id="mGenerateHint">
         ${eligible === 0
-          ? 'No eligible products are currently available in this category.'
+          ? 'No eligible products with stock in this category.'
           : (canGenerate
-            ? 'All required details are complete. Generate the live calculation when ready.'
-            : 'Complete every purchase source and fix invalid selling prices before generating.')}
+            ? 'All purchase places are filled. You can generate the table.'
+            : 'Fill every blank “place where bought” before generating.')}
       </p>
 
-      <div class="margin-readiness-grid" aria-label="Readiness summary">
-        ${this._metric('Eligible items', eligible, 'Active products with stock')}
-        ${this._metric('Ready rows', completed, percent + '% complete', completed === eligible && eligible > 0 ? 'is-ready' : '')}
-        ${this._metric('Missing source', missing, missing ? 'Requires purchase location' : 'All sources complete', missing ? 'needs-attention' : '')}
-        ${this._metric('Price fixes', invalid, invalid ? 'Update in Products & Inventory' : 'All prices usable', invalid ? 'needs-attention' : '')}
+      <div class="margin-readiness-grid" aria-label="Summary">
+        ${this._metric('Items', eligible, 'With stock')}
+        ${this._metric('Ready', completed, percent + '%', completed === eligible && eligible > 0 ? 'is-ready' : '')}
+        ${this._metric('Need place', missing, missing ? 'Fill before generate' : 'All filled', missing ? 'needs-attention' : '')}
+        ${this._metric('Price fixes', invalid, invalid ? 'Fix in Products' : 'OK', invalid ? 'needs-attention' : '')}
       </div>
 
-      <div class="margin-rules" aria-label="Automatic margin rules">
-        <span class="margin-rules-title">Automatic unit profit</span>
-        <span><b>≤ ${App.ui.money(100)}</b> selling price <strong>+${App.ui.money(10)}</strong></span>
-        <span><b>${App.ui.money(100.01)}–${App.ui.money(200)}</b> <strong>+${App.ui.money(15)}</strong></span>
-        <span><b>&gt; ${App.ui.money(200)}</b> <strong>+${App.ui.money(20)}</strong></span>
+      <div class="margin-rules" aria-label="Margin rules">
+        <span class="margin-rules-title">Profit margin (from selling price)</span>
+        <span><b>≤ ${App.ui.money(100)}</b> → profit <strong>${App.ui.money(10)}</strong></span>
+        <span><b>${App.ui.money(100.01)}–${App.ui.money(200)}</b> → profit <strong>${App.ui.money(15)}</strong></span>
+        <span><b>&gt; ${App.ui.money(200)}</b> → profit <strong>${App.ui.money(20)}</strong></span>
       </div>
 
       ${eligible === 0 ? this._emptyReadiness() : ''}
@@ -299,7 +297,7 @@ App.views.margins = {
       ${eligible > 0 && missing === 0 && invalid === 0 ? `
         <div class="margin-ready-banner">
           <span class="margin-ready-mark" aria-hidden="true">✓</span>
-          <div><strong>Everything is ready</strong><p>Every included item has a purchase source and a valid selling price.</p></div>
+          <div><strong>Ready</strong><p>Every item has a purchase place. Generate to compute original prices and profit.</p></div>
         </div>` : ''}`;
 
     const generate = region.querySelector('#mGenerate');
@@ -324,7 +322,7 @@ App.views.margins = {
         <span class="margin-empty-mark" aria-hidden="true">0</span>
         <div>
           <strong>No items to calculate</strong>
-          <p>Add stock to active products under <b>Newly Added Items</b>, then refresh this page.</p>
+          <p>Add stock under <b>Newly Added Items</b>, then refresh.</p>
         </div>
         <button type="button" class="btn btn-sm btn-ghost" id="mOpenProducts">Open Products &amp; Inventory</button>
       </div>`;
@@ -341,22 +339,22 @@ App.views.margins = {
           <div>
             <span class="margin-section-index" aria-hidden="true">01</span>
             <div>
-              <h3 id="mActionTitle">Complete and review purchase sources</h3>
-              <p>${App.ui.esc(String(totalRows))} included item${totalRows === 1 ? '' : 's'}. Blank sources are required; saved sources can be corrected here.</p>
+              <h3 id="mActionTitle">Place where it is bought</h3>
+              <p>Required for every item. Blank rows must be filled before you can generate.</p>
             </div>
           </div>
           ${invalidCount ? `
             <button type="button" class="btn btn-sm btn-ghost" id="mOpenProducts">
-              Fix prices in Products &amp; Inventory →
+              Fix prices in Products →
             </button>` : ''}
         </div>
 
         <div class="margin-bulk-bar">
           <div class="margin-selection-count"><b id="mSelectedCount">${this.selected.size}</b> selected</div>
           <div class="margin-bulk-field">
-            <label class="margin-sr-only" for="mBulkSource">Purchase source for selected items</label>
+            <label class="margin-sr-only" for="mBulkSource">Place bought for selected items</label>
             <input id="mBulkSource" type="text" maxlength="200" list="mSourceSuggestions"
-              placeholder="Purchase source for selected items" autocomplete="off">
+              placeholder="e.g. Wilcon Depot" autocomplete="off">
             <button type="button" class="btn btn-sm btn-primary" id="mBulkApply" ${this.selected.size ? '' : 'disabled'}>
               Apply to selected
             </button>
@@ -374,10 +372,10 @@ App.views.margins = {
                   <input type="checkbox" id="mSelectVisible" aria-label="Select all visible items"
                     ${allSelected ? 'checked' : ''} ${allVisibleSourceIds.length ? '' : 'disabled'}>
                 </th>
-                <th>Item</th>
+                <th>Item name</th>
                 <th class="right">Stock</th>
-                <th class="right">Selling Price</th>
-                <th>Purchase Source</th>
+                <th>Place where it is bought</th>
+                <th class="right">Selling price</th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -388,7 +386,7 @@ App.views.margins = {
         </div>
         ${totalRows > visibleRows.length ? `
           <div class="margin-load-row">
-            <span>Showing ${visibleRows.length} of ${totalRows} included items</span>
+            <span>Showing ${visibleRows.length} of ${totalRows}</span>
             <button type="button" class="btn btn-sm btn-ghost" id="mPrepMore">Load 100 more</button>
           </div>` : ''}
       </section>`;
@@ -398,11 +396,9 @@ App.views.margins = {
     const id = Number(row.id);
     const sourceMissing = this._sourceMissing(row);
     const priceValid = this._priceValid(row);
-    const sku = String(this._field(row, 'sku', 'sku', '')).trim();
-    const unit = String(this._field(row, 'unit', 'unit', '')).trim();
     const stock = this._number(this._field(row, 'stock', 'stock', 0));
     const sellingPrice = this._number(this._field(row, 'selling_price', 'sellingPrice', 0));
-    const priceError = String(this._field(row, 'price_error', 'priceError', 'Selling price must be higher than the assigned margin.'));
+    const priceError = String(this._field(row, 'price_error', 'priceError', 'Selling price must cover the margin.'));
 
     return `
       <tr data-product-id="${id}" class="${!priceValid ? 'has-price-error' : ''}">
@@ -412,22 +408,21 @@ App.views.margins = {
         </td>
         <td>
           <strong class="margin-item-name">${App.ui.esc(this._itemName(row))}</strong>
-          <span class="margin-item-meta">${App.ui.esc([sku, unit].filter(Boolean).join(' · ') || 'Base unit')}</span>
         </td>
         <td class="right margin-number">${App.ui.esc(App.ui.qty(stock))}</td>
-        <td class="right margin-number ${priceValid ? '' : 'margin-price-invalid'}">${App.ui.money(sellingPrice)}</td>
         <td>
           <div class="margin-source-editor">
-            <label class="margin-sr-only" for="mSource-${id}">Purchase source for ${App.ui.esc(this._itemName(row))}</label>
+            <label class="margin-sr-only" for="mSource-${id}">Place bought for ${App.ui.esc(this._itemName(row))}</label>
             <input id="mSource-${id}" class="m-source-input" type="text" maxlength="200"
-              list="mSourceSuggestions" placeholder="e.g. Wilcon Depot"
+              list="mSourceSuggestions" placeholder="Required"
               value="${App.ui.esc(this._source(row))}" autocomplete="off">
             <button type="button" class="btn btn-sm btn-ghost m-source-save" data-id="${id}">${sourceMissing ? 'Save' : 'Update'}</button>
           </div>
         </td>
+        <td class="right margin-number ${priceValid ? '' : 'margin-price-invalid'}">${App.ui.money(sellingPrice)}</td>
         <td>
           <div class="margin-row-status">
-            ${sourceMissing ? '<span class="margin-status-tag is-missing">Source required</span>' : '<span class="margin-status-tag is-ready">Source ready</span>'}
+            ${sourceMissing ? '<span class="margin-status-tag is-missing">Place required</span>' : '<span class="margin-status-tag is-ready">Ready</span>'}
             ${priceValid ? '' : `<span class="margin-status-tag is-invalid" title="${App.ui.esc(priceError)}">Invalid price</span>`}
           </div>
         </td>
@@ -486,7 +481,6 @@ App.views.margins = {
         this._renderReadiness();
       });
     }
-    // Drop selections that no longer correspond to an eligible report row.
     const eligibleIds = new Set(actionRows.map((row) => Number(row.id)));
     [...this.selected].forEach((id) => { if (!eligibleIds.has(id)) this.selected.delete(id); });
     this._syncSelectionControls();
@@ -511,7 +505,7 @@ App.views.margins = {
     const input = this.viewEl && this.viewEl.querySelector('#mSource-' + id);
     const source = input ? input.value.trim() : '';
     if (!source) {
-      App.ui.toast('Enter the place where this item was bought', 'err');
+      App.ui.toast('Enter where this item was bought', 'err');
       if (input) input.focus();
       return;
     }
@@ -521,11 +515,11 @@ App.views.margins = {
     try {
       await App.pos.margins.setSource(id, source);
       if (!this._isCurrent()) return;
-      App.ui.toast('Purchase source saved ✓', 'ok');
+      App.ui.toast('Purchase place saved ✓', 'ok');
       await this._loadReadiness();
     } catch (error) {
       if (!this._isCurrent()) return;
-      App.ui.toast(error.message || 'Could not save purchase source', 'err');
+      App.ui.toast(error.message || 'Could not save purchase place', 'err');
       button.disabled = false;
       button.removeAttribute('aria-busy');
       button.textContent = 'Save';
@@ -541,7 +535,7 @@ App.views.margins = {
       return;
     }
     if (!source) {
-      App.ui.toast('Enter a purchase source for the selected items', 'err');
+      App.ui.toast('Enter a purchase place for the selected items', 'err');
       if (input) input.focus();
       return;
     }
@@ -551,11 +545,11 @@ App.views.margins = {
     try {
       await App.pos.margins.bulkSetSource(ids, source);
       if (!this._isCurrent()) return;
-      App.ui.toast(`Purchase source applied to ${ids.length} item${ids.length === 1 ? '' : 's'} ✓`, 'ok');
+      App.ui.toast(`Purchase place applied to ${ids.length} item${ids.length === 1 ? '' : 's'} ✓`, 'ok');
       await this._loadReadiness();
     } catch (error) {
       if (!this._isCurrent()) return;
-      App.ui.toast(error.message || 'Could not apply purchase source', 'err');
+      App.ui.toast(error.message || 'Could not apply purchase place', 'err');
       button.disabled = false;
       button.removeAttribute('aria-busy');
       button.textContent = 'Apply to selected';
@@ -577,14 +571,13 @@ App.views.margins = {
       this.sourceFilter = 'all';
       this._setReport(report || { rows: [], summary: {} });
       this._renderReport();
-      this._announce('Product margin table generated and ready to download.');
+      this._announce('Margin table generated.');
       App.ui.toast('Margin table generated ✓', 'ok');
       const reportRegion = this.viewEl.querySelector('#mReport');
       if (reportRegion) reportRegion.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (error) {
       if (!this._isCurrent(generation)) return;
       App.ui.toast(error.message || 'Could not generate the margin table', 'err');
-      // Re-check because prices or stock may have changed after readiness.
       await this._loadReadiness();
     } finally {
       if (!this._isCurrent(generation)) return;
@@ -609,36 +602,31 @@ App.views.margins = {
 
     reportRegion.hidden = false;
     reportRegion.innerHTML = `
-      <div class="margin-report-divider" aria-hidden="true"><span>Generated report</span></div>
+      <div class="margin-report-divider" aria-hidden="true"><span>Generated table</span></div>
       <header class="margin-report-head">
         <div>
           <span class="margin-section-index" aria-hidden="true">02</span>
           <div>
-            <h3>Calculated inventory margin</h3>
-            <p>${generatedAt ? `Generated ${App.ui.esc(App.ui.fmtDate(generatedAt))}` : 'Generated from the latest saved product data'} · ${rows.length} product${rows.length === 1 ? '' : 's'}</p>
+            <h3>Margin table</h3>
+            <p>${generatedAt ? `Generated ${App.ui.esc(App.ui.fmtDate(generatedAt))}` : 'From current product prices'} · ${rows.length} item${rows.length === 1 ? '' : 's'}</p>
           </div>
         </div>
         <span class="margin-live-badge"><i aria-hidden="true"></i> Ready to download</span>
       </header>
 
-      <div class="margin-summary-grid" aria-label="Margin table totals">
+      <div class="margin-summary-grid" aria-label="Totals">
         <div class="margin-summary-card">
-          <span>Included inventory</span>
-          <strong>${App.ui.esc(String(this._summaryValue(summary, 'item_count', 'itemCount', rows.length)))}</strong>
-          <small>${App.ui.esc(App.ui.qty(this._summaryValue(summary, 'total_stock', 'totalStock', rows.reduce((sum, row) => sum + this._number(row.stock), 0))))} total stock units</small>
-        </div>
-        <div class="margin-summary-card">
-          <span>Computed inventory cost</span>
+          <span>Total Puhunan (Original)</span>
           <strong>${App.ui.money(this._summaryValue(summary, 'computed_cost', 'computedCost', 0))}</strong>
-          <small>Estimated original cost of current stock</small>
+          <small>Computed original cost of stock</small>
         </div>
         <div class="margin-summary-card">
-          <span>Retail value</span>
+          <span>Total Baligya (Selling)</span>
           <strong>${App.ui.money(this._summaryValue(summary, 'retail_value', 'retailValue', 0))}</strong>
-          <small>Current stock at selling price</small>
+          <small>Current stock × selling price</small>
         </div>
         <div class="margin-summary-card is-gross">
-          <span>Potential gross profit</span>
+          <span>Total Halin (Profit / Gross)</span>
           <strong>${App.ui.money(this._summaryValue(summary, 'potential_gross_profit', 'potentialGrossProfit', 0))}</strong>
           <small>If all included stock is sold</small>
         </div>
@@ -646,15 +634,15 @@ App.views.margins = {
 
       <div class="margin-report-tools">
         <div class="margin-search-field">
-          <label class="margin-sr-only" for="mReportSearch">Search generated table</label>
+          <label class="margin-sr-only" for="mReportSearch">Search table</label>
           <span aria-hidden="true">⌕</span>
           <input type="search" id="mReportSearch" value="${App.ui.esc(this.search)}"
-            placeholder="Search item, SKU, unit, or source…">
+            placeholder="Search item or place bought…">
         </div>
         <div class="margin-filter-field">
-          <label for="mSourceFilter">Purchase source</label>
+          <label for="mSourceFilter">Place bought</label>
           <select id="mSourceFilter">
-            <option value="all">All purchase sources</option>
+            <option value="all">All places</option>
             ${sources.map((source) => `<option value="${App.ui.esc(source)}" ${source === this.sourceFilter ? 'selected' : ''}>${App.ui.esc(source)}</option>`).join('')}
           </select>
         </div>
@@ -666,14 +654,12 @@ App.views.margins = {
           <table class="margin-table margin-result-table">
             <thead>
               <tr>
-                <th>Item Name</th>
-                <th>Unit</th>
+                <th>Item name</th>
                 <th class="right">Stock</th>
-                <th>Purchase Source</th>
-                <th class="right">Original Cost (Computed)</th>
-                <th class="right">Selling Price</th>
-                <th class="right">Unit Profit</th>
-                <th class="right">Potential Gross</th>
+                <th>Place where it is bought</th>
+                <th class="right">Original price</th>
+                <th class="right">Selling price</th>
+                <th class="right">Profit / Gross</th>
               </tr>
             </thead>
             <tbody id="mTableBody"></tbody>
@@ -682,7 +668,7 @@ App.views.margins = {
         <div id="mTableFooter"></div>
       </div>
       <p class="margin-report-footnote">
-        Original cost is computed from the selling price minus the assigned fixed margin. Potential gross profit is stock × unit profit; it is not realized sales profit and does not deduct VAT or operating expenses.
+        Original price (puhunan) = selling price − profit margin (₱10 / ₱15 / ₱20). Profit / Gross = stock × unit profit. This is not yet net of expenses.
       </p>`;
 
     const search = reportRegion.querySelector('#mReportSearch');
@@ -718,7 +704,6 @@ App.views.margins = {
       const haystack = [
         this._itemName(row),
         this._field(row, 'sku', 'sku', ''),
-        this._field(row, 'unit', 'unit', ''),
         source,
       ].join(' ').toLocaleLowerCase();
       return haystack.includes(query);
@@ -738,10 +723,10 @@ App.views.margins = {
 
     if (!visible.length) {
       body.innerHTML = `
-        <tr><td colspan="8">
+        <tr><td colspan="6">
           <div class="margin-table-empty">
             <strong>No matching items</strong>
-            <span>Try a different search or purchase source.</span>
+            <span>Try a different search or place.</span>
           </div>
         </td></tr>`;
     } else {
@@ -749,25 +734,22 @@ App.views.margins = {
         <tr>
           <td>
             <strong class="margin-item-name">${App.ui.esc(this._itemName(row))}</strong>
-            ${this._field(row, 'sku', 'sku', '') ? `<span class="margin-item-meta">${App.ui.esc(this._field(row, 'sku', 'sku', ''))}</span>` : ''}
           </td>
-          <td>${App.ui.esc(this._field(row, 'unit', 'unit', '—'))}</td>
           <td class="right margin-number">${App.ui.esc(App.ui.qty(this._number(this._field(row, 'stock', 'stock', 0))))}</td>
           <td><span class="margin-source-value">${App.ui.esc(this._source(row) || '—')}</span></td>
           <td class="right margin-number">${App.ui.money(this._field(row, 'computed_cost', 'computedCost', 0))}</td>
           <td class="right margin-number">${App.ui.money(this._field(row, 'selling_price', 'sellingPrice', 0))}</td>
-          <td class="right margin-number margin-unit-profit">+${App.ui.money(this._field(row, 'unit_profit', 'unitProfit', 0))}</td>
           <td class="right margin-number margin-gross">${App.ui.money(this._field(row, 'potential_gross_profit', 'potentialGrossProfit', 0))}</td>
         </tr>`).join('');
     }
 
     footer.innerHTML = filtered.length > visible.length ? `
       <div class="margin-load-row">
-        <span>Showing ${visible.length} of ${filtered.length} matching items</span>
+        <span>Showing ${visible.length} of ${filtered.length}</span>
         <button type="button" class="btn btn-sm btn-ghost" id="mReportMore">Load 100 more</button>
       </div>` : `
       <div class="margin-load-row is-complete">
-        <span>${filtered.length ? `All ${filtered.length} matching items are shown` : 'No rows to display'}</span>
+        <span>${filtered.length ? `All ${filtered.length} items shown` : 'No rows'}</span>
       </div>`;
     const more = footer.querySelector('#mReportMore');
     if (more) {

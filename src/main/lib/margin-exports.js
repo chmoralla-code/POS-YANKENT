@@ -4,14 +4,13 @@ const ExcelJS = require('exceljs');
 
 const TABLE_HEADERS = Object.freeze([
   'Item Name',
-  'Unit',
   'Stock',
-  'Purchase Source',
-  'Original Cost (Computed)',
+  'Place Where Bought',
+  'Original Price',
   'Selling Price',
-  'Unit Profit',
-  'Potential Gross Profit',
+  'Profit / Gross',
 ]);
+const TABLE_COL_COUNT = TABLE_HEADERS.length;
 
 const PHP_NUMBER_FORMAT = '"₱"#,##0.00;-"₱"#,##0.00';
 const QUANTITY_NUMBER_FORMAT = '#,##0.##';
@@ -243,22 +242,22 @@ function styleRange(worksheet, row, fromColumn, toColumn, style) {
 
 function setMetadataRow(worksheet, report) {
   worksheet.getCell('A3').value = 'CATEGORY';
-  worksheet.mergeCells('B3:D3');
+  worksheet.mergeCells('B3:C3');
   worksheet.getCell('B3').value = report.category;
-  worksheet.getCell('E3').value = 'GENERATED';
-  worksheet.mergeCells('F3:H3');
+  worksheet.getCell('D3').value = 'GENERATED';
+  worksheet.mergeCells('E3:F3');
   // Excel date serials have no timezone. Write the explicit Manila-local
   // display text so a UTC ISO timestamp cannot appear eight hours early.
-  worksheet.getCell('F3').value = formatGeneratedAt(report.generatedAt);
+  worksheet.getCell('E3').value = formatGeneratedAt(report.generatedAt);
 
-  for (const labelAddress of ['A3', 'E3']) {
+  for (const labelAddress of ['A3', 'D3']) {
     const label = worksheet.getCell(labelAddress);
     label.fill = solidFill(COLORS.panel);
     label.font = { name: 'Arial', size: 9, bold: true, color: { argb: COLORS.ink } };
     label.alignment = { vertical: 'middle', horizontal: 'left' };
     label.border = thinBorder();
   }
-  for (const valueAddress of ['B3', 'F3']) {
+  for (const valueAddress of ['B3', 'E3']) {
     const value = worksheet.getCell(valueAddress);
     value.font = { name: 'Arial', size: 9, color: { argb: COLORS.ink } };
     value.alignment = { vertical: 'middle', horizontal: 'left' };
@@ -268,11 +267,11 @@ function setMetadataRow(worksheet, report) {
 
 function setRulesAndSummary(worksheet, report, firstDetailRow, detailRowCount) {
   const sectionHeaderRow = firstDetailRow - 1;
-  worksheet.mergeCells(sectionHeaderRow, 1, sectionHeaderRow, 4);
+  worksheet.mergeCells(sectionHeaderRow, 1, sectionHeaderRow, 3);
   worksheet.getCell(sectionHeaderRow, 1).value = 'MARGIN RULES';
-  worksheet.mergeCells(sectionHeaderRow, 5, sectionHeaderRow, 8);
-  worksheet.getCell(sectionHeaderRow, 5).value = 'INVENTORY SUMMARY';
-  styleRange(worksheet, sectionHeaderRow, 1, 8, {
+  worksheet.mergeCells(sectionHeaderRow, 4, sectionHeaderRow, TABLE_COL_COUNT);
+  worksheet.getCell(sectionHeaderRow, 4).value = 'SUMMARY';
+  styleRange(worksheet, sectionHeaderRow, 1, TABLE_COL_COUNT, {
     fill: solidFill(COLORS.graphite),
     font: { name: 'Arial', size: 10, bold: true, color: { argb: COLORS.paper } },
     alignment: { vertical: 'middle', horizontal: 'left' },
@@ -283,7 +282,7 @@ function setRulesAndSummary(worksheet, report, firstDetailRow, detailRowCount) {
   for (let offset = 0; offset < detailRowCount; offset += 1) {
     const rowNumber = firstDetailRow + offset;
     worksheet.getRow(rowNumber).height = 22;
-    styleRange(worksheet, rowNumber, 1, 8, {
+    styleRange(worksheet, rowNumber, 1, TABLE_COL_COUNT, {
       fill: solidFill(offset % 2 ? COLORS.softPanel : COLORS.panel),
       font: { name: 'Arial', size: 9, color: { argb: COLORS.ink } },
       alignment: { vertical: 'middle', horizontal: 'left' },
@@ -294,23 +293,23 @@ function setRulesAndSummary(worksheet, report, firstDetailRow, detailRowCount) {
   if (report.rules.length) {
     report.rules.forEach((rule, index) => {
       const rowNumber = firstDetailRow + index;
-      worksheet.mergeCells(rowNumber, 1, rowNumber, 3);
+      worksheet.mergeCells(rowNumber, 1, rowNumber, 2);
       worksheet.getCell(rowNumber, 1).value = describeMarginRule(rule);
-      worksheet.getCell(rowNumber, 4).value = rule.unit_profit;
-      worksheet.getCell(rowNumber, 4).numFmt = PHP_NUMBER_FORMAT;
-      worksheet.getCell(rowNumber, 4).font = {
+      worksheet.getCell(rowNumber, 3).value = rule.unit_profit;
+      worksheet.getCell(rowNumber, 3).numFmt = PHP_NUMBER_FORMAT;
+      worksheet.getCell(rowNumber, 3).font = {
         name: 'Arial',
         size: 9,
         bold: true,
         color: { argb: COLORS.ink },
       };
-      worksheet.getCell(rowNumber, 4).alignment = {
+      worksheet.getCell(rowNumber, 3).alignment = {
         vertical: 'middle',
         horizontal: 'right',
       };
     });
   } else {
-    worksheet.mergeCells(firstDetailRow, 1, firstDetailRow, 4);
+    worksheet.mergeCells(firstDetailRow, 1, firstDetailRow, 3);
     worksheet.getCell(firstDetailRow, 1).value = 'No margin rules supplied';
     worksheet.getCell(firstDetailRow, 1).font = {
       name: 'Arial',
@@ -321,65 +320,35 @@ function setRulesAndSummary(worksheet, report, firstDetailRow, detailRowCount) {
   }
 
   const summary = report.summary;
-  const pairedSummaryRows = [
-    [
-      { label: 'Item Count', value: summary.item_count, format: '#,##0' },
-      { label: 'Total Stock', value: summary.total_stock, format: QUANTITY_NUMBER_FORMAT },
-    ],
-    [
-      { label: 'Retail Value', value: summary.retail_value, format: PHP_NUMBER_FORMAT },
-      { label: 'Computed Cost', value: summary.computed_cost, format: PHP_NUMBER_FORMAT },
-    ],
+  const summaryRows = [
+    { label: 'Total Puhunan (Original)', value: summary.computed_cost, format: PHP_NUMBER_FORMAT },
+    { label: 'Total Baligya (Selling)', value: summary.retail_value, format: PHP_NUMBER_FORMAT },
+    { label: 'Total Halin (Profit / Gross)', value: summary.potential_gross_profit, format: PHP_NUMBER_FORMAT },
   ];
 
-  pairedSummaryRows.forEach((pair, rowOffset) => {
+  summaryRows.forEach((entry, rowOffset) => {
     const rowNumber = firstDetailRow + rowOffset;
-    pair.forEach((entry, pairIndex) => {
-      const labelColumn = pairIndex === 0 ? 5 : 7;
-      const valueColumn = labelColumn + 1;
-      worksheet.getCell(rowNumber, labelColumn).value = entry.label;
-      worksheet.getCell(rowNumber, labelColumn).font = {
-        name: 'Arial',
-        size: 8,
-        bold: true,
-        color: { argb: COLORS.muted },
-      };
-      worksheet.getCell(rowNumber, valueColumn).value = entry.value;
-      worksheet.getCell(rowNumber, valueColumn).numFmt = entry.format;
-      worksheet.getCell(rowNumber, valueColumn).font = {
-        name: 'Arial',
-        size: 10,
-        bold: true,
-        color: { argb: COLORS.ink },
-      };
-      worksheet.getCell(rowNumber, valueColumn).alignment = {
-        vertical: 'middle',
-        horizontal: 'right',
-      };
-    });
+    worksheet.mergeCells(rowNumber, 4, rowNumber, 5);
+    worksheet.getCell(rowNumber, 4).value = entry.label;
+    worksheet.getCell(rowNumber, 4).font = {
+      name: 'Arial',
+      size: 8,
+      bold: true,
+      color: { argb: COLORS.muted },
+    };
+    worksheet.getCell(rowNumber, 6).value = entry.value;
+    worksheet.getCell(rowNumber, 6).numFmt = entry.format;
+    worksheet.getCell(rowNumber, 6).font = {
+      name: 'Arial',
+      size: rowOffset === 2 ? 11 : 10,
+      bold: true,
+      color: { argb: COLORS.ink },
+    };
+    worksheet.getCell(rowNumber, 6).alignment = {
+      vertical: 'middle',
+      horizontal: 'right',
+    };
   });
-
-  const grossRow = firstDetailRow + 2;
-  worksheet.mergeCells(grossRow, 5, grossRow, 7);
-  worksheet.getCell(grossRow, 5).value = 'Potential Gross Profit';
-  worksheet.getCell(grossRow, 5).font = {
-    name: 'Arial',
-    size: 9,
-    bold: true,
-    color: { argb: COLORS.ink },
-  };
-  worksheet.getCell(grossRow, 8).value = summary.potential_gross_profit;
-  worksheet.getCell(grossRow, 8).numFmt = PHP_NUMBER_FORMAT;
-  worksheet.getCell(grossRow, 8).font = {
-    name: 'Arial',
-    size: 11,
-    bold: true,
-    color: { argb: COLORS.ink },
-  };
-  worksheet.getCell(grossRow, 8).alignment = {
-    vertical: 'middle',
-    horizontal: 'right',
-  };
 }
 
 function setTableStyles(worksheet, tableHeaderRow, dataRowCount) {
@@ -402,16 +371,14 @@ function setTableStyles(worksheet, tableHeaderRow, dataRowCount) {
       cell.border = {
         bottom: { style: 'thin', color: { argb: COLORS.softLine } },
       };
-      if (column === 3 || column >= 5) {
+      if (column === 2 || column >= 4) {
         cell.alignment = { vertical: 'middle', horizontal: 'right' };
-      } else if (column === 2) {
-        cell.alignment = { vertical: 'middle', horizontal: 'center' };
       } else {
         cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
       }
     });
-    row.getCell(3).numFmt = QUANTITY_NUMBER_FORMAT;
-    for (const column of [5, 6, 7, 8]) {
+    row.getCell(2).numFmt = QUANTITY_NUMBER_FORMAT;
+    for (const column of [4, 5, 6]) {
       row.getCell(column).numFmt = PHP_NUMBER_FORMAT;
     }
   }
@@ -440,28 +407,26 @@ async function buildMarginWorkbook(reportInput) {
   });
   worksheet.views = [{ state: 'normal', showGridLines: false }];
   worksheet.columns = [
-    { key: 'name', width: 30 },
-    { key: 'unit', width: 12 },
+    { key: 'name', width: 32 },
     { key: 'stock', width: 12 },
     { key: 'source', width: 28 },
     { key: 'cost', width: 16 },
     { key: 'price', width: 16 },
-    { key: 'profit', width: 14 },
-    { key: 'gross', width: 22 },
+    { key: 'gross', width: 16 },
   ];
 
-  worksheet.mergeCells('A1:H1');
+  worksheet.mergeCells(`A1:F1`);
   worksheet.getCell('A1').value = 'YANKENT POS';
-  styleRange(worksheet, 1, 1, 8, {
+  styleRange(worksheet, 1, 1, TABLE_COL_COUNT, {
     fill: solidFill(COLORS.ink),
     font: { name: 'Arial', size: 11, bold: true, color: { argb: COLORS.paper } },
     alignment: { vertical: 'middle', horizontal: 'left' },
   });
   worksheet.getRow(1).height = 24;
 
-  worksheet.mergeCells('A2:H2');
+  worksheet.mergeCells(`A2:F2`);
   worksheet.getCell('A2').value = 'PRODUCT MARGIN TABLE';
-  styleRange(worksheet, 2, 1, 8, {
+  styleRange(worksheet, 2, 1, TABLE_COL_COUNT, {
     fill: solidFill(COLORS.ink),
     font: { name: 'Arial', size: 21, bold: true, color: { argb: COLORS.paper } },
     alignment: { vertical: 'middle', horizontal: 'left' },
@@ -479,9 +444,9 @@ async function buildMarginWorkbook(reportInput) {
   setRulesAndSummary(worksheet, report, firstDetailRow, detailRowCount);
 
   const noteRow = firstDetailRow + detailRowCount + 1;
-  worksheet.mergeCells(noteRow, 1, noteRow, 8);
+  worksheet.mergeCells(noteRow, 1, noteRow, TABLE_COL_COUNT);
   worksheet.getCell(noteRow, 1).value =
-    'Original Cost = Selling Price - Unit Profit | Potential Gross Profit = Stock x Unit Profit';
+    'Original Price (Puhunan) = Selling Price - Profit Margin | Profit / Gross = Stock x Unit Profit';
   worksheet.getCell(noteRow, 1).font = {
     name: 'Arial',
     size: 9,
@@ -500,12 +465,10 @@ async function buildMarginWorkbook(reportInput) {
   const tableHeaderRow = noteRow + 1;
   const tableRows = report.rows.map((row) => [
     row.name,
-    row.unit,
     row.stock,
     row.purchase_source,
     row.computed_cost,
     row.selling_price,
-    row.unit_profit,
     row.potential_gross_profit,
   ]);
 
@@ -530,7 +493,7 @@ async function buildMarginWorkbook(reportInput) {
     worksheet.getRow(tableHeaderRow).values = TABLE_HEADERS;
     worksheet.autoFilter = {
       from: { row: tableHeaderRow, column: 1 },
-      to: { row: tableHeaderRow, column: 8 },
+      to: { row: tableHeaderRow, column: TABLE_COL_COUNT },
     };
   }
 
@@ -559,7 +522,7 @@ async function buildMarginWorkbook(reportInput) {
       header: 0.2,
       footer: 0.2,
     },
-    printArea: `A1:H${finalRow}`,
+    printArea: `A1:F${finalRow}`,
     printTitlesRow: `${tableHeaderRow}:${tableHeaderRow}`,
   };
   worksheet.headerFooter.oddHeader = '&LYANKENT POS&CProduct Margin Table&R&D';
@@ -594,15 +557,13 @@ function buildMarginPdfHtml(reportInput) {
     ? report.rows.map((row) => `
           <tr>
             <td class="item">${escapeHtml(row.name)}</td>
-            <td class="unit">${escapeHtml(row.unit)}</td>
             <td class="number">${escapeHtml(formatQuantity(row.stock))}</td>
             <td>${escapeHtml(row.purchase_source)}</td>
             <td class="money">${escapeHtml(formatPhp(row.computed_cost))}</td>
             <td class="money">${escapeHtml(formatPhp(row.selling_price))}</td>
-            <td class="money">${escapeHtml(formatPhp(row.unit_profit))}</td>
             <td class="money strong">${escapeHtml(formatPhp(row.potential_gross_profit))}</td>
           </tr>`).join('')
-    : '<tr class="empty"><td colspan="8">No eligible products were included.</td></tr>';
+    : '<tr class="empty"><td colspan="6">No eligible products were included.</td></tr>';
 
   return `<!doctype html>
 <html lang="en">
@@ -768,14 +729,12 @@ function buildMarginPdfHtml(reportInput) {
       table-layout: fixed;
       font-size: 8.4px;
     }
-    col.item-col { width: 24%; }
-    col.unit-col { width: 7%; }
-    col.stock-col { width: 7%; }
-    col.source-col { width: 20%; }
-    col.cost-col { width: 10%; }
-    col.price-col { width: 10%; }
-    col.profit-col { width: 9%; }
-    col.gross-col { width: 13%; }
+    col.item-col { width: 28%; }
+    col.stock-col { width: 10%; }
+    col.source-col { width: 22%; }
+    col.cost-col { width: 13%; }
+    col.price-col { width: 13%; }
+    col.gross-col { width: 14%; }
     thead {
       display: table-header-group;
     }
@@ -875,26 +834,18 @@ function buildMarginPdfHtml(reportInput) {
       </div>
     </div>
     <div class="panel">
-      <h2 class="panel-title">Inventory Summary</h2>
+      <h2 class="panel-title">Summary</h2>
       <div class="kpis">
         <div class="kpi">
-          <span class="kpi-label">Item Count</span>
-          <span class="kpi-value">${escapeHtml(formatQuantity(report.summary.item_count))}</span>
-        </div>
-        <div class="kpi">
-          <span class="kpi-label">Total Stock</span>
-          <span class="kpi-value">${escapeHtml(formatQuantity(report.summary.total_stock))}</span>
-        </div>
-        <div class="kpi">
-          <span class="kpi-label">Retail Value</span>
-          <span class="kpi-value">${escapeHtml(formatPhp(report.summary.retail_value))}</span>
-        </div>
-        <div class="kpi">
-          <span class="kpi-label">Computed Inventory Cost</span>
+          <span class="kpi-label">Total Puhunan (Original)</span>
           <span class="kpi-value">${escapeHtml(formatPhp(report.summary.computed_cost))}</span>
         </div>
         <div class="kpi">
-          <span class="kpi-label">Potential Gross Profit</span>
+          <span class="kpi-label">Total Baligya (Selling)</span>
+          <span class="kpi-value">${escapeHtml(formatPhp(report.summary.retail_value))}</span>
+        </div>
+        <div class="kpi">
+          <span class="kpi-label">Total Halin (Profit / Gross)</span>
           <span class="kpi-value">${escapeHtml(formatPhp(report.summary.potential_gross_profit))}</span>
         </div>
       </div>
@@ -902,30 +853,26 @@ function buildMarginPdfHtml(reportInput) {
   </section>
 
   <p class="formula-note">
-    Original Cost = Selling Price - Unit Profit | Potential Gross Profit = Stock x Unit Profit
+    Original Price (Puhunan) = Selling Price − Profit Margin | Profit / Gross = Stock × Unit Profit
   </p>
 
   <table aria-label="Product margin table">
     <colgroup>
       <col class="item-col">
-      <col class="unit-col">
       <col class="stock-col">
       <col class="source-col">
       <col class="cost-col">
       <col class="price-col">
-      <col class="profit-col">
       <col class="gross-col">
     </colgroup>
     <thead>
       <tr>
         <th>Item Name</th>
-        <th>Unit</th>
         <th class="number">Stock</th>
-        <th>Purchase Source</th>
-        <th class="money">Original Cost (Computed)</th>
+        <th>Place Where Bought</th>
+        <th class="money">Original Price</th>
         <th class="money">Selling Price</th>
-        <th class="money">Unit Profit</th>
-        <th class="money">Potential Gross Profit</th>
+        <th class="money">Profit / Gross</th>
       </tr>
     </thead>
     <tbody>${rows}

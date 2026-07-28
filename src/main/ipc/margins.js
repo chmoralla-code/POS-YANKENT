@@ -120,7 +120,7 @@ function notReadyError(readiness) {
   } else {
     const issues = [];
     if (readiness.missingSourceCount) {
-      issues.push(`${readiness.missingSourceCount} purchase source${readiness.missingSourceCount === 1 ? '' : 's'}`);
+      issues.push(`${readiness.missingSourceCount} purchase place${readiness.missingSourceCount === 1 ? '' : 's'}`);
     }
     if (readiness.invalidPriceCount) {
       issues.push(`${readiness.invalidPriceCount} invalid selling price${readiness.invalidPriceCount === 1 ? '' : 's'}`);
