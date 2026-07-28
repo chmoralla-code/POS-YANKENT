@@ -121,6 +121,16 @@ contextBridge.exposeInMainWorld('pos', {
     movements: (id) => call('pos:products:movements', id),
   },
 
+  // ---- Product Margin Table (admin) ----
+  margins: {
+    readiness: () => call('pos:margins:readiness'),
+    setSource: (productId, source) => call('pos:margins:setSource', productId, source),
+    bulkSetSource: (productIds, source) => call('pos:margins:bulkSetSource', productIds, source),
+    generate: () => call('pos:margins:generate'),
+    exportExcel: () => call('pos:margins:exportExcel'),
+    exportPdf: () => call('pos:margins:exportPdf'),
+  },
+
   // ---- Sales ----
   sales: {
     create: (p) => call('pos:sales:create', p),

@@ -13,7 +13,7 @@
 const { preserveImportedCreditDifferences } = require('./lib/loans');
 const { assertLoanReminderRunIdle } = require('./lib/loan-reminders');
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 const LEGACY_TABLES = [
   'users', 'categories', 'products', 'product_units', 'customers',
   'sales', 'sale_items', 'refunds', 'stock_movements', 'settings',
@@ -73,6 +73,11 @@ function validateBackup(data) {
   }
   if (version >= 3 && !Array.isArray(data.tables.loan_email_reminders)) {
     throw new Error('Backup missing table: loan_email_reminders');
+  }
+  if (version >= 4 && data.tables.products.some((row) =>
+    !row || !Object.prototype.hasOwnProperty.call(row, 'purchase_source')
+  )) {
+    throw new Error('Backup products are missing purchase_source');
   }
   return version;
 }

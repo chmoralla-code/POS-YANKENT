@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS products (
   stock              REAL NOT NULL DEFAULT 0,
   cost               REAL NOT NULL DEFAULT 0,
   price              REAL NOT NULL DEFAULT 0,        -- default unit price
+  purchase_source    TEXT,
   low_stock_threshold REAL NOT NULL DEFAULT 10,
   is_service         INTEGER NOT NULL DEFAULT 0,
   active              INTEGER NOT NULL DEFAULT 1,

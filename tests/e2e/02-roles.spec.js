@@ -21,6 +21,8 @@ test.describe('Role-Based Access', () => {
       // Admin items hidden
       await expect(page.locator('.nav-item[data-view="users"]')).toHaveClass(/hidden/);
       await expect(page.locator('.nav-item[data-view="reports"]')).toHaveClass(/hidden/);
+      await expect(page.locator('.nav-item[data-view="earnings"]')).toHaveClass(/hidden/);
+      await expect(page.locator('.nav-item[data-view="margins"]')).toHaveClass(/hidden/);
       await expect(page.locator('.nav-item[data-view="settings"]')).toHaveClass(/hidden/);
     } finally { await electron.close(); }
   });
@@ -29,13 +31,26 @@ test.describe('Role-Based Access', () => {
     const { electron, page } = await launchApp();
     try {
       await login(page, 'admin', 'admin123');
-      for (const v of ['pos', 'analytics', 'products', 'users', 'reports', 'settings']) {
+      for (const v of ['pos', 'analytics', 'products', 'users', 'reports', 'earnings', 'margins', 'settings']) {
         const el = page.locator(`.nav-item[data-view="${v}"]`);
         await expect(el).toBeVisible();
         await expect(el).not.toHaveClass(/hidden/);
       }
+      await expect(page.locator('.nav-item[data-view="earnings"] .nav-label')).toHaveText('Expenses vs Earnings');
+      await expect(page.locator('.nav-item[data-view="margins"] .nav-label')).toHaveText('Generate Margin Table');
       await expect(page.getByText('Administration', { exact: true })).toBeVisible();
       await expect(page.locator('#navRole')).toHaveText('Administrator');
+
+      // The paid earnings page remains intact and the margin feature is a
+      // separate page beside it.
+      await page.locator('.nav-item[data-view="earnings"]').click();
+      await expect(page.locator('#viewTitle')).toHaveText('Expenses vs Earnings');
+      await expect(page.locator('#view h2')).toHaveText('Expenses vs Earnings');
+      await page.locator('.nav-item[data-view="margins"]').click();
+      await expect(page.locator('#viewTitle')).toHaveText('Generate Margin Table');
+      await expect(page.locator('#view h2')).toHaveText('Generate Margin Table');
+      await expect(page.locator('#mReadiness')).toHaveAttribute('aria-busy', 'false');
+      await expect(page.locator('#mDownloadBtn')).toBeDisabled();
     } finally { await electron.close(); }
   });
 

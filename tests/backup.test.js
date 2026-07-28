@@ -3,10 +3,13 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { freshDb } = require('./dbutil');
-const { exportAll, importAll } = require('../src/main/backup');
+const { exportAll, importAll, SCHEMA_VERSION } = require('../src/main/backup');
 
 test('export/import round-trip restores products, sales, settings', async () => {
   const a = await freshDb();
+  const sourceProduct = a.db.prepare('SELECT id FROM products ORDER BY id LIMIT 1').get();
+  a.db.prepare('UPDATE products SET purchase_source=? WHERE id=?')
+    .run('Tagbilaran Wholesale', sourceProduct.id);
   // Insert a representative sale (numbers match money.test.js: total 614)
   const saleCols = ['txn_id','seq','datetime','cashier_id','cashier_name','customer_name','subtotal','vat','discount','delivery_fee','total','payment_method','amount_tendered','change','reference','status'];
   const saleArgs = ['YK-000001', 1, '2026-06-30 10:00:00', 1, 'Admin', 'Walk-in Customer', 548.21, 65.79, 0, 0, 614.00, 'cash', 700, 86, null, 'completed'];
@@ -20,6 +23,7 @@ test('export/import round-trip restores products, sales, settings', async () => 
   const beforeUsers = a.db.prepare('SELECT COUNT(*) AS c FROM users').get().c;
   const data = exportAll(a.db);
   assert.equal(data.app, 'YANKENT POS');
+  assert.equal(data.schemaVersion, SCHEMA_VERSION);
   assert.ok(data.tables.sales.length >= 1);
   assert.equal(data.tables.products.length, beforeProducts);
   a.db.prepare("INSERT OR REPLACE INTO settings(key,value) VALUES('resend_api_key','re_backup_secret')").run();
@@ -40,12 +44,32 @@ test('export/import round-trip restores products, sales, settings', async () => 
   const items = b.db.prepare('SELECT * FROM sale_items WHERE sale_id=?').all(saleId || (b.db.prepare('SELECT id FROM sales WHERE txn_id=?').get('YK-000001').id));
   assert.equal(items.length, 1);
   assert.equal(items[0].amount, 560);
+  assert.equal(
+    b.db.prepare('SELECT purchase_source FROM products WHERE id=?').get(sourceProduct.id).purchase_source,
+    'Tagbilaran Wholesale'
+  );
 
   // settings preserved
   const sn = b.db.prepare("SELECT value FROM settings WHERE key='store_name'").get();
   assert.equal(sn.value, 'YANKENT POS');
 
   a.close(); b.close();
+});
+
+test('legacy v3 backup imports with blank purchase sources', async () => {
+  const a = await freshDb();
+  const data = exportAll(a.db);
+  data.schemaVersion = 3;
+  for (const product of data.tables.products) delete product.purchase_source;
+
+  const b = await freshDb();
+  assert.equal(importAll(b.db, data), true);
+  const populated = b.db.prepare(
+    "SELECT COUNT(*) AS count FROM products WHERE NULLIF(TRIM(purchase_source),'') IS NOT NULL"
+  ).get();
+  assert.equal(populated.count, 0);
+  a.close();
+  b.close();
 });
 
 test('import rejects invalid backup files', async () => {

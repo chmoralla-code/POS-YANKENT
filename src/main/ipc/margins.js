@@ -1,0 +1,289 @@
+'use strict';
+
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { randomUUID } = require('crypto');
+const { round2 } = require('../lib/money');
+const {
+  buildMarginWorkbook,
+  buildMarginPdfHtml,
+} = require('../lib/margin-exports');
+
+const CATEGORY_NAME = 'Newly Added Items';
+const MAX_SOURCE_LENGTH = 200;
+const MARGIN_RULES = Object.freeze([
+  Object.freeze({ min_exclusive: null, max_inclusive: 100, unit_profit: 10 }),
+  Object.freeze({ min_exclusive: 100, max_inclusive: 200, unit_profit: 15 }),
+  Object.freeze({ min_exclusive: 200, max_inclusive: null, unit_profit: 20 }),
+]);
+
+function unitProfitFor(price) {
+  if (price <= 100) return 10;
+  if (price <= 200) return 15;
+  return 20;
+}
+
+function normalizeSource(value) {
+  const source = String(value == null ? '' : value).trim();
+  if (source.length > MAX_SOURCE_LENGTH) {
+    throw new Error(`Purchase source cannot exceed ${MAX_SOURCE_LENGTH} characters`);
+  }
+  return source;
+}
+
+function normalizeProductId(value) {
+  const id = Number(value);
+  if (!Number.isInteger(id) || id <= 0) throw new Error('Invalid product');
+  return id;
+}
+
+function eligibleRows(db) {
+  return db.prepare(`
+    SELECT p.id, p.sku, p.name, p.base_unit AS unit, p.stock,
+           p.purchase_source, p.price AS selling_price
+      FROM products p
+      JOIN categories c ON c.id = p.category_id
+     WHERE c.name = ?
+       AND p.active = 1
+       AND p.is_service = 0
+       AND p.stock > 0
+     ORDER BY p.name COLLATE NOCASE, p.id
+  `).all(CATEGORY_NAME);
+}
+
+function computedRow(row) {
+  const price = round2(Number(row.selling_price));
+  const stock = Number(row.stock);
+  const unitProfit = unitProfitFor(price);
+  const priceValid = Number.isFinite(price) && price > 0 && price >= unitProfit;
+  const source = String(row.purchase_source == null ? '' : row.purchase_source).trim();
+  const computedCost = priceValid ? round2(price - unitProfit) : null;
+  return {
+    id: Number(row.id),
+    sku: String(row.sku || ''),
+    name: String(row.name || ''),
+    unit: String(row.unit || ''),
+    stock,
+    purchase_source: source,
+    selling_price: Number.isFinite(price) ? price : null,
+    unit_profit: unitProfit,
+    computed_cost: computedCost,
+    potential_gross_profit: priceValid ? round2(stock * unitProfit) : null,
+    source_missing: !source,
+    price_valid: priceValid,
+    price_error: priceValid
+      ? null
+      : (price <= 0
+        ? 'Selling price must be greater than zero'
+        : `Selling price must be at least ₱${unitProfit.toFixed(2)} for this margin tier`),
+  };
+}
+
+function buildReadiness(db) {
+  const category = db.prepare('SELECT id FROM categories WHERE name=?').get(CATEGORY_NAME);
+  const rows = eligibleRows(db).map(computedRow);
+  const missingSourceCount = rows.filter((row) => row.source_missing).length;
+  const invalidPriceCount = rows.filter((row) => !row.price_valid).length;
+  const completedCount = rows.filter((row) => !row.source_missing && row.price_valid).length;
+  return {
+    category: CATEGORY_NAME,
+    categoryFound: !!category,
+    rules: MARGIN_RULES.map((rule) => ({ ...rule })),
+    eligibleCount: rows.length,
+    completedCount,
+    missingSourceCount,
+    invalidPriceCount,
+    canGenerate: rows.length > 0 && missingSourceCount === 0 && invalidPriceCount === 0,
+    rows,
+  };
+}
+
+function assertEligibleProduct(db, id) {
+  const row = db.prepare(`
+    SELECT p.id
+      FROM products p
+      JOIN categories c ON c.id = p.category_id
+     WHERE p.id = ?
+       AND c.name = ?
+       AND p.active = 1
+       AND p.is_service = 0
+       AND p.stock > 0
+  `).get(id, CATEGORY_NAME);
+  if (!row) throw new Error('Product is not eligible for the Product Margin Table');
+}
+
+function notReadyError(readiness) {
+  let message;
+  if (!readiness.eligibleCount) {
+    message = `No active, in-stock products were found in "${CATEGORY_NAME}"`;
+  } else {
+    const issues = [];
+    if (readiness.missingSourceCount) {
+      issues.push(`${readiness.missingSourceCount} purchase source${readiness.missingSourceCount === 1 ? '' : 's'}`);
+    }
+    if (readiness.invalidPriceCount) {
+      issues.push(`${readiness.invalidPriceCount} invalid selling price${readiness.invalidPriceCount === 1 ? '' : 's'}`);
+    }
+    message = `Complete or correct ${issues.join(' and ')} before generating the table`;
+  }
+  const error = new Error(message);
+  error.code = 'MARGIN_TABLE_NOT_READY';
+  return error;
+}
+
+function generateTable(db) {
+  const readiness = buildReadiness(db);
+  if (!readiness.canGenerate) throw notReadyError(readiness);
+
+  const rows = readiness.rows.map((row) => ({ ...row }));
+  const summary = rows.reduce((totals, row) => {
+    totals.total_stock += row.stock;
+    totals.retail_value += round2(row.stock * row.selling_price);
+    totals.computed_cost += round2(row.stock * row.computed_cost);
+    totals.potential_gross_profit += row.potential_gross_profit;
+    return totals;
+  }, {
+    item_count: rows.length,
+    total_stock: 0,
+    retail_value: 0,
+    computed_cost: 0,
+    potential_gross_profit: 0,
+  });
+  summary.total_stock = round2(summary.total_stock);
+  summary.retail_value = round2(summary.retail_value);
+  summary.computed_cost = round2(summary.computed_cost);
+  summary.potential_gross_profit = round2(summary.potential_gross_profit);
+
+  return {
+    category: CATEGORY_NAME,
+    generatedAt: new Date().toISOString(),
+    rules: readiness.rules,
+    summary,
+    rows,
+  };
+}
+
+function dateStamp(value = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Manila',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(value);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function ensureExtension(filePath, extension) {
+  return filePath.toLocaleLowerCase().endsWith(extension)
+    ? filePath
+    : `${filePath}${extension}`;
+}
+
+async function chooseExportPath(ctx, extension, label) {
+  const result = await ctx.dialog.showSaveDialog(ctx.getMainWindow(), {
+    title: `Save Generate Margin Table as ${label}`,
+    defaultPath: `yankent-margin-table-${dateStamp()}${extension}`,
+    filters: [{ name: label, extensions: [extension.slice(1)] }],
+    properties: ['createDirectory', 'showOverwriteConfirmation'],
+  });
+  if (result.canceled || !result.filePath) return null;
+  return ensureExtension(result.filePath, extension);
+}
+
+async function writePdf(ctx, filePath, report) {
+  const tempPath = path.join(
+    os.tmpdir(),
+    `yankent-margin-table-${randomUUID()}.html`
+  );
+  let printWindow = null;
+  try {
+    await fs.promises.writeFile(tempPath, buildMarginPdfHtml(report), 'utf8');
+    printWindow = new ctx.BrowserWindow({
+      show: false,
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+      },
+    });
+    await printWindow.loadFile(tempPath);
+    const pdf = await printWindow.webContents.printToPDF({
+      landscape: true,
+      printBackground: true,
+      preferCSSPageSize: true,
+      pageSize: 'A4',
+    });
+    await fs.promises.writeFile(filePath, pdf);
+  } finally {
+    if (printWindow) {
+      const alive = typeof printWindow.isDestroyed !== 'function'
+        || !printWindow.isDestroyed();
+      if (alive && typeof printWindow.destroy === 'function') printWindow.destroy();
+      else if (alive && typeof printWindow.close === 'function') printWindow.close();
+    }
+    await fs.promises.unlink(tempPath).catch(() => {});
+  }
+}
+
+function register(ipcMain, ctx) {
+  const { db, guard } = ctx;
+
+  guard(ipcMain, 'pos:margins:readiness', { admin: true }, () => buildReadiness(db));
+
+  guard(ipcMain, 'pos:margins:setSource', { admin: true }, (_c, productId, value) => {
+    const id = normalizeProductId(productId);
+    const source = normalizeSource(value);
+    assertEligibleProduct(db, id);
+    db.prepare('UPDATE products SET purchase_source=? WHERE id=?').run(source || null, id);
+    return { id, purchase_source: source };
+  });
+
+  guard(ipcMain, 'pos:margins:bulkSetSource', { admin: true }, (_c, productIds, value) => {
+    if (!Array.isArray(productIds) || !productIds.length) {
+      throw new Error('Select at least one product');
+    }
+    if (productIds.length > 10000) throw new Error('Too many products selected');
+    const ids = [...new Set(productIds.map(normalizeProductId))];
+    const source = normalizeSource(value);
+    const update = db.prepare('UPDATE products SET purchase_source=? WHERE id=?');
+    db.transaction(() => {
+      for (const id of ids) assertEligibleProduct(db, id);
+      for (const id of ids) update.run(source || null, id);
+    })();
+    return { updated: ids.length, purchase_source: source };
+  });
+
+  guard(ipcMain, 'pos:margins:generate', { admin: true }, () => generateTable(db));
+
+  guard(ipcMain, 'pos:margins:exportExcel', { admin: true }, async () => {
+    const report = generateTable(db);
+    const filePath = await chooseExportPath(ctx, '.xlsx', 'Excel Workbook');
+    if (!filePath) return { canceled: true };
+    const workbook = await buildMarginWorkbook(report);
+    await fs.promises.writeFile(filePath, workbook);
+    return { canceled: false, filePath };
+  });
+
+  guard(ipcMain, 'pos:margins:exportPdf', { admin: true }, async () => {
+    const report = generateTable(db);
+    const filePath = await chooseExportPath(ctx, '.pdf', 'PDF Document');
+    if (!filePath) return { canceled: true };
+    await writePdf(ctx, filePath, report);
+    return { canceled: false, filePath };
+  });
+}
+
+module.exports = {
+  register,
+  buildReadiness,
+  generateTable,
+  unitProfitFor,
+  CATEGORY_NAME,
+  MARGIN_RULES,
+  dateStamp,
+  ensureExtension,
+  chooseExportPath,
+  writePdf,
+};

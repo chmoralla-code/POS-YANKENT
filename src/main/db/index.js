@@ -67,6 +67,14 @@ function migrate(db) {
     db.exec('ALTER TABLE stock_movements ADD COLUMN source_location TEXT');
   }
 
+  // ---- products: purchase source for the margin table ------------------
+  // Intentionally leave this blank on upgrade. The administrator must review
+  // and enter every source before the first margin table can be generated.
+  const productCols = db.prepare('PRAGMA table_info(products)').all();
+  if (!productCols.some((c) => c.name === 'purchase_source')) {
+    db.exec('ALTER TABLE products ADD COLUMN purchase_source TEXT');
+  }
+
   // ---- Store info: clear stale defaults on existing databases ----------
   // The bundled DB and fresh-install defaults use "YANKENT POS" + the
   // full Tagbilaran address, with an empty TIN.  Older installs may still
