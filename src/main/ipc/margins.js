@@ -6,6 +6,11 @@ const path = require('path');
 const { randomUUID } = require('crypto');
 const { round2 } = require('../lib/money');
 const {
+  MARGIN_RULES,
+  unitProfitFor,
+  resolveUnitCost,
+} = require('../lib/margin-cost');
+const {
   buildMarginWorkbook,
   buildMarginPdfHtml,
 } = require('../lib/margin-exports');
@@ -14,17 +19,6 @@ const CATEGORY_NAME = 'Newly Added Items';
 const MAX_SOURCE_LENGTH = 200;
 const MAX_ITEM_NAME_LENGTH = 200;
 const MAX_UNIT_LENGTH = 32;
-const MARGIN_RULES = Object.freeze([
-  Object.freeze({ min_exclusive: null, max_inclusive: 100, unit_profit: 10 }),
-  Object.freeze({ min_exclusive: 100, max_inclusive: 200, unit_profit: 15 }),
-  Object.freeze({ min_exclusive: 200, max_inclusive: null, unit_profit: 20 }),
-]);
-
-function unitProfitFor(price) {
-  if (price <= 100) return 10;
-  if (price <= 200) return 15;
-  return 20;
-}
 
 function normalizeSource(value) {
   const source = String(value == null ? '' : value).trim();
@@ -99,42 +93,9 @@ function eligibleRows(db) {
 }
 
 function computedRow(row) {
-  const price = round2(Number(row.selling_price));
   const stock = Number(row.stock);
   const source = String(row.purchase_source == null ? '' : row.purchase_source).trim();
-  const priceOk = Number.isFinite(price) && price > 0;
-  const autoProfit = priceOk ? unitProfitFor(price) : null;
-  const canAutoCost = priceOk && price >= autoProfit;
-  const rawManual = row.margin_original_cost;
-  const hasManual = rawManual != null && rawManual !== '' && Number.isFinite(Number(rawManual));
-  const manualCost = hasManual ? round2(Number(rawManual)) : null;
-  const manualUsable = hasManual && priceOk && manualCost >= 0 && manualCost < price;
-
-  let computedCost = null;
-  let unitProfit = autoProfit;
-  let needsManualCost = false;
-  let costMode = 'auto';
-
-  if (manualUsable) {
-    // Administrator override (including under-₱10 items and corrections).
-    computedCost = manualCost;
-    unitProfit = round2(price - manualCost);
-    costMode = 'manual';
-    needsManualCost = false;
-  } else if (canAutoCost) {
-    computedCost = round2(price - autoProfit);
-    unitProfit = autoProfit;
-    costMode = 'auto';
-  } else if (priceOk) {
-    // Selling price is below the fixed margin (e.g. under ₱10) — puhunan
-    // must be entered by the administrator after generate.
-    needsManualCost = true;
-    computedCost = null;
-    unitProfit = null;
-    costMode = 'pending';
-  }
-
-  const priceValid = priceOk;
+  const cost = resolveUnitCost(row.selling_price, row.margin_original_cost);
   return {
     id: Number(row.id),
     sku: String(row.sku || ''),
@@ -142,17 +103,17 @@ function computedRow(row) {
     unit: String(row.unit || ''),
     stock,
     purchase_source: source,
-    selling_price: priceOk ? price : null,
-    unit_profit: unitProfit,
-    computed_cost: computedCost,
-    potential_gross_profit: computedCost != null && unitProfit != null
-      ? round2(stock * unitProfit)
+    selling_price: cost.selling_price,
+    unit_profit: cost.unit_profit,
+    computed_cost: cost.unit_cost,
+    potential_gross_profit: cost.unit_cost != null && cost.unit_profit != null
+      ? round2(stock * cost.unit_profit)
       : null,
     source_missing: !source,
-    price_valid: priceValid,
-    needs_manual_cost: needsManualCost,
-    cost_mode: costMode,
-    price_error: priceValid
+    price_valid: cost.price_valid,
+    needs_manual_cost: cost.needs_manual_cost,
+    cost_mode: cost.cost_mode,
+    price_error: cost.price_valid
       ? null
       : 'Selling price must be greater than zero',
   };

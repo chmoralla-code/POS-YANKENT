@@ -772,7 +772,7 @@ App._start = async function () {
 App._navigate = async function (name) {
   if (!App.views[name]) return;
   // Role guard: Products has its own cashier-safe, Newly Added Items mode.
-  const adminOnlyViews = new Set(['users', 'reports', 'earnings', 'margins', 'settings']);
+  const adminOnlyViews = new Set(['users', 'reports', 'earnings', 'margins', 'marginReports', 'settings']);
   if (adminOnlyViews.has(name) && App.current.user.role !== 'admin') {
     App.ui.toast('Administrator access required', 'err'); return;
   }

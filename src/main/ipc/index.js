@@ -358,6 +358,7 @@ function registerAll(ipcMain, ctx) {
   const moduleCtx = { ...ctx, guard };
   require('./catalog').register(ipcMain, moduleCtx);
   require('./margins').register(ipcMain, moduleCtx);
+  require('./margin-reports').register(ipcMain, moduleCtx);
   const salesRegistration = require('./sales').register(ipcMain, moduleCtx) || {};
   discardPendingSalesForToken = salesRegistration.discardPendingSalesForToken || discardPendingSalesForToken;
   moduleCtx.clearPendingSaleOwners = salesRegistration.clearPendingSaleOwners || (() => {});
