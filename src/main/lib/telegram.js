@@ -264,9 +264,23 @@ function buildAnalytics(db) {
      GROUP BY s.cashier_id ORDER BY total DESC LIMIT 1`
   ).get();
 
+  const topCashierSales = db.prepare(
+    `SELECT s.cashier_name, COUNT(*) AS tx, SUM(s.total) AS total FROM sales s
+     WHERE s.status='completed' AND date(s.datetime)=date('now','localtime')
+       AND s.payment_method != 'account'
+     GROUP BY s.cashier_id ORDER BY total DESC LIMIT 1`
+  ).get();
+
   const payBreak = db.prepare(
     `SELECT payment_method, COUNT(*) AS tx, SUM(total) AS total FROM sales
      WHERE status='completed' AND date(datetime)=date('now','localtime')
+     GROUP BY payment_method`
+  ).all();
+
+  const payBreakSales = db.prepare(
+    `SELECT payment_method, COUNT(*) AS tx, SUM(total) AS total FROM sales
+     WHERE status='completed' AND date(datetime)=date('now','localtime')
+       AND payment_method != 'account'
      GROUP BY payment_method`
   ).all();
 
@@ -281,7 +295,9 @@ function buildAnalytics(db) {
     topProducts,
     topProductsSales,
     topCashier,
+    topCashierSales,
     payBreak,
+    payBreakSales,
   };
 }
 
@@ -337,11 +353,11 @@ function buildReportMessage(db) {
     lines.push('Top Products:');
     tops.forEach((p, i) => lines.push(`${i + 1}. ${escapeHtml(p.name)} — ${reportMoney(p.total)} (${Math.round(p.qty)} sold)`));
   }
-  if (a.topCashier) {
-    lines.push(`Top Cashier: ${escapeHtml(a.topCashier.cashier_name)} — ${reportMoney(a.topCashier.total)} / ${a.topCashier.tx} tx`);
+  if (a.topCashierSales) {
+    lines.push(`Top Cashier: ${escapeHtml(a.topCashierSales.cashier_name)} — ${reportMoney(a.topCashierSales.total)} / ${a.topCashierSales.tx} tx`);
   }
-  if (a.payBreak.length) {
-    lines.push('Payments: ' + a.payBreak.map((p) => `${p.payment_method} ${reportMoney(p.total)}`).join(' · '));
+  if (a.payBreakSales.length) {
+    lines.push('Payments: ' + a.payBreakSales.map((p) => `${p.payment_method} ${reportMoney(p.total)}`).join(' · '));
   }
   // Refunds
   try {

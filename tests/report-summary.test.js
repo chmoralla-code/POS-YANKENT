@@ -5,7 +5,7 @@ const assert = require('node:assert');
 const { createSession } = require('../src/main/lib/auth');
 const { makeApi } = require('./ipc-harness');
 const { buildReportSummary } = require('../src/main/lib/report-summary');
-const { buildReportMessage } = require('../src/main/lib/telegram');
+const { buildReportMessage, buildAnalytics } = require('../src/main/lib/telegram');
 
 async function setup() {
   const api = await makeApi();
@@ -78,6 +78,18 @@ test('telegram sales totals exclude utang and list utang separately', async () =
   const t = await setup();
   await makeCashSale(t.api, t.cashierSession, 1);
   await makeUtangSale(t.api, t.cashierSession, t.contractor, 2);
+  const analytics = buildAnalytics(t.api.db);
+  assert.deepEqual(
+    analytics.payBreak.map((row) => row.payment_method).sort(),
+    ['account', 'cash'],
+  );
+  assert.deepEqual(
+    analytics.payBreakSales.map((row) => row.payment_method),
+    ['cash'],
+  );
+  assert.equal(analytics.topCashier.total, 840);
+  assert.equal(analytics.topCashierSales.total, 280);
+
   const msg = buildReportMessage(t.api.db);
   assert.ok(msg.includes('Sales exclude Utang'));
   assert.ok(msg.includes('Utang (On-Account)'));
@@ -86,5 +98,11 @@ test('telegram sales totals exclude utang and list utang separately', async () =
   assert.ok(/Today:.*280\.00/.test(salesBlock) || /Today:.*₱280/.test(salesBlock) || salesBlock.includes('280'));
   const utangBlock = msg.split('Utang (On-Account)')[1];
   assert.ok(utangBlock.includes('560') || /Today:.*560/.test(utangBlock));
+  const paymentLine = msg.split('\n').find((line) => line.startsWith('Payments:'));
+  assert.ok(paymentLine && paymentLine.includes('cash'));
+  assert.ok(!paymentLine.includes('account'));
+  const topCashierLine = msg.split('\n').find((line) => line.startsWith('Top Cashier:'));
+  assert.ok(topCashierLine && topCashierLine.includes('280'));
+  assert.ok(!topCashierLine.includes('840'));
   t.api.close();
 });

@@ -237,7 +237,8 @@ App.views.analytics = {
     const items = Math.round(
       this.separate ? (a.itemsSoldSales != null ? a.itemsSoldSales : 0) : (a.itemsSold || 0)
     );
-    const pays = (a.payBreak || []).map((p) => {
+    const paymentRows = this.separate ? (a.payBreakSales || []) : (a.payBreak || []);
+    const pays = paymentRows.map((p) => {
       const label = p.payment_method === 'account' ? 'utang' : p.payment_method;
       return `${App.ui.esc(label)}: ${App.ui.money(p.total)}`;
     }).join(' · ') || '—';

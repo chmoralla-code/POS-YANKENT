@@ -41,7 +41,7 @@ test.describe('Reports (admin)', () => {
       await login(page, 'admin', 'admin123');
       await navigate(page, 'reports');
       await expect(page.getByRole('heading', { name: 'Sales performance' })).toBeVisible();
-      await expect(page.locator('#rStats .report-stat')).toHaveCount(4);
+      await expect(page.locator('#rStats .report-stat')).toHaveCount(5);
       await expect(page.locator('#rSections .collapse-toggle')).toHaveCount(7);
       await expect(page.locator('#rSections .collapse-toggle[aria-expanded="true"]')).toHaveCount(1);
 
