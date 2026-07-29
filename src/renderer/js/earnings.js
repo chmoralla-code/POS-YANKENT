@@ -47,7 +47,7 @@ App.views.earnings = {
     return Math.round(n * 100) / 100;
   },
 
-  _renderCards(monthSales, expenses) {
+  _renderCards(monthSales, expenses, separateUtang = false) {
     const earnings = monthSales - expenses;
     const earningsClass = earnings > 0 ? 'is-profit' : (earnings < 0 ? 'is-loss' : '');
     const earningsHint = earnings > 0
@@ -58,7 +58,7 @@ App.views.earnings = {
       <div class="an-card">
         <div class="an-k">This month’s sales</div>
         <div class="an-v">${App.ui.money(monthSales)}</div>
-        <div class="an-sub">From completed sales (automatic)</div>
+        <div class="an-sub">${separateUtang ? 'Paid sales only — Utang excluded' : 'All completed sales — Utang included'}</div>
       </div>
       <div class="an-card an-card-expense">
         <div class="an-k">Total expenses</div>
@@ -114,7 +114,7 @@ App.views.earnings = {
       ]);
       const monthSales = Number((summary && summary.month && summary.month.total) || 0);
       const expenses = this._parseExpenses((settings || {}).analytics_total_expenses) || 0;
-      cards.innerHTML = this._renderCards(monthSales, expenses);
+      cards.innerHTML = this._renderCards(monthSales, expenses, !!(summary && summary.separateUtang));
       const saveBtn = cards.querySelector('#eExpenseSave');
       if (saveBtn) saveBtn.onclick = () => this._saveExpenses();
       const expenseInput = cards.querySelector('#eExpenseInput');

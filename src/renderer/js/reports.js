@@ -70,7 +70,7 @@ App.views.reports = {
         <div class="reports-heading">
           <div class="reports-eyebrow">Sales intelligence</div>
           <h2>Sales performance</h2>
-          <p>Review revenue, product performance, cashier activity, payments, and refunds.</p>
+          <p id="rScope">Review revenue, product performance, cashier activity, payments, and refunds.</p>
         </div>
         <div class="reports-actions" aria-label="Report actions">
           <button type="button" class="btn btn-sm btn-ghost" id="rSendTg">Send to Telegram</button>
@@ -222,6 +222,12 @@ App.views.reports = {
     if (detailsEl) detailsEl.textContent = `${periodLabel} · date filters apply to period-based sections.`;
     const clearButton = v.querySelector('#rClear');
     if (clearButton) clearButton.disabled = !this.from && !this.to;
+    const scope = v.querySelector('#rScope');
+    if (scope) {
+      scope.textContent = s.separateUtang
+        ? 'Separate is on — report totals and lists exclude Utang (on-account).'
+        : 'Separate is off — report totals and lists include Utang (on-account).';
+    }
 
     // ---- Summary stat cards (always visible) ---------------------------
     v.querySelector('#rStats').innerHTML = `

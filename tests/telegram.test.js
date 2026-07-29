@@ -31,6 +31,7 @@ test('buildReportMessage includes header, today/yesterday/week/month/year, and f
   const t = await setup();
   const { api, cashierSession } = t;
   await makeSale(api, cashierSession, 560);
+  api.db.prepare("UPDATE settings SET value='1' WHERE key='separate_utang_reports'").run();
   const msg = buildReportMessage(api.db);
   assert.ok(msg.includes('YANKENT POS Sales Report'));
   assert.ok(msg.includes('Sales exclude Utang'));

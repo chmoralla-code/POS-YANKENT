@@ -69,6 +69,7 @@ function normalizeReport(report) {
     period: textValue(report.period),
     label: textValue(report.label) || 'Period',
     generatedAt: report.generatedAt,
+    separateUtang: !!report.separateUtang,
     rows: rows.map((row, index) => {
       if (!row || typeof row !== 'object') {
         throw new TypeError(`Report row ${index + 1} must be an object`);
@@ -138,6 +139,12 @@ async function buildMarginReportWorkbook(report) {
   sheet.getCell('A5').value = 'Items';
   sheet.getCell('A5').font = { color: { argb: COLORS.muted } };
   sheet.getCell('B5').value = data.totals.item_count;
+
+  sheet.getCell('A6').value = 'Scope';
+  sheet.getCell('A6').font = { color: { argb: COLORS.muted } };
+  sheet.getCell('B6').value = data.separateUtang
+    ? 'Paid sales only — Utang excluded'
+    : 'All completed sales — Utang included';
 
   const headerRowIndex = 8;
   REPORT_HEADERS.forEach((header, index) => {
@@ -260,7 +267,8 @@ function buildMarginReportPdfHtml(report) {
   <h1>Margin table Reports</h1>
   <p class="meta">
     Period: <b>${escapeHtml(data.label)}</b><br>
-    Generated: ${escapeHtml(generatedAt)} · Items: <b>${data.totals.item_count}</b>
+    Generated: ${escapeHtml(generatedAt)} · Items: <b>${data.totals.item_count}</b><br>
+    Scope: <b>${data.separateUtang ? 'Paid sales only — Utang excluded' : 'All completed sales — Utang included'}</b>
   </p>
   <table>
     <thead>

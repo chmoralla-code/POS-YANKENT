@@ -190,6 +190,8 @@ contextBridge.exposeInMainWorld('pos', {
 
   // ---- Reports ----
   reports: {
+    utangSeparation: () => call('pos:reports:utangSeparation'),
+    setUtangSeparation: (enabled) => call('pos:reports:setUtangSeparation', enabled),
     summary: () => call('pos:reports:summary'),
     bestSelling: (f) => call('pos:reports:bestSelling', f || {}),
     byCashier: (f) => call('pos:reports:byCashier', f || {}),

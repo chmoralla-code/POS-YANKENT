@@ -5,6 +5,11 @@ const { computeTotals, round2 } = require('../lib/money');
 const { buildReceipt } = require('../lib/receipt');
 const { buildAnalytics } = require('../lib/telegram');
 const {
+  getUtangSeparation,
+  setUtangSeparation,
+  reportPaymentFilter,
+} = require('../lib/report-summary');
+const {
   validateNewDueDate,
   createSaleLoan,
   reconcileCustomerCredit,
@@ -352,6 +357,7 @@ function register(ipcMain, ctx) {
   guard(ipcMain, 'pos:sales:list', { auth: true }, (_c, f = {}) => {
     let sql = `SELECT id, txn_id, datetime, cashier_name, customer_name, total, payment_method, status FROM sales WHERE status='completed'`;
     const params = [];
+    sql += reportPaymentFilter(db);
     if (f.from) { sql += ` AND datetime >= ?`; params.push(f.from + ' 00:00:00'); }
     if (f.to) { sql += ` AND datetime <= ?`; params.push(f.to + ' 23:59:59'); }
     if (f.cashierId) { sql += ` AND cashier_id=?`; params.push(f.cashierId); }
@@ -491,6 +497,7 @@ function register(ipcMain, ctx) {
   guard(ipcMain, 'pos:refunds:list', { auth: true }, (_c, f = {}) => {
     let sql = `SELECT r.*, s.payment_method FROM refunds r JOIN sales s ON r.original_sale_id = s.id WHERE 1=1`;
     const params = [];
+    sql += reportPaymentFilter(db, 's.payment_method');
     if (f.from) { sql += ` AND r.datetime >= ?`; params.push(f.from + ' 00:00:00'); }
     if (f.to) { sql += ` AND r.datetime <= ?`; params.push(f.to + ' 23:59:59'); }
     sql += ` ORDER BY r.datetime DESC LIMIT ?`;
@@ -502,15 +509,27 @@ function register(ipcMain, ctx) {
 
   guard(ipcMain, 'pos:refunds:summary', { auth: true }, () => {
     const today = db.prepare(
-      `SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total FROM refunds WHERE date(datetime)=date('now','localtime')`
+      `SELECT COUNT(*) AS tx, COALESCE(SUM(r.total),0) AS total
+         FROM refunds r JOIN sales s ON r.original_sale_id=s.id
+        WHERE date(r.datetime)=date('now','localtime')${reportPaymentFilter(db, 's.payment_method')}`
     ).get();
     const month = db.prepare(
-      `SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total FROM refunds WHERE strftime('%Y-%m',datetime)=strftime('%Y-%m','now','localtime')`
+      `SELECT COUNT(*) AS tx, COALESCE(SUM(r.total),0) AS total
+         FROM refunds r JOIN sales s ON r.original_sale_id=s.id
+        WHERE strftime('%Y-%m',r.datetime)=strftime('%Y-%m','now','localtime')${reportPaymentFilter(db, 's.payment_method')}`
     ).get();
     return { today, month };
   });
 
   // ---- Reports -----------------------------------------------------------
+  guard(ipcMain, 'pos:reports:utangSeparation', { auth: true }, () => (
+    getUtangSeparation(db)
+  ));
+
+  guard(ipcMain, 'pos:reports:setUtangSeparation', { auth: true }, (_c, enabled) => (
+    setUtangSeparation(db, enabled)
+  ));
+
   guard(ipcMain, 'pos:reports:summary', { auth: true }, () => {
     const { buildReportSummary } = require('../lib/report-summary');
     return buildReportSummary(db);
@@ -521,6 +540,7 @@ function register(ipcMain, ctx) {
       FROM sale_items si JOIN sales s ON si.sale_id=s.id
       WHERE s.status='completed'`;
     const params = [];
+    sql += reportPaymentFilter(db, 's.payment_method');
     if (f.from) { sql += ` AND s.datetime >= ?`; params.push(f.from + ' 00:00:00'); }
     if (f.to) { sql += ` AND s.datetime <= ?`; params.push(f.to + ' 23:59:59'); }
     sql += ` GROUP BY si.product_id ORDER BY total DESC LIMIT ?`;
@@ -532,6 +552,7 @@ function register(ipcMain, ctx) {
     let sql = `SELECT s.cashier_name, COUNT(*) AS tx, COALESCE(SUM(s.total),0) AS total
       FROM sales s WHERE s.status='completed'`;
     const params = [];
+    sql += reportPaymentFilter(db, 's.payment_method');
     if (f.from) { sql += ` AND s.datetime >= ?`; params.push(f.from + ' 00:00:00'); }
     if (f.to) { sql += ` AND s.datetime <= ?`; params.push(f.to + ' 23:59:59'); }
     sql += ` GROUP BY s.cashier_id ORDER BY total DESC`;
@@ -542,6 +563,7 @@ function register(ipcMain, ctx) {
     let sql = `SELECT date(datetime) AS date, COUNT(*) AS tx, COALESCE(SUM(total),0) AS total
       FROM sales WHERE status='completed'`;
     const params = [];
+    sql += reportPaymentFilter(db);
     if (f.from) { sql += ` AND datetime >= ?`; params.push(f.from + ' 00:00:00'); }
     if (f.to) { sql += ` AND datetime <= ?`; params.push(f.to + ' 23:59:59'); }
     sql += ` GROUP BY date(datetime) ORDER BY date DESC`;
@@ -562,6 +584,7 @@ function register(ipcMain, ctx) {
       const params = [];
       let sql = `SELECT si.name, SUM(si.qty) AS qty, SUM(si.amount) AS total
         FROM sale_items si JOIN sales s ON si.sale_id=s.id WHERE s.status='completed'`;
+      sql += reportPaymentFilter(db, 's.payment_method');
       sql = range(sql, params, 's.datetime');
       sql += ' GROUP BY si.product_id ORDER BY total DESC';
       rows = db.prepare(sql).all(...params);
@@ -572,6 +595,7 @@ function register(ipcMain, ctx) {
     } else if (type === 'byCashier') {
       const params = [];
       let sql = "SELECT cashier_name, COUNT(*) AS tx, SUM(total) AS total FROM sales WHERE status='completed'";
+      sql += reportPaymentFilter(db);
       sql = range(sql, params, 'datetime');
       sql += ' GROUP BY cashier_id ORDER BY total DESC';
       rows = db.prepare(sql).all(...params);
@@ -582,6 +606,7 @@ function register(ipcMain, ctx) {
     } else if (type === 'salesByDay') {
       const params = [];
       let sql = "SELECT date(datetime) AS date, COUNT(*) AS tx, SUM(total) AS total FROM sales WHERE status='completed'";
+      sql += reportPaymentFilter(db);
       sql = range(sql, params, 'datetime');
       sql += ' GROUP BY date(datetime) ORDER BY date DESC';
       rows = db.prepare(sql).all(...params);
@@ -608,10 +633,12 @@ function register(ipcMain, ctx) {
       defaultName = 'restocks';
     } else if (type === 'refunds') {
       const params = [];
-      let sql = `SELECT refund_txn_id,original_txn_id,datetime,cashier_name,admin_name,
-        customer_name,total,reason FROM refunds WHERE 1=1`;
-      sql = range(sql, params, 'datetime');
-      sql += ' ORDER BY datetime DESC';
+      let sql = `SELECT r.refund_txn_id,r.original_txn_id,r.datetime,r.cashier_name,r.admin_name,
+        r.customer_name,r.total,r.reason
+        FROM refunds r JOIN sales s ON r.original_sale_id=s.id WHERE 1=1`;
+      sql += reportPaymentFilter(db, 's.payment_method');
+      sql = range(sql, params, 'r.datetime');
+      sql += ' ORDER BY r.datetime DESC';
       rows = db.prepare(sql).all(...params);
       header = ['Refund ID','Original Txn','Date','Cashier','Approved By','Customer','Total','Reason'];
       keys = ['refund_txn_id','original_txn_id','datetime','cashier_name','admin_name','customer_name','total','reason'];
@@ -622,6 +649,7 @@ function register(ipcMain, ctx) {
       // so the exported CSV matches the on-screen "Recent Sales" table.
       const params = [];
       let sql = "SELECT txn_id,datetime,cashier_name,customer_name,total,payment_method FROM sales WHERE status='completed'";
+      sql += reportPaymentFilter(db);
       sql = range(sql, params, 'datetime');
       sql += ' ORDER BY datetime DESC';
       rows = db.prepare(sql).all(...params);

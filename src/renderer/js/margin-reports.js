@@ -58,7 +58,7 @@ App.views.marginReports = {
           </div>
           <div class="mrep-actions">
             <button type="button" class="btn btn-primary mrep-generate" id="mrepGenerate">Generate</button>
-            <p class="mrep-hint muted" id="mrepHint">Cost uses the same ₱10 / ₱15 / ₱20 rules as Generate Margin Table (or saved manual puhunan).</p>
+            <p class="mrep-hint muted" id="mrepHint">Cost uses the same ₱10 / ₱15 / ₱20 rules as Generate Margin Table (or saved manual puhunan). ${App.reporting.isUtangSeparated() ? 'Separate is on, so Utang is excluded.' : 'Separate is off, so Utang is included.'}</p>
           </div>
         </section>
 
@@ -193,7 +193,7 @@ App.views.marginReports = {
       <div class="mrep-result-head">
         <div>
           <h3>${App.ui.esc(report.label)}</h3>
-          <p class="muted">${report.rows.length} item${report.rows.length === 1 ? '' : 's'} sold · Generated ${App.ui.esc(new Date(report.generatedAt).toLocaleString())}</p>
+          <p class="muted">${report.rows.length} item${report.rows.length === 1 ? '' : 's'} sold · ${report.separateUtang ? 'Utang excluded' : 'Utang included'} · Generated ${App.ui.esc(new Date(report.generatedAt).toLocaleString())}</p>
         </div>
       </div>
       ${tip}

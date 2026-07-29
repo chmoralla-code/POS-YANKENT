@@ -210,7 +210,12 @@ function vatSplit(total, vatRate = 12) {
  * enriched Telegram report).
  */
 function buildAnalytics(db) {
-  const today = db.prepare(
+  const {
+    isUtangSeparated,
+  } = require('./report-summary');
+  const separateUtang = isUtangSeparated(db);
+
+  const combinedToday = db.prepare(
     `SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total FROM sales
      WHERE status='completed' AND date(datetime)=date('now','localtime')`
   ).get();
@@ -227,10 +232,12 @@ function buildAnalytics(db) {
        AND payment_method = 'account'`
   ).get();
 
-  const avgTx = today.tx > 0 ? today.total / today.tx : 0;
+  const avgTxCombined = combinedToday.tx > 0
+    ? combinedToday.total / combinedToday.tx
+    : 0;
   const avgTxSales = salesToday.tx > 0 ? salesToday.total / salesToday.tx : 0;
 
-  const itemsSold = db.prepare(
+  const itemsSoldCombined = db.prepare(
     `SELECT COALESCE(SUM(si.qty),0) AS q FROM sale_items si
      JOIN sales s ON si.sale_id=s.id
      WHERE s.status='completed' AND date(s.datetime)=date('now','localtime')`
@@ -243,7 +250,7 @@ function buildAnalytics(db) {
        AND s.payment_method != 'account'`
   ).get().q;
 
-  const topProducts = db.prepare(
+  const topProductsCombined = db.prepare(
     `SELECT si.name, SUM(si.qty) AS qty, SUM(si.amount) AS total
      FROM sale_items si JOIN sales s ON si.sale_id=s.id
      WHERE s.status='completed' AND date(s.datetime)=date('now','localtime')
@@ -258,7 +265,7 @@ function buildAnalytics(db) {
      GROUP BY si.product_id ORDER BY total DESC LIMIT 3`
   ).all();
 
-  const topCashier = db.prepare(
+  const topCashierCombined = db.prepare(
     `SELECT s.cashier_name, COUNT(*) AS tx, SUM(s.total) AS total FROM sales s
      WHERE s.status='completed' AND date(s.datetime)=date('now','localtime')
      GROUP BY s.cashier_id ORDER BY total DESC LIMIT 1`
@@ -271,7 +278,7 @@ function buildAnalytics(db) {
      GROUP BY s.cashier_id ORDER BY total DESC LIMIT 1`
   ).get();
 
-  const payBreak = db.prepare(
+  const payBreakCombined = db.prepare(
     `SELECT payment_method, COUNT(*) AS tx, SUM(total) AS total FROM sales
      WHERE status='completed' AND date(datetime)=date('now','localtime')
      GROUP BY payment_method`
@@ -284,47 +291,65 @@ function buildAnalytics(db) {
      GROUP BY payment_method`
   ).all();
 
+  const today = separateUtang ? salesToday : combinedToday;
+  const avgTx = separateUtang ? avgTxSales : avgTxCombined;
+  const itemsSold = separateUtang ? itemsSoldSales : itemsSoldCombined;
+  const topProducts = separateUtang ? topProductsSales : topProductsCombined;
+  const topCashier = separateUtang ? topCashierSales : topCashierCombined;
+  const payBreak = separateUtang ? payBreakSales : payBreakCombined;
+
   return {
     today,
+    combinedToday,
     salesToday,
     utangToday,
     avgTx,
+    avgTxCombined,
     avgTxSales,
     itemsSold,
+    itemsSoldCombined,
     itemsSoldSales,
     topProducts,
+    topProductsCombined,
     topProductsSales,
     topCashier,
+    topCashierCombined,
     topCashierSales,
     payBreak,
+    payBreakCombined,
     payBreakSales,
+    separateUtang,
   };
 }
 
 /**
  * Build the owner sales-report message string from the local database,
  * including an analytics breakdown.
- * Sales totals exclude Utang (on-account); Utang is listed separately.
+ * Uses the software-wide Analytics → Separate preference.
  */
 function buildReportMessage(db) {
-  const { buildReportSummaryWithVat } = require('./report-summary');
+  const {
+    buildReportSummaryWithVat,
+    reportPaymentFilter,
+  } = require('./report-summary');
   const summary = buildReportSummaryWithVat(db);
-  const today = summary.sales.today;
-  const yesterday = summary.sales.yesterday;
-  const week = summary.sales.week;
-  const month = summary.sales.month;
-  const year = summary.sales.year;
+  const scoped = summary.separateUtang ? summary.sales : summary.combined;
+  const today = scoped.today;
+  const yesterday = scoped.yesterday;
+  const week = scoped.week;
+  const month = scoped.month;
+  const year = scoped.year;
   const utang = summary.utang;
 
   let bestDay = '—';
-  if (summary.sales.bestDay) {
-    bestDay = `${summary.sales.bestDay.label} - ${reportMoney(summary.sales.bestDay.total)}`;
+  if (scoped.bestDay) {
+    bestDay = `${scoped.bestDay.label} - ${reportMoney(scoped.bestDay.total)}`;
   }
 
   const a = buildAnalytics(db);
   const lines = [
     '<b>YANKENT POS Sales Report</b>',
-    '<i>Sales exclude Utang (on-account)</i>',
+    ...(summary.separateUtang ? ['<i>Sales exclude Utang (on-account)</i>'] : []),
     '━━━━━━━━━━━━━━━━━━',
     `📅 Today: ${reportMoney(today.total)} / ${today.tx} transactions`,
     `   Net: ${reportMoney(today.net)} · VAT included: ${reportMoney(today.vat)}`,
@@ -333,35 +358,45 @@ function buildReportMessage(db) {
     `📊 This Month: ${reportMoney(month.total)} / ${month.tx} tx`,
     `   Net: ${reportMoney(month.net)} · VAT included: ${reportMoney(month.vat)}`,
     `📈 This Year: ${reportMoney(year.total)} / ${year.tx} tx`,
-    `🏆 Best Day (Sales): ${bestDay}`,
-    '',
-    '<b>🧾 Utang (On-Account)</b>',
-    '━━━━━━━━━━━━━━━━━━',
-    `Today: ${reportMoney(utang.today.total)} / ${utang.today.tx} tx`,
-    `Yesterday: ${reportMoney(utang.yesterday.total)} / ${utang.yesterday.tx} tx`,
-    `This Week: ${reportMoney(utang.week.total)} / ${utang.week.tx} tx`,
-    `This Month: ${reportMoney(utang.month.total)} / ${utang.month.tx} tx`,
-    `This Year: ${reportMoney(utang.year.total)} / ${utang.year.tx} tx`,
-    '',
-    '<b>📊 Analytics (Today · Sales)</b>',
-    '━━━━━━━━━━━━━━━━━━',
-    `Avg. Transaction: ${reportMoney(a.avgTxSales)}`,
-    `Items Sold: ${Math.round(a.itemsSoldSales)}`,
+    `🏆 Best Day${summary.separateUtang ? ' (Sales)' : ''}: ${bestDay}`,
   ];
-  const tops = a.topProductsSales || [];
+  if (summary.separateUtang) {
+    lines.push(
+      '',
+      '<b>🧾 Utang (On-Account)</b>',
+      '━━━━━━━━━━━━━━━━━━',
+      `Today: ${reportMoney(utang.today.total)} / ${utang.today.tx} tx`,
+      `Yesterday: ${reportMoney(utang.yesterday.total)} / ${utang.yesterday.tx} tx`,
+      `This Week: ${reportMoney(utang.week.total)} / ${utang.week.tx} tx`,
+      `This Month: ${reportMoney(utang.month.total)} / ${utang.month.tx} tx`,
+      `This Year: ${reportMoney(utang.year.total)} / ${utang.year.tx} tx`
+    );
+  }
+  lines.push(
+    '',
+    `<b>📊 Analytics (Today${summary.separateUtang ? ' · Sales' : ''})</b>`,
+    '━━━━━━━━━━━━━━━━━━',
+    `Avg. Transaction: ${reportMoney(a.avgTx)}`,
+    `Items Sold: ${Math.round(a.itemsSold)}`
+  );
+  const tops = a.topProducts || [];
   if (tops.length) {
     lines.push('Top Products:');
     tops.forEach((p, i) => lines.push(`${i + 1}. ${escapeHtml(p.name)} — ${reportMoney(p.total)} (${Math.round(p.qty)} sold)`));
   }
-  if (a.topCashierSales) {
-    lines.push(`Top Cashier: ${escapeHtml(a.topCashierSales.cashier_name)} — ${reportMoney(a.topCashierSales.total)} / ${a.topCashierSales.tx} tx`);
+  if (a.topCashier) {
+    lines.push(`Top Cashier: ${escapeHtml(a.topCashier.cashier_name)} — ${reportMoney(a.topCashier.total)} / ${a.topCashier.tx} tx`);
   }
-  if (a.payBreakSales.length) {
-    lines.push('Payments: ' + a.payBreakSales.map((p) => `${p.payment_method} ${reportMoney(p.total)}`).join(' · '));
+  if (a.payBreak.length) {
+    lines.push('Payments: ' + a.payBreak.map((p) => `${p.payment_method} ${reportMoney(p.total)}`).join(' · '));
   }
   // Refunds
   try {
-    const refToday = db.prepare(`SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total FROM refunds WHERE date(datetime)=date('now','localtime')`).get();
+    const refToday = db.prepare(
+      `SELECT COUNT(*) AS tx, COALESCE(SUM(r.total),0) AS total
+         FROM refunds r JOIN sales s ON r.original_sale_id=s.id
+        WHERE date(r.datetime)=date('now','localtime')${reportPaymentFilter(db, 's.payment_method')}`
+    ).get();
     if (refToday && refToday.tx > 0) {
       lines.push('', '<b>↩️ Refunds (Today)</b>', '━━━━━━━━━━━━━━━━━━', `Refunds: ${refToday.tx} / ${reportMoney(refToday.total)}`);
     }

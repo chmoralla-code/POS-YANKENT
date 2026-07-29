@@ -666,6 +666,14 @@ App._start = async function () {
     App.currencySymbol = s.currency_symbol || '₱';
   } catch { App.settingsCache = {}; }
 
+  // Migrate the old Analytics-only Separate preference once, then keep the
+  // main-process report scope ready for every report/export in the app.
+  try {
+    await App.reporting.load();
+  } catch (e) {
+    console.warn('Could not initialize report scope:', e);
+  }
+
   // ---- Proactive printer reconnect on login -----------------------------
   // On a fresh boot (laptop was powered off then on), the POS auto-starts
   // and the cashier logs in — but the Bluetooth GATT link from the previous

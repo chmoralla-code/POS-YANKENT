@@ -29,14 +29,22 @@ async function setup() {
 async function makeSale(api, session, {
   productId, sku, name, unit = 'bag', qty, unitPrice, factor = 1,
   discount = 0,
+  paymentMethod = 'cash',
+  customerId = null,
+  customerName = '',
 }) {
+  const due = new Date();
+  due.setDate(due.getDate() + 7);
   const res = await api.call('pos:sales:create', session, {
     items: [{
       productId, sku, name, unit, qty, unitPrice, factor,
     }],
     discount,
-    paymentMethod: 'cash',
-    amountTendered: 99999,
+    paymentMethod,
+    customerId,
+    customerName,
+    dueDate: paymentMethod === 'account' ? due.toISOString().slice(0, 10) : undefined,
+    amountTendered: paymentMethod === 'cash' ? 99999 : 0,
   });
   await api.call('pos:sales:commit', session, res.txnId);
   return res;
@@ -125,6 +133,79 @@ test('margin report totals use catalog margin rules times qty sold', async () =>
   assert.equal(report.totals.baligya, row.baligya);
   assert.equal(report.totals.puhunan, row.puhunan);
   assert.equal(report.totals.halin, row.halin);
+  t.api.close();
+});
+
+test('Margin table Reports follows the Analytics Separate switch', async () => {
+  const t = await setup();
+  const product = t.api.db.prepare(
+    "SELECT id, sku, name, base_unit FROM products WHERE sku='CMT-001' AND active=1"
+  ).get();
+  const customer = t.api.db.prepare(
+    "SELECT id, name FROM customers WHERE name='ABC Construction'"
+  ).get();
+  t.api.db.prepare('UPDATE products SET price=100, margin_original_cost=NULL WHERE id=?')
+    .run(product.id);
+  t.api.db.prepare('UPDATE product_units SET price=100 WHERE product_id=?')
+    .run(product.id);
+
+  await makeSale(t.api, t.cashierSession, {
+    productId: product.id,
+    sku: product.sku,
+    name: product.name,
+    unit: product.base_unit || 'bag',
+    qty: 1,
+    unitPrice: 100,
+  });
+  await makeSale(t.api, t.cashierSession, {
+    productId: product.id,
+    sku: product.sku,
+    name: product.name,
+    unit: product.base_unit || 'bag',
+    qty: 2,
+    unitPrice: 100,
+    paymentMethod: 'account',
+    customerId: customer.id,
+    customerName: customer.name,
+  });
+
+  const combined = await t.api.call(
+    'pos:marginReports:generate',
+    t.adminSession,
+    'today'
+  );
+  assert.equal(combined.separateUtang, false);
+  assert.equal(combined.rows[0].qty_sold, 3);
+  assert.equal(combined.totals.baligya, 300);
+  assert.equal(combined.totals.halin, 30);
+
+  await t.api.call(
+    'pos:reports:setUtangSeparation',
+    t.adminSession,
+    true
+  );
+  const separated = await t.api.call(
+    'pos:marginReports:generate',
+    t.adminSession,
+    'today'
+  );
+  assert.equal(separated.separateUtang, true);
+  assert.equal(separated.rows[0].qty_sold, 1);
+  assert.equal(separated.totals.baligya, 100);
+  assert.equal(separated.totals.halin, 10);
+
+  await t.api.call(
+    'pos:reports:setUtangSeparation',
+    t.adminSession,
+    false
+  );
+  const restored = await t.api.call(
+    'pos:marginReports:generate',
+    t.adminSession,
+    'today'
+  );
+  assert.equal(restored.rows[0].qty_sold, 3);
+  assert.equal(restored.totals.baligya, 300);
   t.api.close();
 });
 
@@ -306,6 +387,7 @@ test('margin report workbook and PDF include period, columns, and totals', async
   assert.ok(sheet);
   assert.equal(sheet.getCell('A2').value, 'MARGIN TABLE REPORTS');
   assert.equal(sheet.getCell('B3').value, 'Today');
+  assert.equal(sheet.getCell('B6').value, 'All completed sales — Utang included');
   assert.deepEqual(
     [1, 2, 3, 4, 5, 6].map((column) => sheet.getCell(8, column).value),
     [...REPORT_HEADERS]
@@ -320,6 +402,7 @@ test('margin report workbook and PDF include period, columns, and totals', async
   const html = buildMarginReportPdfHtml(sampleReport());
   assert.match(html, /Margin table Reports/);
   assert.match(html, /Today/);
+  assert.match(html, /All completed sales — Utang included/);
   assert.match(html, /Cement Bag/);
   assert.match(html, /TOTAL/);
   assert.doesNotMatch(html, /<script/i);

@@ -214,6 +214,9 @@ const SETTINGS_DEFAULTS = {
   // Owner-entered store expenses for the simple Analytics earnings card.
   // Earnings = this month's sales − this value (beginner-friendly, one blank).
   analytics_total_expenses: '0',
+  // Global report scope controlled by Analytics → Separate. Blank means an
+  // existing install has not yet migrated its renderer-local preference.
+  separate_utang_reports: '',
   app_version: '1',
   session_idle_timeout: '15', // minutes; 0 = disabled (not recommended)
 };

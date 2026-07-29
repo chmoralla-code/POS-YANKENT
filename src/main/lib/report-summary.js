@@ -38,6 +38,37 @@ const DATE_SQL = Object.freeze({
 
 const PAID_ONLY = ` AND payment_method != 'account'`;
 const UTANG_ONLY = ` AND payment_method = 'account'`;
+const SEPARATE_UTANG_SETTING = 'separate_utang_reports';
+
+function getUtangSeparation(db) {
+  const row = db.prepare('SELECT value FROM settings WHERE key=?')
+    .get(SEPARATE_UTANG_SETTING);
+  const value = row == null ? '' : String(row.value);
+  return {
+    enabled: value === '1',
+    configured: value === '0' || value === '1',
+  };
+}
+
+function setUtangSeparation(db, enabled) {
+  const normalized = enabled === true || enabled === 1 || enabled === '1';
+  db.prepare(
+    `INSERT INTO settings(key,value) VALUES(?,?)
+     ON CONFLICT(key) DO UPDATE SET value=excluded.value`
+  ).run(SEPARATE_UTANG_SETTING, normalized ? '1' : '0');
+  return { enabled: normalized, configured: true };
+}
+
+function isUtangSeparated(db) {
+  return getUtangSeparation(db).enabled;
+}
+
+function reportPaymentFilter(db, column = 'payment_method') {
+  if (column !== 'payment_method' && column !== 's.payment_method') {
+    throw new Error('Invalid report payment column');
+  }
+  return isUtangSeparated(db) ? ` AND ${column} != 'account'` : '';
+}
 
 function bestDay(db, paymentFilterSql = '') {
   const best = db.prepare(
@@ -68,22 +99,32 @@ function periodSet(db, paymentFilterSql = '', { withVat = false } = {}) {
 /**
  * @returns {{
  *   today, yesterday, week, month, year, bestDay,
+ *   combined: { today, yesterday, week, month, year, bestDay },
  *   sales: { today, yesterday, week, month, year, bestDay },
- *   utang: { today, yesterday, week, month, year }
+ *   utang: { today, yesterday, week, month, year },
+ *   separateUtang: boolean
  * }}
  */
 function buildReportSummary(db) {
   const combined = periodSet(db, '');
   const sales = periodSet(db, PAID_ONLY);
   const utang = periodSet(db, UTANG_ONLY);
-  return {
+  const combinedWithBest = {
     ...combined,
     bestDay: bestDay(db, ''),
-    sales: {
-      ...sales,
-      bestDay: bestDay(db, PAID_ONLY),
-    },
+  };
+  const salesWithBest = {
+    ...sales,
+    bestDay: bestDay(db, PAID_ONLY),
+  };
+  const separateUtang = isUtangSeparated(db);
+  const selected = separateUtang ? salesWithBest : combinedWithBest;
+  return {
+    ...selected,
+    combined: combinedWithBest,
+    sales: salesWithBest,
     utang,
+    separateUtang,
   };
 }
 
@@ -94,21 +135,34 @@ function buildReportSummaryWithVat(db) {
   const combined = periodSet(db, '', { withVat: true });
   const sales = periodSet(db, PAID_ONLY, { withVat: true });
   const utang = periodSet(db, UTANG_ONLY, { withVat: true });
-  return {
-    combined,
-    sales: {
-      ...sales,
-      bestDay: bestDay(db, PAID_ONLY),
-    },
-    utang,
+  const combinedWithBest = {
+    ...combined,
     bestDay: bestDay(db, ''),
+  };
+  const salesWithBest = {
+    ...sales,
+    bestDay: bestDay(db, PAID_ONLY),
+  };
+  const separateUtang = isUtangSeparated(db);
+  const selected = separateUtang ? salesWithBest : combinedWithBest;
+  return {
+    ...selected,
+    combined: combinedWithBest,
+    sales: salesWithBest,
+    utang,
+    separateUtang,
   };
 }
 
 module.exports = {
   buildReportSummary,
   buildReportSummaryWithVat,
+  getUtangSeparation,
+  setUtangSeparation,
+  isUtangSeparated,
+  reportPaymentFilter,
   DATE_SQL,
   PAID_ONLY,
   UTANG_ONLY,
+  SEPARATE_UTANG_SETTING,
 };

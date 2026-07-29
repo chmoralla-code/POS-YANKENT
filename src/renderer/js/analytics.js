@@ -9,14 +9,12 @@
 window.App = window.App || {};
 App.views = App.views || {};
 
-App.views.analytics = {
-  title: 'Analytics',
-  viewEl: null,
-  openState: { topSellers: true, refunds: false },
-  separate: false,
-  _cache: null,
+App.reporting = App.reporting || {
+  separateUtang: false,
+  loaded: false,
+  pending: null,
 
-  _readSeparatePref() {
+  _readLegacy() {
     try {
       return localStorage.getItem('yankent-analytics-separate') === '1';
     } catch {
@@ -24,15 +22,55 @@ App.views.analytics = {
     }
   },
 
-  _writeSeparatePref(on) {
+  _writeLegacy(on) {
     try {
       localStorage.setItem('yankent-analytics-separate', on ? '1' : '0');
     } catch {}
   },
 
+  async load(force = false) {
+    if (this.loaded && !force) return this.separateUtang;
+    if (this.pending) return this.pending;
+    this.pending = (async () => {
+      let state = await App.pos.reports.utangSeparation();
+      if (!state || !state.configured) {
+        state = await App.pos.reports.setUtangSeparation(this._readLegacy());
+      }
+      this.separateUtang = !!(state && state.enabled);
+      this.loaded = true;
+      this._writeLegacy(this.separateUtang);
+      return this.separateUtang;
+    })();
+    try {
+      return await this.pending;
+    } finally {
+      this.pending = null;
+    }
+  },
+
+  async set(on) {
+    const state = await App.pos.reports.setUtangSeparation(!!on);
+    this.separateUtang = !!(state && state.enabled);
+    this.loaded = true;
+    this._writeLegacy(this.separateUtang);
+    return this.separateUtang;
+  },
+
+  isUtangSeparated() {
+    return !!this.separateUtang;
+  },
+};
+
+App.views.analytics = {
+  title: 'Analytics',
+  viewEl: null,
+  openState: { topSellers: true, refunds: false },
+  separate: false,
+  _cache: null,
+
   async render(view) {
     this.viewEl = view;
-    this.separate = this._readSeparatePref();
+    this.separate = await App.reporting.load();
     view.classList.add('view-analytics');
     const role = App.current.user && App.current.user.role === 'admin' ? 'Administrator' : 'Cashier';
     view.innerHTML = `
@@ -75,12 +113,21 @@ App.views.analytics = {
       await this._load();
       button.disabled = false; button.textContent = 'Refresh';
     };
-    view.querySelector('#anSeparate').onclick = () => {
-      this.separate = !this.separate;
-      this._writeSeparatePref(this.separate);
-      this._syncSeparateButton();
-      if (this._cache) this._renderFromCache(this._cache);
-      else this._load();
+    view.querySelector('#anSeparate').onclick = async () => {
+      const button = view.querySelector('#anSeparate');
+      const previous = this.separate;
+      button.disabled = true;
+      try {
+        this.separate = await App.reporting.set(!previous);
+        this._syncSeparateButton();
+        await this._load();
+      } catch (e) {
+        this.separate = previous;
+        this._syncSeparateButton();
+        App.ui.toast(e.message || 'Could not update report scope', 'err');
+      } finally {
+        if (this.viewEl === view) button.disabled = false;
+      }
     };
     view.querySelector('#anSections').addEventListener('click', (e) => {
       const toggle = e.target.closest('.collapse-toggle');
@@ -192,12 +239,13 @@ App.views.analytics = {
     const sectionsEl = this.viewEl.querySelector('#anSections');
     const salesSub = this.viewEl.querySelector('#anSalesSub');
 
+    const combinedSource = s.combined || s;
     const combined = {
-      today: s.today || { tx: 0, total: 0 },
-      yesterday: s.yesterday || { tx: 0, total: 0 },
-      week: s.week || { tx: 0, total: 0 },
-      month: s.month || { tx: 0, total: 0 },
-      year: s.year || { tx: 0, total: 0 },
+      today: combinedSource.today || { tx: 0, total: 0 },
+      yesterday: combinedSource.yesterday || { tx: 0, total: 0 },
+      week: combinedSource.week || { tx: 0, total: 0 },
+      month: combinedSource.month || { tx: 0, total: 0 },
+      year: combinedSource.year || { tx: 0, total: 0 },
     };
     const sales = s.sales || combined;
     const utang = s.utang || {
@@ -211,7 +259,7 @@ App.views.analytics = {
     const overview = this.separate ? sales : combined;
     const best = this.separate
       ? (sales.bestDay || null)
-      : (s.bestDay || null);
+      : (combinedSource.bestDay || null);
 
     if (salesSub) {
       salesSub.textContent = this.separate

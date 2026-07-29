@@ -17,6 +17,10 @@ const {
   dateStamp,
   ensureExtension,
 } = require('./margins');
+const {
+  isUtangSeparated,
+  reportPaymentFilter,
+} = require('../lib/report-summary');
 
 const PERIODS = Object.freeze({
   today: Object.freeze({
@@ -130,6 +134,7 @@ function generateReport(db, periodKey = 'today') {
       ) sale_totals ON sale_totals.sale_id = s.id
       LEFT JOIN products p ON p.id = si.product_id
      WHERE s.status = 'completed'
+       ${reportPaymentFilter(db, 's.payment_method')}
        AND ${period.sql}
      GROUP BY si.product_id
      ORDER BY baligya DESC, name COLLATE NOCASE
@@ -163,6 +168,7 @@ function generateReport(db, periodKey = 'today') {
     label: period.label,
     generatedAt: new Date().toISOString(),
     rules: MARGIN_RULES.map((rule) => ({ ...rule })),
+    separateUtang: isUtangSeparated(db),
     rows,
     totals,
   };

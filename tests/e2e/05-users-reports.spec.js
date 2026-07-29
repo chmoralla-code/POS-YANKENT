@@ -35,6 +35,39 @@ test.describe('Users (admin)', () => {
 });
 
 test.describe('Reports (admin)', () => {
+  test('Analytics Separate button controls report scope across the software', async () => {
+    const { electron, page } = await launchApp();
+    try {
+      await login(page, 'admin', 'admin123');
+      await page.evaluate(async () => {
+        localStorage.setItem('yankent-analytics-separate', '0');
+        await App.reporting.set(false);
+      });
+
+      await navigate(page, 'analytics');
+      const separate = page.locator('#anSeparate');
+      await expect(separate).toHaveAttribute('aria-pressed', 'false');
+      await separate.click();
+      await expect(separate).toHaveAttribute('aria-pressed', 'true');
+      await expect(page.locator('#anSeparateHint')).toContainText('Sales totals exclude Utang');
+
+      const persisted = await page.evaluate(() => window.pos.reports.utangSeparation());
+      expect(persisted).toEqual({ enabled: true, configured: true });
+
+      await navigate(page, 'reports');
+      await expect(page.locator('#rScope')).toContainText('exclude Utang');
+
+      await navigate(page, 'earnings');
+      await expect(page.locator('#eCards')).toContainText('Paid sales only — Utang excluded');
+
+      await navigate(page, 'marginReports');
+      await expect(page.locator('#mrepHint')).toContainText('Separate is on, so Utang is excluded');
+
+      await navigate(page, 'analytics');
+      await expect(page.locator('#anSeparate')).toHaveAttribute('aria-pressed', 'true');
+    } finally { await electron.close(); }
+  });
+
   test('reports view loads with summary stats', async () => {
     const { electron, page } = await launchApp();
     try {

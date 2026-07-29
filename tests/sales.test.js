@@ -254,13 +254,28 @@ test('CSV exports neutralize formulas and honor the requested date range', async
       paymentMethod: 'cash', amountTendered: 500,
     });
     await api.call('pos:sales:commit', session, second.txnId);
+    const customer = api.db.prepare(
+      "SELECT * FROM customers WHERE name='ABC Construction'"
+    ).get();
+    const account = await api.call('pos:sales:create', session, {
+      items: [{ productId: cement.id, unit: 'bag', qty: 1 }],
+      paymentMethod: 'account',
+      customerId: customer.id,
+      customerName: customer.name,
+      dueDate: '2026-12-31',
+      amountTendered: 0,
+    });
+    await api.call('pos:sales:commit', session, account.txnId);
     api.db.prepare("UPDATE sales SET datetime='2026-01-15 10:00:00' WHERE id=?").run(first.saleId);
     api.db.prepare("UPDATE sales SET datetime='2026-02-15 10:00:00' WHERE id=?").run(second.saleId);
+    api.db.prepare("UPDATE sales SET datetime='2026-02-16 10:00:00' WHERE id=?").run(account.saleId);
+    await api.call('pos:reports:setUtangSeparation', session, true);
 
     await api.call('pos:reports:exportCSV', session, 'sales', { from: '2026-02-01', to: '2026-02-28' });
     const csv = fs.readFileSync(csvPath, 'utf8');
     assert.match(csv, new RegExp(second.txnId));
     assert.doesNotMatch(csv, new RegExp(first.txnId));
+    assert.doesNotMatch(csv, new RegExp(account.txnId));
   } finally {
     api.close();
     try { fs.unlinkSync(csvPath); } catch {}
