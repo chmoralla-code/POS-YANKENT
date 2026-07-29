@@ -124,6 +124,7 @@ contextBridge.exposeInMainWorld('pos', {
   // ---- Product Margin Table (admin) ----
   margins: {
     readiness: () => call('pos:margins:readiness'),
+    addItem: (item) => call('pos:margins:addItem', item),
     setSource: (productId, source) => call('pos:margins:setSource', productId, source),
     bulkSetSource: (productIds, source) => call('pos:margins:bulkSetSource', productIds, source),
     generate: () => call('pos:margins:generate'),

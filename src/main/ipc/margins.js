@@ -12,6 +12,8 @@ const {
 
 const CATEGORY_NAME = 'Newly Added Items';
 const MAX_SOURCE_LENGTH = 200;
+const MAX_ITEM_NAME_LENGTH = 200;
+const MAX_UNIT_LENGTH = 32;
 const MARGIN_RULES = Object.freeze([
   Object.freeze({ min_exclusive: null, max_inclusive: 100, unit_profit: 10 }),
   Object.freeze({ min_exclusive: 100, max_inclusive: 200, unit_profit: 15 }),
@@ -54,6 +56,32 @@ function normalizeOriginalCost(value, sellingPrice) {
     throw new Error('Original price must be lower than the selling price');
   }
   return cost;
+}
+
+function normalizeRequiredText(value, label, maxLength) {
+  const text = String(value == null ? '' : value).trim();
+  if (!text) throw new Error(`${label} is required`);
+  if (text.length > maxLength) {
+    throw new Error(`${label} cannot exceed ${maxLength} characters`);
+  }
+  return text;
+}
+
+function normalizePositiveNumber(value, label) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) {
+    throw new Error(`${label} must be greater than zero`);
+  }
+  return number;
+}
+
+function normalizeNonNegativeNumber(value, label, fallback = 0) {
+  const raw = value === '' || value == null ? fallback : value;
+  const number = Number(raw);
+  if (!Number.isFinite(number) || number < 0) {
+    throw new Error(`${label} must be zero or greater`);
+  }
+  return number;
 }
 
 function eligibleRows(db) {
@@ -127,6 +155,108 @@ function computedRow(row) {
     price_error: priceValid
       ? null
       : 'Selling price must be greater than zero',
+  };
+}
+
+function createMarginItem(db, payload = {}, session = null) {
+  const category = db.prepare('SELECT id FROM categories WHERE name=?').get(CATEGORY_NAME);
+  if (!category) {
+    throw new Error(`The "${CATEGORY_NAME}" category is missing`);
+  }
+
+  const name = normalizeRequiredText(payload.name, 'Item name', MAX_ITEM_NAME_LENGTH);
+  const unit = normalizeRequiredText(
+    payload.base_unit != null ? payload.base_unit : payload.unit,
+    'Unit',
+    MAX_UNIT_LENGTH
+  );
+  const stock = normalizePositiveNumber(payload.stock, 'Stock');
+  const price = round2(normalizePositiveNumber(
+    payload.selling_price != null ? payload.selling_price : payload.price,
+    'Selling price'
+  ));
+  const source = normalizeSource(
+    payload.purchase_source != null ? payload.purchase_source : payload.source
+  );
+  if (!source) throw new Error('Place where bought is required');
+  const lowStock = normalizeNonNegativeNumber(
+    payload.low_stock_threshold,
+    'Low-stock threshold',
+    10
+  );
+
+  const rawOriginalCost = payload.original_cost != null
+    ? payload.original_cost
+    : payload.margin_original_cost;
+  const hasOriginalCost = rawOriginalCost !== '' && rawOriginalCost != null;
+  const automaticProfit = unitProfitFor(price);
+  if (!hasOriginalCost && price < automaticProfit) {
+    throw new Error(
+      `Original price (puhunan) is required when the selling price is below ₱${automaticProfit}`
+    );
+  }
+  const originalCost = hasOriginalCost
+    ? normalizeOriginalCost(rawOriginalCost, price)
+    : null;
+  const syncedCost = originalCost == null
+    ? round2(price - automaticProfit)
+    : originalCost;
+
+  const duplicate = db.prepare(
+    'SELECT id FROM products WHERE active=1 AND LOWER(TRIM(name))=LOWER(?) LIMIT 1'
+  ).get(name);
+  if (duplicate) throw new Error('An active product with this name already exists');
+
+  const productId = db.transaction(() => {
+    let next = Number(db.prepare('SELECT COALESCE(MAX(id),0)+1 AS n FROM products').get().n);
+    let sku = '';
+    do {
+      sku = 'P-' + String(next).padStart(5, '0');
+      next += 1;
+    } while (db.prepare('SELECT id FROM products WHERE sku=?').get(sku));
+
+    const inserted = db.prepare(
+      `INSERT INTO products(
+         sku,name,category_id,base_unit,stock,cost,price,purchase_source,
+         margin_original_cost,low_stock_threshold,is_service,active
+       ) VALUES(?,?,?,?,?,?,?,?,?,?,0,1)`
+    ).run(
+      sku,
+      name,
+      category.id,
+      unit,
+      stock,
+      syncedCost,
+      price,
+      source,
+      originalCost,
+      lowStock
+    );
+    const id = Number(inserted.lastInsertRowid);
+    db.prepare(
+      'INSERT INTO product_units(product_id,unit,factor,price) VALUES(?,?,1,?)'
+    ).run(id, unit, price);
+    db.prepare(
+      `INSERT INTO stock_movements(
+         product_id,movement,qty_change,reason,user_id,source_location
+       ) VALUES(?,'restock',?,?,?,?)`
+    ).run(
+      id,
+      stock,
+      'Initial stock (Margin Table Add Item)',
+      session && session.id ? session.id : null,
+      source
+    );
+    return id;
+  })();
+
+  const row = eligibleRows(db).map(computedRow)
+    .find((entry) => Number(entry.id) === productId);
+  if (!row) throw new Error('The new item could not be loaded into the margin table');
+  return {
+    id: productId,
+    category: CATEGORY_NAME,
+    row,
   };
 }
 
@@ -304,6 +434,10 @@ function register(ipcMain, ctx) {
 
   guard(ipcMain, 'pos:margins:readiness', { admin: true }, () => buildReadiness(db));
 
+  guard(ipcMain, 'pos:margins:addItem', { admin: true }, ({ session }, payload) =>
+    createMarginItem(db, payload, session)
+  );
+
   guard(ipcMain, 'pos:margins:setSource', { admin: true }, (_c, productId, value) => {
     const id = normalizeProductId(productId);
     const source = normalizeSource(value);
@@ -364,6 +498,7 @@ module.exports = {
   register,
   buildReadiness,
   generateTable,
+  createMarginItem,
   unitProfitFor,
   CATEGORY_NAME,
   MARGIN_RULES,

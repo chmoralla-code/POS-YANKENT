@@ -80,6 +80,137 @@ test('margin table generates computed cost and stock gross from live base prices
   t.api.close();
 });
 
+test('Add Item creates one synced product for margin table, inventory, and POS', async () => {
+  const t = await setup();
+  const created = await t.api.call('pos:margins:addItem', t.adminSession, {
+    name: 'Margin Sync Test Item',
+    unit: 'bundle',
+    stock: 7,
+    purchase_source: 'Cogon Test Depot',
+    selling_price: 175,
+    low_stock_threshold: 2,
+  });
+
+  assert.equal(created.category, CATEGORY_NAME);
+  assert.deepEqual(
+    {
+      name: created.row.name,
+      unit: created.row.unit,
+      stock: created.row.stock,
+      source: created.row.purchase_source,
+      price: created.row.selling_price,
+      cost: created.row.computed_cost,
+      unitProfit: created.row.unit_profit,
+      gross: created.row.potential_gross_profit,
+    },
+    {
+      name: 'Margin Sync Test Item',
+      unit: 'bundle',
+      stock: 7,
+      source: 'Cogon Test Depot',
+      price: 175,
+      cost: 160,
+      unitProfit: 15,
+      gross: 105,
+    }
+  );
+
+  const product = await t.api.call('pos:products:get', t.adminSession, created.id);
+  assert.equal(product.category, CATEGORY_NAME);
+  assert.match(product.sku, /^P-\d{5,}$/);
+  assert.equal(product.base_unit, 'bundle');
+  assert.equal(product.stock, 7);
+  assert.equal(product.cost, 160);
+  assert.equal(product.price, 175);
+  assert.equal(product.purchase_source, 'Cogon Test Depot');
+  assert.equal(product.margin_original_cost, null);
+  assert.equal(product.low_stock_threshold, 2);
+  assert.deepEqual(
+    product.units.map(({ unit, factor, price }) => ({ unit, factor, price })),
+    [{ unit: 'bundle', factor: 1, price: 175 }]
+  );
+
+  const catalog = await t.api.call(
+    'pos:products:list',
+    t.adminSession,
+    { q: 'Margin Sync Test Item' }
+  );
+  assert.equal(catalog.length, 1);
+  assert.equal(catalog[0].id, created.id);
+  assert.equal(catalog[0].category, CATEGORY_NAME);
+
+  const movement = t.api.db.prepare(
+    `SELECT movement,qty_change,reason,user_id,source_location
+       FROM stock_movements WHERE product_id=?`
+  ).get(created.id);
+  assert.deepEqual(movement, {
+    movement: 'restock',
+    qty_change: 7,
+    reason: 'Initial stock (Margin Table Add Item)',
+    user_id: t.adminSession.id,
+    source_location: 'Cogon Test Depot',
+  });
+
+  const readiness = await t.api.call('pos:margins:readiness', t.adminSession);
+  assert.equal(readiness.canGenerate, true);
+  assert.equal(readiness.rows.some((row) => row.id === created.id), true);
+  t.api.close();
+});
+
+test('Add Item validates low-price cost and prevents duplicate active products', async () => {
+  const t = await setup();
+  const before = t.api.db.prepare('SELECT COUNT(*) AS n FROM products').get().n;
+
+  await assert.rejects(
+    () => t.api.call('pos:margins:addItem', t.adminSession, {
+      name: 'Five Peso Item',
+      unit: 'pc',
+      stock: 3,
+      purchase_source: 'Supplier',
+      selling_price: 5,
+      low_stock_threshold: 1,
+    }),
+    /Original price.*required/i
+  );
+  assert.equal(t.api.db.prepare('SELECT COUNT(*) AS n FROM products').get().n, before);
+
+  const created = await t.api.call('pos:margins:addItem', t.adminSession, {
+    name: 'Five Peso Item',
+    unit: 'pc',
+    stock: 3,
+    purchase_source: 'Supplier',
+    selling_price: 5,
+    original_cost: 2.5,
+    low_stock_threshold: 1,
+  });
+  assert.equal(created.row.computed_cost, 2.5);
+  assert.equal(created.row.unit_profit, 2.5);
+  assert.equal(created.row.potential_gross_profit, 7.5);
+
+  const saved = await t.api.call('pos:products:get', t.adminSession, created.id);
+  assert.equal(saved.cost, 2.5);
+  assert.equal(saved.margin_original_cost, 2.5);
+
+  await assert.rejects(
+    () => t.api.call('pos:margins:addItem', t.adminSession, {
+      name: '  five peso item  ',
+      unit: 'pc',
+      stock: 1,
+      purchase_source: 'Other Supplier',
+      selling_price: 6,
+      original_cost: 3,
+    }),
+    /already exists/i
+  );
+  assert.equal(
+    t.api.db.prepare(
+      "SELECT COUNT(*) AS n FROM products WHERE LOWER(TRIM(name))='five peso item' AND active=1"
+    ).get().n,
+    1
+  );
+  t.api.close();
+});
+
 test('prices below the fixed margin still generate with blank original cost', async () => {
   assert.equal(unitProfitFor(100), 10);
   assert.equal(unitProfitFor(100.01), 15);
@@ -191,6 +322,13 @@ test('margin endpoints are administrator-only', async () => {
   });
   for (const call of [
     () => t.api.call('pos:margins:readiness', t.cashierSession),
+    () => t.api.call('pos:margins:addItem', t.cashierSession, {
+      name: 'Forbidden Item',
+      unit: 'pc',
+      stock: 1,
+      purchase_source: 'Supplier',
+      selling_price: 50,
+    }),
     () => t.api.call('pos:margins:generate', t.cashierSession),
     () => t.api.call('pos:margins:setSource', t.cashierSession, productId, 'Other'),
     () => t.api.call('pos:margins:bulkSetSource', t.cashierSession, [productId], 'Other'),

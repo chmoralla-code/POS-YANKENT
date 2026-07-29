@@ -19,6 +19,7 @@ App.views.margins = {
   sourceFilter: 'all',
   _sessionGeneration: null,
   _outsideClick: null,
+  _recentItemId: null,
 
   async render(view) {
     const generation = App.captureSessionGeneration();
@@ -32,6 +33,7 @@ App.views.margins = {
     this.reportShown = this.batchSize;
     this.search = '';
     this.sourceFilter = 'all';
+    this._recentItemId = null;
 
     view.classList.add('view-margins');
     view.innerHTML = `
@@ -42,6 +44,8 @@ App.views.margins = {
             <p>Fill where each item was bought, then generate the table.</p>
           </div>
           <div class="margin-header-actions">
+            <button type="button" class="btn btn-sm btn-primary margin-add-trigger"
+              id="mAddItem" data-testid="margin-add-item">+ Add Item</button>
             <button type="button" class="btn btn-sm btn-ghost" id="mRefresh">Refresh</button>
             <div class="margin-download" id="mDownload">
               <button type="button" class="btn btn-sm btn-ghost margin-download-trigger" id="mDownloadBtn"
@@ -64,6 +68,7 @@ App.views.margins = {
         <p class="margin-sr-only" id="mLive" aria-live="polite"></p>
       </div>`;
 
+    view.querySelector('#mAddItem').addEventListener('click', () => this._openAddItem());
     view.querySelector('#mRefresh').addEventListener('click', () => this._loadReadiness());
     view.querySelector('#mDownloadBtn').addEventListener('click', (event) => {
       event.stopPropagation();
@@ -93,6 +98,7 @@ App.views.margins = {
     this.report = null;
     this.prepRows = [];
     this.selected = new Set();
+    this._recentItemId = null;
   },
 
   _isCurrent(generation = this._sessionGeneration) {
@@ -105,6 +111,200 @@ App.views.margins = {
   _number(value) {
     const number = Number(value);
     return Number.isFinite(number) ? number : 0;
+  },
+
+  _fixedProfitFor(price) {
+    if (price <= 100) return 10;
+    if (price <= 200) return 15;
+    return 20;
+  },
+
+  _openAddItem() {
+    const modal = App.ui.modal({
+      title: 'Add Item',
+      wide: true,
+      closeOnOverlay: false,
+      bodyHtml: `
+        <form id="mAddItemForm" class="margin-add-form" novalidate>
+          <div class="margin-add-sync-note">
+            <span class="margin-add-sync-icon" aria-hidden="true">↻</span>
+            <div>
+              <strong>One item, synced everywhere</strong>
+              <p>This item will automatically appear in Margin Table, Products &amp; Inventory, and Point of Sale.</p>
+            </div>
+          </div>
+
+          <div class="margin-add-category">
+            <span>Category</span>
+            <strong>Newly Added Items</strong>
+            <small>SKU is created automatically</small>
+          </div>
+
+          <div class="margin-add-grid">
+            <div class="field margin-add-field-wide">
+              <label class="fl" for="mAddName">Item name</label>
+              <input id="mAddName" type="text" maxlength="200" autocomplete="off"
+                placeholder="e.g. 1/2 inch PVC elbow" required>
+            </div>
+            <div class="field">
+              <label class="fl" for="mAddUnit">Unit</label>
+              <input id="mAddUnit" type="text" maxlength="32" value="pc"
+                placeholder="pc, box, meter…" required>
+            </div>
+            <div class="field">
+              <label class="fl" for="mAddStock">Starting stock</label>
+              <input id="mAddStock" type="number" min="0.001" step="any"
+                inputmode="decimal" placeholder="0" required>
+            </div>
+            <div class="field">
+              <label class="fl" for="mAddSource">Place where bought</label>
+              <input id="mAddSource" type="text" maxlength="200" autocomplete="off"
+                placeholder="Supplier, store, or market" required>
+            </div>
+            <div class="field">
+              <label class="fl" for="mAddPrice">Selling price</label>
+              <div class="margin-add-money">
+                <span aria-hidden="true">₱</span>
+                <input id="mAddPrice" type="number" min="0.01" step="0.01"
+                  inputmode="decimal" placeholder="0.00" required>
+              </div>
+            </div>
+            <div class="field">
+              <label class="fl" for="mAddOriginalCost" id="mAddCostLabel">Original cost (puhunan)</label>
+              <div class="margin-add-money">
+                <span aria-hidden="true">₱</span>
+                <input id="mAddOriginalCost" type="number" min="0" step="0.01"
+                  inputmode="decimal" placeholder="Auto-calculated">
+              </div>
+              <small class="margin-add-cost-hint" id="mAddCostHint" aria-live="polite">
+                Leave blank to calculate from the fixed margin.
+              </small>
+            </div>
+            <div class="field">
+              <label class="fl" for="mAddLowStock">Low-stock warning at</label>
+              <input id="mAddLowStock" type="number" min="0" step="any"
+                inputmode="decimal" value="10" required>
+            </div>
+          </div>
+        </form>`,
+      footerHtml: `
+        <button type="button" class="btn btn-ghost" id="mAddCancel">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="mAddSave" form="mAddItemForm">Add &amp; Sync Item</button>`,
+    });
+    modal.el.querySelector('.modal').classList.add('margin-add-modal');
+
+    const form = modal.el.querySelector('#mAddItemForm');
+    const name = modal.el.querySelector('#mAddName');
+    const price = modal.el.querySelector('#mAddPrice');
+    const originalCost = modal.el.querySelector('#mAddOriginalCost');
+    const costLabel = modal.el.querySelector('#mAddCostLabel');
+    const costHint = modal.el.querySelector('#mAddCostHint');
+    const save = modal.el.querySelector('#mAddSave');
+    let saving = false;
+
+    const updateCostHint = () => {
+      const sellingPrice = Number(price.value);
+      if (!Number.isFinite(sellingPrice) || sellingPrice <= 0) {
+        originalCost.required = false;
+        originalCost.placeholder = 'Auto-calculated';
+        costLabel.textContent = 'Original cost (puhunan)';
+        costHint.textContent = 'Leave blank to calculate from the fixed margin.';
+        costHint.classList.remove('is-required');
+        return;
+      }
+      const profit = this._fixedProfitFor(sellingPrice);
+      if (sellingPrice < profit) {
+        originalCost.required = true;
+        originalCost.placeholder = 'Required';
+        costLabel.textContent = 'Original cost (puhunan) — required';
+        costHint.textContent = `Required because the selling price is below the ₱${profit} fixed margin.`;
+        costHint.classList.add('is-required');
+      } else {
+        const automaticCost = Math.round((sellingPrice - profit) * 100) / 100;
+        originalCost.required = false;
+        originalCost.placeholder = automaticCost.toFixed(2);
+        costLabel.textContent = 'Original cost (puhunan)';
+        costHint.textContent = `Leave blank to use ₱${automaticCost.toFixed(2)} cost and ₱${profit} profit.`;
+        costHint.classList.remove('is-required');
+      }
+    };
+
+    const invalid = (input, message) => {
+      App.ui.toast(message, 'err');
+      input.focus();
+      return false;
+    };
+
+    price.addEventListener('input', updateCostHint);
+    modal.el.querySelector('#mAddCancel').addEventListener('click', () => modal.close());
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (saving) return;
+
+      const unit = modal.el.querySelector('#mAddUnit');
+      const stock = modal.el.querySelector('#mAddStock');
+      const source = modal.el.querySelector('#mAddSource');
+      const lowStock = modal.el.querySelector('#mAddLowStock');
+      const sellingPrice = Number(price.value);
+      const stockValue = Number(stock.value);
+      const lowStockValue = Number(lowStock.value);
+      const costText = originalCost.value.trim();
+      const costValue = costText === '' ? null : Number(costText);
+      const fixedProfit = this._fixedProfitFor(sellingPrice);
+
+      if (!name.value.trim()) return invalid(name, 'Enter the item name');
+      if (!unit.value.trim()) return invalid(unit, 'Enter the unit');
+      if (!stock.value.trim() || !Number.isFinite(stockValue) || stockValue <= 0) {
+        return invalid(stock, 'Starting stock must be greater than zero');
+      }
+      if (!source.value.trim()) return invalid(source, 'Enter where the item was bought');
+      if (!price.value.trim() || !Number.isFinite(sellingPrice) || sellingPrice <= 0) {
+        return invalid(price, 'Selling price must be greater than zero');
+      }
+      if (!lowStock.value.trim() || !Number.isFinite(lowStockValue) || lowStockValue < 0) {
+        return invalid(lowStock, 'Low-stock warning must be zero or greater');
+      }
+      if (costText !== '' && (!Number.isFinite(costValue) || costValue < 0)) {
+        return invalid(originalCost, 'Original cost must be zero or greater');
+      }
+      if (costValue != null && costValue >= sellingPrice) {
+        return invalid(originalCost, 'Original cost must be lower than the selling price');
+      }
+      if (sellingPrice < fixedProfit && costValue == null) {
+        return invalid(originalCost, 'Enter the original cost for this low-price item');
+      }
+
+      saving = true;
+      save.disabled = true;
+      save.textContent = 'Adding & syncing…';
+      try {
+        const created = await App.pos.margins.addItem({
+          name: name.value.trim(),
+          unit: unit.value.trim(),
+          stock: stockValue,
+          purchase_source: source.value.trim(),
+          selling_price: sellingPrice,
+          original_cost: costValue,
+          low_stock_threshold: lowStockValue,
+        });
+        if (!this._isCurrent()) return;
+        this._recentItemId = Number(created.id);
+        await modal.close();
+        await this._loadReadiness();
+        if (!this._isCurrent()) return;
+        this._announce(`${name.value.trim()} added and synced.`);
+        App.ui.toast('Item added and synced to Margin Table, Inventory & POS ✓', 'ok');
+      } catch (error) {
+        if (!this._isCurrent()) return;
+        saving = false;
+        save.disabled = false;
+        save.textContent = 'Add & Sync Item';
+        App.ui.toast(error.message || 'Could not add the item', 'err');
+      }
+    });
+
+    updateCostHint();
+    requestAnimationFrame(() => name.focus());
   },
 
   _count(data, camel, snake) {
@@ -189,6 +389,13 @@ App.views.margins = {
       this.readiness = data || {};
       this._renderReadiness();
       this._announce('Items loaded.');
+      if (this._recentItemId) {
+        requestAnimationFrame(() => {
+          const row = this.viewEl
+            && this.viewEl.querySelector(`tr[data-product-id="${this._recentItemId}"]`);
+          if (row) row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        });
+      }
     } catch (error) {
       if (!this._isCurrent(generation)) return;
       const message = error && error.message ? error.message : 'Unable to load items.';
@@ -227,6 +434,9 @@ App.views.margins = {
       : (typeof data.can_generate === 'boolean' ? data.can_generate : eligible > 0 && missing === 0 && invalid === 0);
 
     this.prepRows = [...rows].sort((a, b) => {
+      const aRecent = Number(a.id) === this._recentItemId;
+      const bRecent = Number(b.id) === this._recentItemId;
+      if (aRecent !== bRecent) return aRecent ? -1 : 1;
       const aNeedsAttention = this._sourceMissing(a) || !this._priceValid(a);
       const bNeedsAttention = this._sourceMissing(b) || !this._priceValid(b);
       if (aNeedsAttention !== bNeedsAttention) return aNeedsAttention ? -1 : 1;
@@ -340,9 +550,14 @@ App.views.margins = {
     const priceValid = this._priceValid(row);
     const stock = this._number(this._field(row, 'stock', 'stock', 0));
     const sellingPrice = this._number(this._field(row, 'selling_price', 'sellingPrice', 0));
+    const rowClasses = [
+      !priceValid ? 'has-price-error' : '',
+      sourceMissing ? 'needs-source' : '',
+      id === this._recentItemId ? 'is-recent' : '',
+    ].filter(Boolean).join(' ');
 
     return `
-      <tr data-product-id="${id}" class="${!priceValid ? 'has-price-error' : ''}${sourceMissing ? ' needs-source' : ''}">
+      <tr data-product-id="${id}" class="${rowClasses}">
         <td class="margin-check-cell">
           <input type="checkbox" class="m-row-check" value="${id}" aria-label="Select ${App.ui.esc(this._itemName(row))}"
             ${this.selected.has(id) ? 'checked' : ''}>
