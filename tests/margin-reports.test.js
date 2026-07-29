@@ -198,7 +198,7 @@ test('margin report yesterday period only includes yesterday sales', async () =>
     unitPrice: 100,
   });
   t.api.db.prepare(
-    `UPDATE sales SET datetime=datetime('now','localtime','-1 day','utc') WHERE txn_id=?`
+    `UPDATE sales SET datetime=datetime('now','-1 day') WHERE txn_id=?`
   ).run(yesterdaySale.txnId);
 
   const today = await t.api.call('pos:marginReports:generate', t.adminSession, 'today');
@@ -231,14 +231,14 @@ test('today uses Philippine local date for after-midnight UTC timestamps', async
   // 12:30 AM Manila is still the previous UTC calendar date.
   t.api.db.prepare(
     `UPDATE sales
-        SET datetime=datetime('now','localtime','start of day','+30 minutes','utc')
+        SET datetime=datetime('now','+8 hours','start of day','+30 minutes','-8 hours')
       WHERE txn_id=?`
   ).run(sale.txnId);
 
   const stored = t.api.db.prepare(
     `SELECT date(datetime) AS utc_date,
-            date(datetime,'localtime') AS local_date,
-            date('now','localtime') AS today
+            date(datetime,'+8 hours') AS local_date,
+            date('now','+8 hours') AS today
        FROM sales WHERE txn_id=?`
   ).get(sale.txnId);
   assert.notEqual(stored.utc_date, stored.local_date);
