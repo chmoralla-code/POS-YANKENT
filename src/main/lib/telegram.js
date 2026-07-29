@@ -215,7 +215,20 @@ function buildAnalytics(db) {
      WHERE status='completed' AND date(datetime)=date('now','localtime')`
   ).get();
 
+  const salesToday = db.prepare(
+    `SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total FROM sales
+     WHERE status='completed' AND date(datetime)=date('now','localtime')
+       AND payment_method != 'account'`
+  ).get();
+
+  const utangToday = db.prepare(
+    `SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total FROM sales
+     WHERE status='completed' AND date(datetime)=date('now','localtime')
+       AND payment_method = 'account'`
+  ).get();
+
   const avgTx = today.tx > 0 ? today.total / today.tx : 0;
+  const avgTxSales = salesToday.tx > 0 ? salesToday.total / salesToday.tx : 0;
 
   const itemsSold = db.prepare(
     `SELECT COALESCE(SUM(si.qty),0) AS q FROM sale_items si
@@ -223,10 +236,25 @@ function buildAnalytics(db) {
      WHERE s.status='completed' AND date(s.datetime)=date('now','localtime')`
   ).get().q;
 
+  const itemsSoldSales = db.prepare(
+    `SELECT COALESCE(SUM(si.qty),0) AS q FROM sale_items si
+     JOIN sales s ON si.sale_id=s.id
+     WHERE s.status='completed' AND date(s.datetime)=date('now','localtime')
+       AND s.payment_method != 'account'`
+  ).get().q;
+
   const topProducts = db.prepare(
     `SELECT si.name, SUM(si.qty) AS qty, SUM(si.amount) AS total
      FROM sale_items si JOIN sales s ON si.sale_id=s.id
      WHERE s.status='completed' AND date(s.datetime)=date('now','localtime')
+     GROUP BY si.product_id ORDER BY total DESC LIMIT 3`
+  ).all();
+
+  const topProductsSales = db.prepare(
+    `SELECT si.name, SUM(si.qty) AS qty, SUM(si.amount) AS total
+     FROM sale_items si JOIN sales s ON si.sale_id=s.id
+     WHERE s.status='completed' AND date(s.datetime)=date('now','localtime')
+       AND s.payment_method != 'account'
      GROUP BY si.product_id ORDER BY total DESC LIMIT 3`
   ).all();
 
@@ -242,63 +270,45 @@ function buildAnalytics(db) {
      GROUP BY payment_method`
   ).all();
 
-  return { today, avgTx, itemsSold, topProducts, topCashier, payBreak };
+  return {
+    today,
+    salesToday,
+    utangToday,
+    avgTx,
+    avgTxSales,
+    itemsSold,
+    itemsSoldSales,
+    topProducts,
+    topProductsSales,
+    topCashier,
+    payBreak,
+  };
 }
 
 /**
  * Build the owner sales-report message string from the local database,
  * including an analytics breakdown.
+ * Sales totals exclude Utang (on-account); Utang is listed separately.
  */
 function buildReportMessage(db) {
-  const today = db.prepare(
-    `SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total,
-            COALESCE(SUM(subtotal),0) AS net, COALESCE(SUM(vat),0) AS vat
-     FROM sales WHERE status='completed'
-       AND date(datetime)=date('now','localtime')`
-  ).get();
-
-  const yesterday = db.prepare(
-    `SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total FROM sales
-     WHERE status='completed'
-       AND date(datetime)=date('now','localtime','-1 day')`
-  ).get();
-
-  // Calendar week Mon–today (localtime).
-  const week = db.prepare(
-    `SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total FROM sales
-     WHERE status='completed'
-       AND date(datetime) >= date('now','localtime','-' || ((CAST(strftime('%w','now','localtime') AS INTEGER) + 6) % 7) || ' days')
-       AND date(datetime) <= date('now','localtime')`
-  ).get();
-
-  const month = db.prepare(
-    `SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total,
-            COALESCE(SUM(subtotal),0) AS net, COALESCE(SUM(vat),0) AS vat
-     FROM sales WHERE status='completed'
-       AND strftime('%Y-%m', datetime)=strftime('%Y-%m','now','localtime')`
-  ).get();
-
-  const year = db.prepare(
-    `SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total FROM sales WHERE status='completed'
-       AND strftime('%Y', datetime)=strftime('%Y','now','localtime')`
-  ).get();
-
-  const best = db.prepare(
-    `SELECT date(datetime) AS d, SUM(total) AS total FROM sales
-     WHERE status='completed' GROUP BY date(datetime) ORDER BY total DESC LIMIT 1`
-  ).get();
+  const { buildReportSummaryWithVat } = require('./report-summary');
+  const summary = buildReportSummaryWithVat(db);
+  const today = summary.sales.today;
+  const yesterday = summary.sales.yesterday;
+  const week = summary.sales.week;
+  const month = summary.sales.month;
+  const year = summary.sales.year;
+  const utang = summary.utang;
 
   let bestDay = '—';
-  if (best && best.d) {
-    const dt = new Date(best.d + 'T00:00:00');
-    bestDay = `${dt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} - ${reportMoney(best.total)}`;
+  if (summary.sales.bestDay) {
+    bestDay = `${summary.sales.bestDay.label} - ${reportMoney(summary.sales.bestDay.total)}`;
   }
 
   const a = buildAnalytics(db);
-  // Sum the VAT split persisted on each sale. This remains correct even if
-  // the configured VAT rate changes during the reporting period.
   const lines = [
     '<b>YANKENT POS Sales Report</b>',
+    '<i>Sales exclude Utang (on-account)</i>',
     '━━━━━━━━━━━━━━━━━━',
     `📅 Today: ${reportMoney(today.total)} / ${today.tx} transactions`,
     `   Net: ${reportMoney(today.net)} · VAT included: ${reportMoney(today.vat)}`,
@@ -307,16 +317,25 @@ function buildReportMessage(db) {
     `📊 This Month: ${reportMoney(month.total)} / ${month.tx} tx`,
     `   Net: ${reportMoney(month.net)} · VAT included: ${reportMoney(month.vat)}`,
     `📈 This Year: ${reportMoney(year.total)} / ${year.tx} tx`,
-    `🏆 Best Day: ${bestDay}`,
+    `🏆 Best Day (Sales): ${bestDay}`,
     '',
-    '<b>📊 Analytics (Today)</b>',
+    '<b>🧾 Utang (On-Account)</b>',
     '━━━━━━━━━━━━━━━━━━',
-    `Avg. Transaction: ${reportMoney(a.avgTx)}`,
-    `Items Sold: ${Math.round(a.itemsSold)}`,
+    `Today: ${reportMoney(utang.today.total)} / ${utang.today.tx} tx`,
+    `Yesterday: ${reportMoney(utang.yesterday.total)} / ${utang.yesterday.tx} tx`,
+    `This Week: ${reportMoney(utang.week.total)} / ${utang.week.tx} tx`,
+    `This Month: ${reportMoney(utang.month.total)} / ${utang.month.tx} tx`,
+    `This Year: ${reportMoney(utang.year.total)} / ${utang.year.tx} tx`,
+    '',
+    '<b>📊 Analytics (Today · Sales)</b>',
+    '━━━━━━━━━━━━━━━━━━',
+    `Avg. Transaction: ${reportMoney(a.avgTxSales)}`,
+    `Items Sold: ${Math.round(a.itemsSoldSales)}`,
   ];
-  if (a.topProducts.length) {
+  const tops = a.topProductsSales || [];
+  if (tops.length) {
     lines.push('Top Products:');
-    a.topProducts.forEach((p, i) => lines.push(`${i + 1}. ${escapeHtml(p.name)} — ${reportMoney(p.total)} (${Math.round(p.qty)} sold)`));
+    tops.forEach((p, i) => lines.push(`${i + 1}. ${escapeHtml(p.name)} — ${reportMoney(p.total)} (${Math.round(p.qty)} sold)`));
   }
   if (a.topCashier) {
     lines.push(`Top Cashier: ${escapeHtml(a.topCashier.cashier_name)} — ${reportMoney(a.topCashier.total)} / ${a.topCashier.tx} tx`);

@@ -1012,6 +1012,7 @@ html.theme-dark .wn-empty-mark { color: #111114; background: #f4f4f5; }
 .an-header h2 { margin: 3px 0 5px; font-size: 24px; letter-spacing: -.35px; }
 .an-header p { margin: 0; color: var(--muted); font-size: 12px; }
 .an-refresh-wrap { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.an-separate-hint { margin: 8px 2px 0; font-size: 12px; }
 .an-updated { color: var(--muted); font-size: 11px; }
 .an-dashboard-groups { display: flex; flex-direction: column; gap: 20px; }
 .an-group { display: flex; flex-direction: column; gap: 9px; }

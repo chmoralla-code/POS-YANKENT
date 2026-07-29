@@ -22,28 +22,28 @@ const PERIODS = Object.freeze({
   today: Object.freeze({
     key: 'today',
     label: 'Today',
-    sql: `date(s.datetime,'+8 hours')=date('now','+8 hours')`,
+    sql: `date(s.datetime)=date('now','localtime')`,
   }),
   yesterday: Object.freeze({
     key: 'yesterday',
     label: 'Yesterday',
-    sql: `date(s.datetime,'+8 hours')=date('now','+8 hours','-1 day')`,
+    sql: `date(s.datetime)=date('now','localtime','-1 day')`,
   }),
   week: Object.freeze({
     key: 'week',
     label: 'This Week',
-    sql: `date(s.datetime,'+8 hours') >= date('now','+8 hours','-' || ((CAST(strftime('%w','now','+8 hours') AS INTEGER) + 6) % 7) || ' days')
-          AND date(s.datetime,'+8 hours') <= date('now','+8 hours')`,
+    sql: `date(s.datetime) >= date('now','localtime','-' || ((CAST(strftime('%w','now','localtime') AS INTEGER) + 6) % 7) || ' days')
+          AND date(s.datetime) <= date('now','localtime')`,
   }),
   month: Object.freeze({
     key: 'month',
     label: 'This Month',
-    sql: `strftime('%Y-%m',s.datetime,'+8 hours')=strftime('%Y-%m','now','+8 hours')`,
+    sql: `strftime('%Y-%m',s.datetime)=strftime('%Y-%m','now','localtime')`,
   }),
   year: Object.freeze({
     key: 'year',
     label: 'This Year',
-    sql: `strftime('%Y',s.datetime,'+8 hours')=strftime('%Y','now','+8 hours')`,
+    sql: `strftime('%Y',s.datetime)=strftime('%Y','now','localtime')`,
   }),
 });
 

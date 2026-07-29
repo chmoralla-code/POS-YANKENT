@@ -33,13 +33,15 @@ test('buildReportMessage includes header, today/yesterday/week/month/year, and f
   await makeSale(api, cashierSession, 560);
   const msg = buildReportMessage(api.db);
   assert.ok(msg.includes('YANKENT POS Sales Report'));
+  assert.ok(msg.includes('Sales exclude Utang'));
   assert.ok(msg.includes('VAT included:'), 'report uses the VAT stored on each sale');
   assert.ok(msg.includes('Today:'));
   assert.ok(msg.includes('Yesterday:'));
   assert.ok(msg.includes('This Week:'));
   assert.ok(msg.includes('This Month:'));
   assert.ok(msg.includes('This Year:'));
-  assert.ok(msg.includes('Best Day:'));
+  assert.ok(msg.includes('Best Day (Sales):'));
+  assert.ok(msg.includes('Utang (On-Account)'));
   assert.ok(msg.includes('Sent from YANKENT POS'));
   t.api.close();
 });

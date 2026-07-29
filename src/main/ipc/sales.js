@@ -512,33 +512,8 @@ function register(ipcMain, ctx) {
 
   // ---- Reports -----------------------------------------------------------
   guard(ipcMain, 'pos:reports:summary', { auth: true }, () => {
-    const today = db.prepare(
-      `SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total FROM sales
-       WHERE status='completed' AND date(datetime)=date('now','localtime')`).get();
-    const yesterday = db.prepare(
-      `SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total FROM sales
-       WHERE status='completed' AND date(datetime)=date('now','localtime','-1 day')`).get();
-    // Calendar week Mon–today (localtime). %w: 0=Sun … 6=Sat → days since Monday.
-    const week = db.prepare(
-      `SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total FROM sales
-       WHERE status='completed'
-         AND date(datetime) >= date('now','localtime','-' || ((CAST(strftime('%w','now','localtime') AS INTEGER) + 6) % 7) || ' days')
-         AND date(datetime) <= date('now','localtime')`).get();
-    const month = db.prepare(
-      `SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total FROM sales
-       WHERE status='completed' AND strftime('%Y-%m',datetime)=strftime('%Y-%m','now','localtime')`).get();
-    const year = db.prepare(
-      `SELECT COUNT(*) AS tx, COALESCE(SUM(total),0) AS total FROM sales
-       WHERE status='completed' AND strftime('%Y',datetime)=strftime('%Y','now','localtime')`).get();
-    const best = db.prepare(
-      `SELECT date(datetime) AS d, COALESCE(SUM(total),0) AS total FROM sales
-       WHERE status='completed' GROUP BY date(datetime) ORDER BY total DESC LIMIT 1`).get();
-    let bestDay = null;
-    if (best && best.d) {
-      const dt = new Date(best.d + 'T00:00:00');
-      bestDay = { date: best.d, label: dt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }), total: best.total };
-    }
-    return { today, yesterday, week, month, year, bestDay };
+    const { buildReportSummary } = require('../lib/report-summary');
+    return buildReportSummary(db);
   });
 
   guard(ipcMain, 'pos:reports:bestSelling', { auth: true }, (_c, f = {}) => {

@@ -534,14 +534,23 @@ App.views.settings = {
   async _tgPreview() {
     try {
       const s = await App.pos.reports.summary();
-      const best = s.bestDay ? `${s.bestDay.label} - ${App.ui.money(s.bestDay.total)}` : '—';
+      const sales = s.sales || s;
+      const utang = s.utang || { today: { total: 0, tx: 0 }, month: { total: 0, tx: 0 } };
+      const best = sales.bestDay
+        ? `${sales.bestDay.label} - ${App.ui.money(sales.bestDay.total)}`
+        : (s.bestDay ? `${s.bestDay.label} - ${App.ui.money(s.bestDay.total)}` : '—');
       const txt = `YANKENT POS Sales Report
-Today: ${App.ui.money(s.today.total)} / ${s.today.tx} transactions
-Yesterday: ${App.ui.money(s.yesterday.total)} / ${s.yesterday.tx} transactions
-This Week: ${App.ui.money(s.week.total)} / ${s.week.tx} transactions
-This Month: ${App.ui.money(s.month.total)}
-This Year: ${App.ui.money(s.year.total)}
-Best Day: ${best}`;
+(Sales exclude Utang)
+Today: ${App.ui.money(sales.today.total)} / ${sales.today.tx} transactions
+Yesterday: ${App.ui.money(sales.yesterday.total)} / ${sales.yesterday.tx} transactions
+This Week: ${App.ui.money(sales.week.total)} / ${sales.week.tx} transactions
+This Month: ${App.ui.money(sales.month.total)}
+This Year: ${App.ui.money(sales.year.total)}
+Best Day (Sales): ${best}
+
+Utang (On-Account)
+Today: ${App.ui.money(utang.today.total)} / ${utang.today.tx} tx
+This Month: ${App.ui.money(utang.month.total)} / ${utang.month.tx} tx`;
       const el = this.viewEl.querySelector('#sTgPreview');
       if (el) el.textContent = txt;
     } catch {}
