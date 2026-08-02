@@ -19,7 +19,8 @@ const {
 } = require('./margins');
 const {
   isUtangSeparated,
-  reportPaymentFilter,
+  PAID_ONLY,
+  UTANG_ONLY,
 } = require('../lib/report-summary');
 
 const PERIODS = Object.freeze({
@@ -96,9 +97,8 @@ function buildSoldReportRow(raw) {
   };
 }
 
-function generateReport(db, periodKey = 'today') {
-  const period = normalizePeriod(periodKey);
-  const rawRows = db.prepare(`
+function queryReportRows(db, period, paymentFilterSql = '') {
+  return db.prepare(`
     SELECT si.product_id AS product_id,
            COALESCE(MAX(p.name), MAX(si.name)) AS name,
            COALESCE(MAX(p.base_unit), MAX(si.unit), '') AS unit,
@@ -132,14 +132,16 @@ function generateReport(db, periodKey = 'today') {
           FROM sale_items
          GROUP BY sale_id
       ) sale_totals ON sale_totals.sale_id = s.id
-      LEFT JOIN products p ON p.id = si.product_id
+     LEFT JOIN products p ON p.id = si.product_id
      WHERE s.status = 'completed'
-       ${reportPaymentFilter(db, 's.payment_method')}
+       ${paymentFilterSql}
        AND ${period.sql}
      GROUP BY si.product_id
      ORDER BY baligya DESC, name COLLATE NOCASE
   `).all();
+}
 
+function buildReportSection(rawRows) {
   const rows = rawRows.map(buildSoldReportRow);
   const totals = rows.reduce((acc, row) => {
     acc.item_count += 1;
@@ -163,14 +165,28 @@ function generateReport(db, periodKey = 'today') {
   totals.baligya = round2(totals.baligya);
   totals.halin = round2(totals.halin);
 
+  return { rows, totals };
+}
+
+function generateReport(db, periodKey = 'today') {
+  const period = normalizePeriod(periodKey);
+  const separateUtang = isUtangSeparated(db);
+  const primary = buildReportSection(
+    queryReportRows(db, period, separateUtang ? PAID_ONLY : '')
+  );
+  const utang = separateUtang
+    ? buildReportSection(queryReportRows(db, period, UTANG_ONLY))
+    : null;
+
   return {
     period: period.key,
     label: period.label,
     generatedAt: new Date().toISOString(),
     rules: MARGIN_RULES.map((rule) => ({ ...rule })),
-    separateUtang: isUtangSeparated(db),
-    rows,
-    totals,
+    separateUtang,
+    rows: primary.rows,
+    totals: primary.totals,
+    utang,
   };
 }
 
@@ -256,4 +272,6 @@ module.exports = {
   normalizePeriod,
   PERIODS,
   buildSoldReportRow,
+  buildReportSection,
+  queryReportRows,
 };

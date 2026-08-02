@@ -61,7 +61,10 @@ test.describe('Reports (admin)', () => {
       await expect(page.locator('#eCards')).toContainText('Paid sales only — Utang excluded');
 
       await navigate(page, 'marginReports');
-      await expect(page.locator('#mrepHint')).toContainText('Separate is on, so Utang is excluded');
+      await expect(page.locator('#mrepHint')).toContainText('Separate is on, so paid sales and Utang are shown in separate tables');
+      await page.locator('#mrepGenerate').click();
+      await expect(page.locator('#mrepResult')).toContainText('Paid Sales');
+      await expect(page.locator('#mrepResult')).toContainText('Utang (On-Account)');
 
       await navigate(page, 'analytics');
       await expect(page.locator('#anSeparate')).toHaveAttribute('aria-pressed', 'true');

@@ -87,6 +87,55 @@ function sampleReport() {
   };
 }
 
+function sampleSeparatedReport() {
+  return {
+    period: 'today',
+    label: 'Today',
+    generatedAt: '2026-07-29T01:00:00.000Z',
+    separateUtang: true,
+    rows: [
+      {
+        name: 'Paid Cement Bag',
+        qty_sold: 1,
+        stock: 10,
+        is_service: false,
+        puhunan: 90,
+        baligya: 100,
+        halin: 10,
+      },
+    ],
+    totals: {
+      item_count: 1,
+      qty_sold: 1,
+      puhunan: 90,
+      baligya: 100,
+      halin: 10,
+      missing_cost_count: 0,
+    },
+    utang: {
+      rows: [
+        {
+          name: 'Utang Cement Bag',
+          qty_sold: 2,
+          stock: 10,
+          is_service: false,
+          puhunan: 180,
+          baligya: 200,
+          halin: 20,
+        },
+      ],
+      totals: {
+        item_count: 1,
+        qty_sold: 2,
+        puhunan: 180,
+        baligya: 200,
+        halin: 20,
+        missing_cost_count: 0,
+      },
+    },
+  };
+}
+
 test('margin report generate is administrator-only', async () => {
   const t = await setup();
   await assert.rejects(
@@ -178,6 +227,7 @@ test('Margin table Reports follows the Analytics Separate switch', async () => {
   assert.equal(combined.rows[0].qty_sold, 3);
   assert.equal(combined.totals.baligya, 300);
   assert.equal(combined.totals.halin, 30);
+  assert.equal(combined.utang, null);
 
   await t.api.call(
     'pos:reports:setUtangSeparation',
@@ -193,6 +243,11 @@ test('Margin table Reports follows the Analytics Separate switch', async () => {
   assert.equal(separated.rows[0].qty_sold, 1);
   assert.equal(separated.totals.baligya, 100);
   assert.equal(separated.totals.halin, 10);
+  assert.ok(separated.utang);
+  assert.equal(separated.utang.rows[0].qty_sold, 2);
+  assert.equal(separated.utang.totals.puhunan, 180);
+  assert.equal(separated.utang.totals.baligya, 200);
+  assert.equal(separated.utang.totals.halin, 20);
 
   await t.api.call(
     'pos:reports:setUtangSeparation',
@@ -206,6 +261,7 @@ test('Margin table Reports follows the Analytics Separate switch', async () => {
   );
   assert.equal(restored.rows[0].qty_sold, 3);
   assert.equal(restored.totals.baligya, 300);
+  assert.equal(restored.utang, null);
   t.api.close();
 });
 
@@ -406,6 +462,32 @@ test('margin report workbook and PDF include period, columns, and totals', async
   assert.match(html, /Cement Bag/);
   assert.match(html, /TOTAL/);
   assert.doesNotMatch(html, /<script/i);
+});
+
+test('separated margin report exports keep paid sales and Utang in distinct sections', async () => {
+  const buffer = await buildMarginReportWorkbook(sampleSeparatedReport());
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer);
+
+  const paidSheet = workbook.getWorksheet('Margin table Reports');
+  const utangSheet = workbook.getWorksheet('Utang (On-Account)');
+  assert.ok(paidSheet);
+  assert.ok(utangSheet);
+  assert.equal(paidSheet.getCell('A2').value, 'MARGIN TABLE REPORTS — PAID SALES');
+  assert.equal(paidSheet.getCell('B6').value, 'Paid sales only — Utang is shown separately in this report');
+  assert.equal(paidSheet.getCell('A9').value, 'Paid Cement Bag');
+  assert.equal(paidSheet.getCell('E10').value, 100);
+  assert.equal(utangSheet.getCell('A2').value, 'MARGIN TABLE REPORTS — UTANG (ON-ACCOUNT)');
+  assert.equal(utangSheet.getCell('B6').value, 'Utang (on-account) sales only');
+  assert.equal(utangSheet.getCell('A9').value, 'Utang Cement Bag');
+  assert.equal(utangSheet.getCell('E10').value, 200);
+
+  const html = buildMarginReportPdfHtml(sampleSeparatedReport());
+  assert.match(html, /Paid Sales/);
+  assert.match(html, /Utang \(On-Account\)/);
+  assert.match(html, /Paid Cement Bag/);
+  assert.match(html, /Utang Cement Bag/);
+  assert.match(html, /Paid sales only — Utang is shown separately in this report/);
 });
 
 test('margin report export handlers save files', async () => {

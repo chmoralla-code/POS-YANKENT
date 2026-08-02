@@ -1244,6 +1244,13 @@ html.theme-dark .wn-empty-mark { color: #111114; background: #f4f4f5; }
   border-radius: var(--radius); background: rgba(138,26,26,.04); color: var(--ink); font-size: 12px;
 }
 .margin-manual-note b { font-family: var(--mono); }
+.margin-inventory-scope {
+  margin: -2px 2px 12px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.margin-inventory-scope b { color: var(--ink); }
 .margin-table tr.needs-manual-cost td { background: rgba(180, 83, 9, .08); }
 .margin-table tr.is-low-price-pending td { background: rgba(180, 83, 9, .1); }
 .margin-table tr.is-low-price-pending:hover td { background: rgba(180, 83, 9, .14); }
@@ -1354,6 +1361,13 @@ html.theme-dark .margin-report-tools select { background: #1d1d21; }
 .mrep-result-head { margin-bottom: 10px; }
 .mrep-result-head h3 { margin: 0 0 2px; font-size: 16px; }
 .mrep-result-head p { margin: 0; font-size: 12px; }
+.mrep-section + .mrep-section { margin-top: 22px; }
+.mrep-section-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  margin: 0 0 8px;
+}
+.mrep-section-head h4 { margin: 0; font-size: 14px; }
+.mrep-section-head p { margin: 0; font-size: 12px; }
 .mrep-note {
   margin: 0 0 12px;
   padding: 8px 10px;

@@ -57,56 +57,83 @@ function formatStock(value, isService) {
   return formatQuantity(value);
 }
 
+function normalizeRows(sourceRows, rowLabel = 'Report') {
+  const rows = Array.isArray(sourceRows) ? sourceRows : [];
+  return rows.map((row, index) => {
+    if (!row || typeof row !== 'object') {
+      throw new TypeError(`${rowLabel} row ${index + 1} must be an object`);
+    }
+    return {
+      name: textValue(row.name),
+      qty_sold: finiteNumber(row.qty_sold, `${rowLabel} row ${index + 1} qty sold`),
+      stock: row.stock == null || row.stock === '' ? null : finiteNumber(row.stock, `${rowLabel} row ${index + 1} stock`),
+      is_service: !!row.is_service,
+      puhunan: row.puhunan == null || row.puhunan === ''
+        ? null
+        : finiteNumber(row.puhunan, `${rowLabel} row ${index + 1} puhunan`),
+      baligya: finiteNumber(row.baligya, `${rowLabel} row ${index + 1} baligya`),
+      halin: row.halin == null || row.halin === ''
+        ? null
+        : finiteNumber(row.halin, `${rowLabel} row ${index + 1} halin`),
+      needs_manual_cost: !!row.needs_manual_cost,
+    };
+  });
+}
+
+function normalizeTotals(sourceTotals, rows, totalsLabel = 'totals') {
+  const totals = sourceTotals && typeof sourceTotals === 'object'
+    ? sourceTotals
+    : {};
+  return {
+    item_count: Number(totals.item_count) || rows.length,
+    qty_sold: finiteNumber(totals.qty_sold == null ? 0 : totals.qty_sold, `${totalsLabel}.qty_sold`),
+    puhunan: finiteNumber(totals.puhunan == null ? 0 : totals.puhunan, `${totalsLabel}.puhunan`),
+    baligya: finiteNumber(totals.baligya == null ? 0 : totals.baligya, `${totalsLabel}.baligya`),
+    halin: finiteNumber(totals.halin == null ? 0 : totals.halin, `${totalsLabel}.halin`),
+    missing_cost_count: Number(totals.missing_cost_count) || 0,
+  };
+}
+
+function normalizeSection(section, label = 'Report') {
+  const source = section && typeof section === 'object' ? section : {};
+  const rows = normalizeRows(source.rows, label);
+  return {
+    rows,
+    totals: normalizeTotals(source.totals, rows, label === 'Report' ? 'totals' : `${label} totals`),
+  };
+}
+
 function normalizeReport(report) {
   if (!report || typeof report !== 'object') {
     throw new TypeError('Margin report must be an object');
   }
-  const rows = Array.isArray(report.rows) ? report.rows : [];
-  const totals = report.totals && typeof report.totals === 'object'
-    ? report.totals
-    : {};
+  const primary = normalizeSection({ rows: report.rows, totals: report.totals });
+  const separateUtang = !!report.separateUtang;
   return {
     period: textValue(report.period),
     label: textValue(report.label) || 'Period',
     generatedAt: report.generatedAt,
-    separateUtang: !!report.separateUtang,
-    rows: rows.map((row, index) => {
-      if (!row || typeof row !== 'object') {
-        throw new TypeError(`Report row ${index + 1} must be an object`);
-      }
-      return {
-        name: textValue(row.name),
-        qty_sold: finiteNumber(row.qty_sold, `Row ${index + 1} qty sold`),
-        stock: row.stock == null || row.stock === '' ? null : finiteNumber(row.stock, `Row ${index + 1} stock`),
-        is_service: !!row.is_service,
-        puhunan: row.puhunan == null || row.puhunan === ''
-          ? null
-          : finiteNumber(row.puhunan, `Row ${index + 1} puhunan`),
-        baligya: finiteNumber(row.baligya, `Row ${index + 1} baligya`),
-        halin: row.halin == null || row.halin === ''
-          ? null
-          : finiteNumber(row.halin, `Row ${index + 1} halin`),
-        needs_manual_cost: !!row.needs_manual_cost,
-      };
-    }),
-    totals: {
-      item_count: Number(totals.item_count) || rows.length,
-      qty_sold: finiteNumber(totals.qty_sold == null ? 0 : totals.qty_sold, 'totals.qty_sold'),
-      puhunan: finiteNumber(totals.puhunan == null ? 0 : totals.puhunan, 'totals.puhunan'),
-      baligya: finiteNumber(totals.baligya == null ? 0 : totals.baligya, 'totals.baligya'),
-      halin: finiteNumber(totals.halin == null ? 0 : totals.halin, 'totals.halin'),
-      missing_cost_count: Number(totals.missing_cost_count) || 0,
-    },
+    separateUtang,
+    rows: primary.rows,
+    totals: primary.totals,
+    utang: separateUtang ? normalizeSection(report.utang, 'Utang') : null,
   };
 }
 
-async function buildMarginReportWorkbook(report) {
-  const data = normalizeReport(report);
-  const workbook = new ExcelJS.Workbook();
-  workbook.creator = 'YANKENT POS';
-  workbook.created = new Date();
+function primaryScope(data) {
+  return data.separateUtang
+    ? 'Paid sales only — Utang is shown separately in this report'
+    : 'All completed sales — Utang included';
+}
 
-  const sheet = workbook.addWorksheet('Margin table Reports', {
+function writeReportWorksheet(workbook, {
+  name,
+  title,
+  data,
+  section,
+  scope,
+}) {
+  const sheet = workbook.addWorksheet(name, {
     views: [{ state: 'frozen', ySplit: 8 }],
   });
 
@@ -124,7 +151,7 @@ async function buildMarginReportWorkbook(report) {
   sheet.getCell('A1').font = { bold: true, size: 14, color: { argb: COLORS.ink } };
 
   sheet.mergeCells('A2:F2');
-  sheet.getCell('A2').value = 'MARGIN TABLE REPORTS';
+  sheet.getCell('A2').value = title;
   sheet.getCell('A2').font = { bold: true, size: 16, color: { argb: COLORS.ink } };
 
   sheet.getCell('A3').value = 'Period';
@@ -138,13 +165,11 @@ async function buildMarginReportWorkbook(report) {
 
   sheet.getCell('A5').value = 'Items';
   sheet.getCell('A5').font = { color: { argb: COLORS.muted } };
-  sheet.getCell('B5').value = data.totals.item_count;
+  sheet.getCell('B5').value = section.totals.item_count;
 
   sheet.getCell('A6').value = 'Scope';
   sheet.getCell('A6').font = { color: { argb: COLORS.muted } };
-  sheet.getCell('B6').value = data.separateUtang
-    ? 'Paid sales only — Utang excluded'
-    : 'All completed sales — Utang included';
+  sheet.getCell('B6').value = scope;
 
   const headerRowIndex = 8;
   REPORT_HEADERS.forEach((header, index) => {
@@ -157,7 +182,7 @@ async function buildMarginReportWorkbook(report) {
     };
   });
 
-  data.rows.forEach((row, offset) => {
+  section.rows.forEach((row, offset) => {
     const r = headerRowIndex + 1 + offset;
     sheet.getCell(r, 1).value = row.name;
     sheet.getCell(r, 2).value = row.qty_sold;
@@ -189,19 +214,19 @@ async function buildMarginReportWorkbook(report) {
     }
   });
 
-  const totalRow = headerRowIndex + 1 + data.rows.length;
+  const totalRow = headerRowIndex + 1 + section.rows.length;
   sheet.getCell(totalRow, 1).value = 'TOTAL';
   sheet.getCell(totalRow, 1).font = { bold: true };
-  sheet.getCell(totalRow, 2).value = data.totals.qty_sold;
+  sheet.getCell(totalRow, 2).value = section.totals.qty_sold;
   sheet.getCell(totalRow, 2).numFmt = QUANTITY_NUMBER_FORMAT;
   sheet.getCell(totalRow, 2).font = { bold: true };
-  sheet.getCell(totalRow, 4).value = data.totals.puhunan;
+  sheet.getCell(totalRow, 4).value = section.totals.puhunan;
   sheet.getCell(totalRow, 4).numFmt = PHP_NUMBER_FORMAT;
   sheet.getCell(totalRow, 4).font = { bold: true };
-  sheet.getCell(totalRow, 5).value = data.totals.baligya;
+  sheet.getCell(totalRow, 5).value = section.totals.baligya;
   sheet.getCell(totalRow, 5).numFmt = PHP_NUMBER_FORMAT;
   sheet.getCell(totalRow, 5).font = { bold: true };
-  sheet.getCell(totalRow, 6).value = data.totals.halin;
+  sheet.getCell(totalRow, 6).value = section.totals.halin;
   sheet.getCell(totalRow, 6).numFmt = PHP_NUMBER_FORMAT;
   sheet.getCell(totalRow, 6).font = { bold: true };
   for (let c = 1; c <= 6; c += 1) {
@@ -213,21 +238,46 @@ async function buildMarginReportWorkbook(report) {
     };
   }
 
-  if (data.rows.length) {
+  if (section.rows.length) {
     sheet.autoFilter = {
       from: { row: headerRowIndex, column: 1 },
-      to: { row: headerRowIndex + data.rows.length, column: 6 },
+      to: { row: headerRowIndex + section.rows.length, column: 6 },
     };
+  }
+}
+
+async function buildMarginReportWorkbook(report) {
+  const data = normalizeReport(report);
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'YANKENT POS';
+  workbook.created = new Date();
+  workbook.title = 'Margin table Reports';
+  workbook.subject = 'Period-based sold item margin report';
+
+  writeReportWorksheet(workbook, {
+    name: 'Margin table Reports',
+    title: data.separateUtang ? 'MARGIN TABLE REPORTS — PAID SALES' : 'MARGIN TABLE REPORTS',
+    data,
+    section: { rows: data.rows, totals: data.totals },
+    scope: primaryScope(data),
+  });
+
+  if (data.separateUtang) {
+    writeReportWorksheet(workbook, {
+      name: 'Utang (On-Account)',
+      title: 'MARGIN TABLE REPORTS — UTANG (ON-ACCOUNT)',
+      data,
+      section: data.utang,
+      scope: 'Utang (on-account) sales only',
+    });
   }
 
   const buffer = await workbook.xlsx.writeBuffer();
   return Buffer.from(buffer);
 }
 
-function buildMarginReportPdfHtml(report) {
-  const data = normalizeReport(report);
-  const generatedAt = formatGeneratedAt(data.generatedAt);
-  const bodyRows = data.rows.map((row) => `
+function renderReportTable(section, emptyMessage) {
+  const bodyRows = section.rows.map((row) => `
       <tr>
         <td>${escapeHtml(row.name)}</td>
         <td class="num">${escapeHtml(formatQuantity(row.qty_sold))}</td>
@@ -236,6 +286,55 @@ function buildMarginReportPdfHtml(report) {
         <td class="money">${escapeHtml(formatPhp(row.baligya))}</td>
         <td class="money">${escapeHtml(formatPhpOrBlank(row.halin))}</td>
       </tr>`).join('');
+
+  return `
+  <table>
+    <thead>
+      <tr>
+        <th>Item Name</th>
+        <th class="num">Qty Sold</th>
+        <th class="num">Stock Left</th>
+        <th class="money">Puhunan (Cost)</th>
+        <th class="money">Baligya (Sales)</th>
+        <th class="money">Halin (Gross Profit)</th>
+      </tr>
+    </thead>
+    <tbody>${bodyRows || `
+      <tr><td colspan="6">${escapeHtml(emptyMessage)}</td></tr>`}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td>TOTAL</td>
+        <td class="num">${escapeHtml(formatQuantity(section.totals.qty_sold))}</td>
+        <td class="num"></td>
+        <td class="money">${escapeHtml(formatPhp(section.totals.puhunan))}</td>
+        <td class="money">${escapeHtml(formatPhp(section.totals.baligya))}</td>
+        <td class="money">${escapeHtml(formatPhp(section.totals.halin))}</td>
+      </tr>
+    </tfoot>
+  </table>`;
+}
+
+function buildMarginReportPdfHtml(report) {
+  const data = normalizeReport(report);
+  const generatedAt = formatGeneratedAt(data.generatedAt);
+  const scope = primaryScope(data);
+  const primaryTable = renderReportTable(
+    { rows: data.rows, totals: data.totals },
+    data.separateUtang ? 'No paid sales in this period.' : 'No sales in this period.'
+  );
+  const primarySection = data.separateUtang
+    ? `<section class="report-section">
+      <h2>Paid Sales</h2>
+      ${primaryTable}
+    </section>`
+    : primaryTable;
+  const utangSection = data.separateUtang
+    ? `<section class="report-section">
+      <h2>Utang (On-Account)</h2>
+      ${renderReportTable(data.utang, 'No Utang sales in this period.')}
+    </section>`
+    : '';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -251,6 +350,7 @@ function buildMarginReportPdfHtml(report) {
       line-height: 1.35;
     }
     h1 { margin: 0 0 2px; font-size: 18px; letter-spacing: .02em; }
+    h2 { margin: 0 0 8px; font-size: 14px; }
     .eyebrow { margin: 0; color: #686868; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
     .meta { margin: 10px 0 16px; color: #353535; }
     .meta b { color: #171717; }
@@ -259,6 +359,7 @@ function buildMarginReportPdfHtml(report) {
     th { background: #f2f2f2; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
     td.num, th.num, td.money, th.money { text-align: right; font-variant-numeric: tabular-nums; }
     tfoot td { font-weight: 700; background: #f8f8f8; border-top: 1px solid #d4d4d4; }
+    .report-section + .report-section { margin-top: 18px; }
     footer { margin-top: 18px; color: #686868; font-size: 10px; display: flex; justify-content: space-between; }
   </style>
 </head>
@@ -268,33 +369,10 @@ function buildMarginReportPdfHtml(report) {
   <p class="meta">
     Period: <b>${escapeHtml(data.label)}</b><br>
     Generated: ${escapeHtml(generatedAt)} · Items: <b>${data.totals.item_count}</b><br>
-    Scope: <b>${data.separateUtang ? 'Paid sales only — Utang excluded' : 'All completed sales — Utang included'}</b>
+    Scope: <b>${escapeHtml(scope)}</b>
   </p>
-  <table>
-    <thead>
-      <tr>
-        <th>Item Name</th>
-        <th class="num">Qty Sold</th>
-        <th class="num">Stock Left</th>
-        <th class="money">Puhunan (Cost)</th>
-        <th class="money">Baligya (Sales)</th>
-        <th class="money">Halin (Gross Profit)</th>
-      </tr>
-    </thead>
-    <tbody>${bodyRows || `
-      <tr><td colspan="6">No sales in this period.</td></tr>`}
-    </tbody>
-    <tfoot>
-      <tr>
-        <td>TOTAL</td>
-        <td class="num">${escapeHtml(formatQuantity(data.totals.qty_sold))}</td>
-        <td class="num"></td>
-        <td class="money">${escapeHtml(formatPhp(data.totals.puhunan))}</td>
-        <td class="money">${escapeHtml(formatPhp(data.totals.baligya))}</td>
-        <td class="money">${escapeHtml(formatPhp(data.totals.halin))}</td>
-      </tr>
-    </tfoot>
-  </table>
+  ${primarySection}
+  ${utangSection}
   <footer>
     <span>YANKENT POS | Margin table Reports</span>
     <span>Generated ${escapeHtml(generatedAt)}</span>

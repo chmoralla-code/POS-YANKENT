@@ -11,6 +11,7 @@ const TABLE_HEADERS = Object.freeze([
   'Halin (Gross Profit)',
 ]);
 const TABLE_COL_COUNT = TABLE_HEADERS.length;
+const DEFAULT_INVENTORY_SCOPE_NOTE = 'Inventory valuation only — paid sales and Utang transactions are not included. Use Margin table Reports to view sales; Analytics → Separate shows Utang in its own section.';
 
 const PHP_NUMBER_FORMAT = '"₱"#,##0.00;-"₱"#,##0.00';
 const QUANTITY_NUMBER_FORMAT = '#,##0.##';
@@ -200,6 +201,7 @@ function normalizeReport(report) {
   return {
     category: textValue(report.category || 'Newly Added Items'),
     generatedAt: parseGeneratedAt(report.generatedAt),
+    scopeNote: textValue(report.scopeNote).trim() || DEFAULT_INVENTORY_SCOPE_NOTE,
     rules,
     summary: {
       item_count: summaryValue(report.summary, 'item_count', 'itemCount', rows.length),
@@ -476,7 +478,7 @@ async function buildMarginWorkbook(reportInput) {
   const noteRow = firstDetailRow + detailRowCount + 1;
   worksheet.mergeCells(noteRow, 1, noteRow, TABLE_COL_COUNT);
   worksheet.getCell(noteRow, 1).value =
-    'Puhunan (Cost) = Baligya (Sales) - Profit Margin | Halin (Gross Profit) = Stock x Unit Profit';
+    `Scope: ${report.scopeNote}\nPuhunan (Cost) = Baligya (Sales) - Profit Margin | Halin (Gross Profit) = Stock x Unit Profit`;
   worksheet.getCell(noteRow, 1).font = {
     name: 'Arial',
     size: 9,
@@ -490,7 +492,7 @@ async function buildMarginWorkbook(reportInput) {
   };
   worksheet.getCell(noteRow, 1).fill = solidFill(COLORS.softPanel);
   worksheet.getCell(noteRow, 1).border = thinBorder(COLORS.softLine);
-  worksheet.getRow(noteRow).height = 22;
+  worksheet.getRow(noteRow).height = 34;
 
   const tableHeaderRow = noteRow + 1;
   const tableRows = report.rows.map((row) => [
@@ -860,6 +862,7 @@ function buildMarginPdfHtml(reportInput) {
   </section>
 
   <p class="formula-note">
+    <b>Scope:</b> ${escapeHtml(report.scopeNote)}<br>
     Puhunan (Cost) = Baligya (Sales) − Profit Margin | Halin (Gross Profit) = Stock × Unit Profit
   </p>
 
@@ -905,4 +908,5 @@ module.exports = {
   formatGeneratedAt,
   TABLE_HEADERS,
   PHP_NUMBER_FORMAT,
+  DEFAULT_INVENTORY_SCOPE_NOTE,
 };

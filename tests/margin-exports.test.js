@@ -68,6 +68,7 @@ test('margin workbook contains a typed, formatted and filterable report table', 
   assert.equal(sheet.getCell('A1').value, 'YANKENT POS');
   assert.equal(sheet.getCell('A2').value, 'PRODUCT MARGIN TABLE');
   assert.equal(sheet.getCell('E3').value, 'Jul 28, 2026, 12:30:00 PM (Asia/Manila)');
+  assert.match(sheet.getCell('A10').value, /Inventory valuation only/);
 
   assert.deepEqual(
     [1, 2, 3, 4, 5, 6].map((column) => sheet.getCell(11, column).value),
@@ -95,6 +96,7 @@ test('margin PDF HTML is self-contained and escapes database text', () => {
   assert.match(html, /Puhunan \(Cost\)/);
   assert.match(html, /Baligya \(Sales\)/);
   assert.match(html, /Place Where Bought/);
+  assert.match(html, /Inventory valuation only/);
   assert.match(html, /PVC Elbow &lt;1\/2&quot;&gt;/);
   assert.match(html, /Cyrhiel &amp; Sons/);
   assert.match(html, /&quot;Main&quot; Depot/);

@@ -19,6 +19,7 @@ const CATEGORY_NAME = 'Newly Added Items';
 const MAX_SOURCE_LENGTH = 200;
 const MAX_ITEM_NAME_LENGTH = 200;
 const MAX_UNIT_LENGTH = 32;
+const INVENTORY_SCOPE_NOTE = 'Inventory valuation only — paid sales and Utang transactions are not included. Use Margin table Reports to view sales; Analytics → Separate shows Utang in its own section.';
 
 function normalizeSource(value) {
   const source = String(value == null ? '' : value).trim();
@@ -321,6 +322,8 @@ function generateTable(db) {
   return {
     category: CATEGORY_NAME,
     generatedAt: new Date().toISOString(),
+    dataScope: 'inventory',
+    scopeNote: INVENTORY_SCOPE_NOTE,
     rules: readiness.rules,
     summary,
     rows,
@@ -463,6 +466,7 @@ module.exports = {
   unitProfitFor,
   CATEGORY_NAME,
   MARGIN_RULES,
+  INVENTORY_SCOPE_NOTE,
   dateStamp,
   ensureExtension,
   chooseExportPath,

@@ -58,7 +58,7 @@ App.views.marginReports = {
           </div>
           <div class="mrep-actions">
             <button type="button" class="btn btn-primary mrep-generate" id="mrepGenerate">Generate</button>
-            <p class="mrep-hint muted" id="mrepHint">Cost uses the same ₱10 / ₱15 / ₱20 rules as Generate Margin Table (or saved manual puhunan). ${App.reporting.isUtangSeparated() ? 'Separate is on, so Utang is excluded.' : 'Separate is off, so Utang is included.'}</p>
+            <p class="mrep-hint muted" id="mrepHint">Cost uses the same ₱10 / ₱15 / ₱20 rules as Generate Margin Table (or saved manual puhunan). ${App.reporting.isUtangSeparated() ? 'Separate is on, so paid sales and Utang are shown in separate tables.' : 'Separate is off, so Utang is included with completed sales.'}</p>
           </div>
         </section>
 
@@ -153,7 +153,7 @@ App.views.marginReports = {
       this.report = report;
       this._renderResult(report);
       const dl = this.viewEl.querySelector('#mrepDownloadBtn');
-      if (dl) dl.disabled = !(report && report.rows && report.rows.length);
+      if (dl) dl.disabled = !this._hasReportRows(report);
     } catch (e) {
       if (this.viewEl !== view) return;
       this.report = null;
@@ -177,62 +177,93 @@ App.views.marginReports = {
     return App.ui.qty(row.stock);
   },
 
+  _hasReportRows(report) {
+    if (!report) return false;
+    const paidRows = Array.isArray(report.rows) ? report.rows : [];
+    const utangRows = report.utang && Array.isArray(report.utang.rows)
+      ? report.utang.rows
+      : [];
+    return paidRows.length > 0 || utangRows.length > 0;
+  },
+
+  _renderSection(title, section, emptyMessage) {
+    const rows = section && Array.isArray(section.rows) ? section.rows : [];
+    const totals = section && section.totals ? section.totals : {};
+    const missing = Number(totals.missing_cost_count) || 0;
+    const note = missing
+      ? `<p class="mrep-note">Note: ${missing} item${missing === 1 ? '' : 's'} need a saved manual puhunan — those rows are blank in Puhunan / Halin and excluded from those totals.</p>`
+      : '';
+    return `
+      <section class="mrep-section">
+        <div class="mrep-section-head">
+          <h4>${App.ui.esc(title)}</h4>
+          <p class="muted">${rows.length} item${rows.length === 1 ? '' : 's'}</p>
+        </div>
+        ${note}
+        <div class="mrep-table-wrap">
+          <table class="mrep-table">
+            <thead>
+              <tr>
+                <th>Item name</th>
+                <th class="num">Qty sold</th>
+                <th class="num">Stock left</th>
+                <th class="num">Puhunan (Cost)</th>
+                <th class="num">Baligya (Sales)</th>
+                <th class="num">Halin (Gross Profit)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.length ? rows.map((row) => `
+                <tr class="${row.needs_manual_cost ? 'is-pending-cost' : ''}">
+                  <td>${App.ui.esc(row.name)}</td>
+                  <td class="num">${App.ui.qty(row.qty_sold)}</td>
+                  <td class="num">${this._stockCell(row)}</td>
+                  <td class="num">${this._moneyOrDash(row.puhunan)}</td>
+                  <td class="num">${App.ui.money(row.baligya)}</td>
+                  <td class="num">${this._moneyOrDash(row.halin)}</td>
+                </tr>
+              `).join('') : `
+                <tr><td colspan="6"><div class="mrep-empty muted">${App.ui.esc(emptyMessage)}</div></td></tr>`}
+            </tbody>
+            <tfoot>
+              <tr>
+                <th>Total</th>
+                <th class="num">${App.ui.qty(totals.qty_sold || 0)}</th>
+                <th class="num"></th>
+                <th class="num">${App.ui.money(totals.puhunan || 0)}</th>
+                <th class="num">${App.ui.money(totals.baligya || 0)}</th>
+                <th class="num">${App.ui.money(totals.halin || 0)}</th>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </section>`;
+  },
+
   _renderResult(report) {
     const el = this.viewEl.querySelector('#mrepResult');
-    if (!report || !report.rows || !report.rows.length) {
+    if (!report || !Array.isArray(report.rows)) {
       el.innerHTML = `<div class="mrep-empty muted">No sales in this period.</div>`;
       return;
     }
-    const t = report.totals || {};
-    const missing = Number(t.missing_cost_count) || 0;
-    const tip = missing
-      ? `<p class="mrep-note">Note: ${missing} item${missing === 1 ? '' : 's'} need a saved manual puhunan — those rows are blank in Puhunan / Halin and excluded from those totals.</p>`
-      : '';
+    const paid = { rows: report.rows, totals: report.totals || {} };
+    const utang = report.separateUtang
+      ? (report.utang || { rows: [], totals: {} })
+      : null;
+    const scope = report.separateUtang
+      ? 'Paid Sales and Utang shown separately'
+      : 'All completed sales, including Utang';
 
     el.innerHTML = `
       <div class="mrep-result-head">
         <div>
           <h3>${App.ui.esc(report.label)}</h3>
-          <p class="muted">${report.rows.length} item${report.rows.length === 1 ? '' : 's'} sold · ${report.separateUtang ? 'Utang excluded' : 'Utang included'} · Generated ${App.ui.esc(new Date(report.generatedAt).toLocaleString())}</p>
+          <p class="muted">${scope} · Generated ${App.ui.esc(new Date(report.generatedAt).toLocaleString())}</p>
         </div>
       </div>
-      ${tip}
-      <div class="mrep-table-wrap">
-        <table class="mrep-table">
-          <thead>
-            <tr>
-              <th>Item name</th>
-              <th class="num">Qty sold</th>
-              <th class="num">Stock left</th>
-              <th class="num">Puhunan (Cost)</th>
-              <th class="num">Baligya (Sales)</th>
-              <th class="num">Halin (Gross Profit)</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${report.rows.map((row) => `
-              <tr class="${row.needs_manual_cost ? 'is-pending-cost' : ''}">
-                <td>${App.ui.esc(row.name)}</td>
-                <td class="num">${App.ui.qty(row.qty_sold)}</td>
-                <td class="num">${this._stockCell(row)}</td>
-                <td class="num">${this._moneyOrDash(row.puhunan)}</td>
-                <td class="num">${App.ui.money(row.baligya)}</td>
-                <td class="num">${this._moneyOrDash(row.halin)}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-          <tfoot>
-            <tr>
-              <th>Total</th>
-              <th class="num">${App.ui.qty(t.qty_sold || 0)}</th>
-              <th class="num"></th>
-              <th class="num">${App.ui.money(t.puhunan || 0)}</th>
-              <th class="num">${App.ui.money(t.baligya || 0)}</th>
-              <th class="num">${App.ui.money(t.halin || 0)}</th>
-            </tr>
-          </tfoot>
-        </table>
-      </div>`;
+      ${this._renderSection(report.separateUtang ? 'Paid Sales' : 'Completed Sales', paid,
+        report.separateUtang ? 'No paid sales in this period.' : 'No sales in this period.')}
+      ${utang ? this._renderSection('Utang (On-Account)', utang, 'No Utang sales in this period.') : ''}`;
   },
 
   async _export(method) {

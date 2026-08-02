@@ -47,6 +47,8 @@ test('margin table generates computed cost and stock gross from live base prices
 
   const report = await t.api.call('pos:margins:generate', t.adminSession);
   assert.equal(report.category, CATEGORY_NAME);
+  assert.equal(report.dataScope, 'inventory');
+  assert.match(report.scopeNote, /paid sales and Utang transactions are not included/);
   assert.equal(report.rows.length, 3);
   assert.deepEqual(
     report.rows.map((row) => ({

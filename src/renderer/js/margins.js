@@ -41,7 +41,7 @@ App.views.margins = {
         <header class="margin-header">
           <div class="margin-heading">
             <h2>Generate Margin Table</h2>
-            <p>Fill where each item was bought, then generate the table.</p>
+            <p>Fill where each item was bought, then generate the inventory table. Paid and Utang sales are shown in Margin table Reports.</p>
           </div>
           <div class="margin-header-actions">
             <button type="button" class="btn btn-sm btn-primary margin-add-trigger"
@@ -764,6 +764,8 @@ App.views.margins = {
       const price = this._number(this._field(row, 'selling_price', 'sellingPrice', 0));
       return price > 0 && price < 10;
     }).length;
+    const scopeNote = String(this.report.scopeNote
+      || 'Inventory valuation only — paid sales and Utang transactions are not included.');
 
     reportRegion.hidden = false;
     reportRegion.innerHTML = `
@@ -774,6 +776,7 @@ App.views.margins = {
         ${missingCost ? `<br><b>${missingCost}</b> item${missingCost === 1 ? '' : 's'} still need puhunan.` : ''}
         ${lowPriceCount && !missingCost ? `<br>${lowPriceCount} item${lowPriceCount === 1 ? '' : 's'} are under ₱10.` : ''}
       </p>
+      <p class="margin-inventory-scope" id="mInventoryScope"><b>Scope:</b> ${App.ui.esc(scopeNote)}</p>
 
       <div class="margin-summary-grid">
         <div class="margin-summary-card">
