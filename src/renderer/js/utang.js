@@ -360,6 +360,9 @@ App.views.utang = {
         <div><small>Outstanding</small><b>${App.ui.money(loan.balance)}</b></div>
       </div>
       <div class="utang-loan-actions">
+        ${loan.sale && loan.sale.txn_id
+          ? `<button type="button" class="btn btn-sm btn-ghost" data-action="reprint-receipt" data-txn-id="${App.ui.esc(loan.sale.txn_id)}">Reprint receipt</button>`
+          : ''}
         ${open ? `<button type="button" class="btn btn-sm btn-primary" data-action="record-payment" data-loan-id="${loan.id}">Record payment</button>` : ''}
         ${admin && loan.state !== 'cancelled' ? `<button type="button" class="btn btn-sm btn-ghost" data-action="set-due" data-loan-id="${loan.id}" data-due-date="${App.ui.esc(loan.due_date || '')}">Set due date</button><button type="button" class="btn btn-sm btn-ghost" data-action="adjust" data-loan-id="${loan.id}">Adjust balance</button>` : ''}
       </div>
@@ -392,6 +395,30 @@ App.views.utang = {
       }
     } else if (action === 'record-payment') {
       this._paymentForm(Number(button.dataset.loanId), customer.id, modal);
+    } else if (action === 'reprint-receipt') {
+      const txnId = String(button.dataset.txnId || '').trim();
+      if (!txnId) {
+        App.ui.toast('No sale receipt is linked to this loan', 'err');
+        return;
+      }
+      button.disabled = true;
+      const original = button.textContent;
+      button.textContent = 'Printing…';
+      try {
+        if (App.printer && typeof App.printer.printReceipt === 'function') {
+          await App.printer.printReceipt(txnId);
+        } else {
+          await App.printer.printReceiptFallback(txnId);
+        }
+        if (this._isSessionCurrent(generation)) App.ui.toast(`Receipt ${txnId} reprinted ✓`, 'ok');
+      } catch (error) {
+        if (this._isSessionCurrent(generation)) App.ui.toast(error.message || 'Reprint failed', 'err');
+      } finally {
+        if (button.isConnected) {
+          button.disabled = false;
+          button.textContent = original;
+        }
+      }
     } else if (action === 'set-due' && this.isAdmin) {
       this._dueDateForm(Number(button.dataset.loanId), button.dataset.dueDate, customer.id, modal);
     } else if (action === 'adjust' && this.isAdmin) {

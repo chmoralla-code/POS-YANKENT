@@ -32,3 +32,22 @@ test('persistence failures are surfaced and latch future writes', async () => {
     fixture.close();
   }
 });
+
+test('prepared statements stay usable after a write flushes the database', async () => {
+  const fixture = await freshDb();
+  try {
+    // sql.js export() (run on every flush) frees all prepared statements.
+    const upsert = fixture.db.prepare(
+      'INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value'
+    );
+    const read = fixture.db.prepare('SELECT value FROM settings WHERE key=?');
+    upsert.run('shim_reuse_a', '1');
+    upsert.run('shim_reuse_b', '2');
+    assert.strictEqual(read.get('shim_reuse_a').value, '1');
+    upsert.run('shim_reuse_a', '3');
+    assert.strictEqual(read.get('shim_reuse_a').value, '3');
+    assert.deepStrictEqual(read.all('shim_reuse_b'), [{ value: '2' }]);
+  } finally {
+    fixture.close();
+  }
+});

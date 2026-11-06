@@ -724,11 +724,17 @@ App.views.pos = {
     this._compute();
   },
 
+  // 0% is a valid VAT setting; only a missing or invalid value falls back to 12%.
+  _vatRate() {
+    const rate = parseFloat((App.settingsCache || {}).vat_rate);
+    return Number.isFinite(rate) ? rate : 12;
+  },
+
   _compute() {
     const mat = App.cart.filter((i) => !i.isService).reduce((s, i) => s + i.qty * i.unitPrice, 0);
     const svc = App.cart.filter((i) => i.isService).reduce((s, i) => s + i.qty * i.unitPrice, 0);
     const gross = mat + svc;
-    const vatRate = parseFloat((App.settingsCache || {}).vat_rate) || 12;
+    const vatRate = this._vatRate();
     const discPct = this.state.discountOn ? (parseFloat((App.settingsCache || {}).discount_percent) || 0) : 0;
     const discAmt = gross * discPct / 100;
     // Catalog prices are VAT-inclusive. Split VAT out for display without
@@ -803,7 +809,7 @@ App.views.pos = {
       return;
     }
     const gross = App.cart.reduce((s, i) => s + i.qty * i.unitPrice, 0);
-    const vatRate = parseFloat((App.settingsCache || {}).vat_rate) || 12;
+    const vatRate = this._vatRate();
     const discPct = this.state.discountOn ? (parseFloat((App.settingsCache || {}).discount_percent) || 0) : 0;
     // Prices already include VAT; checkout must not add it a second time.
     const total = Math.max(0, gross - gross * discPct / 100);
