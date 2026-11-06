@@ -27,8 +27,18 @@ async function getSql() {
 }
 
 class Statement {
-  constructor(db, sql) { this.db = db; this.stmt = db._raw.prepare(sql); }
-  _bind(args) { this.stmt.reset(); this.stmt.bind(args); }
+  constructor(db, sql) { this.db = db; this.sql = sql; this._prepare(); }
+  _prepare() {
+    this.stmt = this.db._raw.prepare(this.sql);
+    this.exportGeneration = this.db._exportGeneration;
+  }
+  _bind(args) {
+    // flush() runs sql.js export(), which frees every prepared statement.
+    // Re-prepare so a statement reused after a write does not throw.
+    if (this.exportGeneration !== this.db._exportGeneration) this._prepare();
+    this.stmt.reset();
+    this.stmt.bind(args);
+  }
   run(...args) {
     this.db._assertWritable();
     this._bind(args);
@@ -62,6 +72,7 @@ class Database {
     this._inTx = 0;
     this._persistenceError = null;
     this._foreignKeysEnabled = false;
+    this._exportGeneration = 0;
   }
   exec(sql) {
     this._assertWritable();
@@ -119,6 +130,7 @@ class Database {
     const tempPath = this.filePath + '.tmp';
     try {
       const bytes = Buffer.from(this._raw.export());
+      this._exportGeneration++;
       // sql.js export() reopens its in-memory SQLite connection and resets
       // connection-scoped PRAGMAs. Restore FK enforcement immediately so the
       // next write cannot bypass cascades or SET NULL constraints.
