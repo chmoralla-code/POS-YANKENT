@@ -1,7 +1,7 @@
 'use strict';
 /* Section 4 — Point of Sale (catalog, cart, checkout) */
 const { test, expect } = require('@playwright/test');
-const { launchApp, login } = require('./helpers');
+const { launchApp, login, makeOpenPriceFixture } = require('./helpers');
 
 // Restock one fixed-price product so cart tests do not accidentally select
 // an open-price item and wait on its price-entry modal.
@@ -147,6 +147,7 @@ test.describe('POS — Cart', () => {
   test('cashier can price and correct a Newly Added open-price item', async () => {
     const { electron, page } = await launchApp();
     try {
+      await makeOpenPriceFixture(page, 'AMERROCK Concealed Hinge');
       await login(page, 'cashier', 'cashier123');
       await page.fill('#posSearch', 'AMERROCK Concealed Hinge');
       const card = page.locator('#posGrid .prod-card', { hasText: 'AMERROCK Concealed Hinge' });
@@ -177,6 +178,7 @@ test.describe('POS — Cart', () => {
   test('mixed-price alternate units survive a base rename and checkout', async () => {
     const { electron, page } = await launchApp();
     try {
+      await makeOpenPriceFixture(page, 'concrete nails #3');
       await login(page, 'cashier', 'cashier123');
       await page.fill('#posSearch', 'concrete nails #3');
       const card = page.locator('#posGrid .prod-card', { hasText: 'concrete nails #3' });

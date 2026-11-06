@@ -13,6 +13,7 @@ const {
   NEWLY_ADDED_ITEMS_UNIT_PRICE_FIX,
   NEWLY_ADDED_ITEMS_NOTEBOOK1_REMOVED,
   NEWLY_ADDED_ITEMS_RECOUNT_V1,
+  NEWLY_ADDED_ITEMS_MARKET_PRICE_FILL,
   NEWLY_ADDED_ITEMS_ERASED_STOCK_RECOVERY,
   NEWLY_ADDED_ITEMS_ERASED_STOCK_REASON,
 } = require('../src/main/db/seed');
@@ -98,6 +99,12 @@ test('fresh catalog contains all Newly Added Items with the requested stock, uni
   assert.ok(rows.some((r) => r.sku === 'NAI-216' && r.name === 'CN #5'));
   assert.ok(rows.some((r) => r.sku === 'NAI-498'));
   assert.ok(rows.some((r) => r.sku === 'NAI-582' && r.unit === 'kg' && r.unit_price === 90));
+  assert.ok(rows.every((r) => Number(r.price) > 0 && Number(r.unit_price) > 0));
+  assert.equal(
+    t.api.db.prepare('SELECT value FROM settings WHERE key=?')
+      .get(NEWLY_ADDED_ITEMS_MARKET_PRICE_FILL).value,
+    'fresh'
+  );
 
   const movementCount = t.api.db.prepare(
     `SELECT COUNT(*) AS count
@@ -231,6 +238,40 @@ test('legacy reset of an early Newly Added Items batch is recovered after later 
     t.api.db.prepare('SELECT COUNT(*) AS count FROM stock_movements WHERE reason=?')
       .get(NEWLY_ADDED_ITEMS_ERASED_STOCK_REASON).count,
     affected.length
+  );
+  t.api.close();
+});
+
+test('market price fill writes catalog prices only onto zero-priced Newly Added Items', async () => {
+  const t = await setup();
+  const sample = EXPECTED_NEWLY_ADDED_ITEMS.find(
+    (item) => item.sku !== 'NAI-001' && Number(item.price) > 0
+  );
+  assert.ok(sample);
+
+  const product = t.api.db.prepare('SELECT id,price FROM products WHERE sku=?').get(sample.sku);
+  t.api.db.prepare('UPDATE products SET price=0 WHERE id=?').run(product.id);
+  t.api.db.prepare('UPDATE product_units SET price=0 WHERE product_id=?').run(product.id);
+  t.api.db.prepare('UPDATE products SET price=? WHERE sku=?').run(777, 'NAI-001');
+  t.api.db.prepare('DELETE FROM settings WHERE key=?').run(NEWLY_ADDED_ITEMS_MARKET_PRICE_FILL);
+
+  const first = ensureNewlyAddedItems(t.api.db);
+  assert.equal(first.alreadyRun, true);
+  assert.equal(
+    t.api.db.prepare('SELECT price FROM products WHERE sku=?').get(sample.sku).price,
+    sample.price
+  );
+  assert.equal(
+    t.api.db.prepare('SELECT price FROM products WHERE sku=?').get('NAI-001').price,
+    777
+  );
+
+  t.api.db.prepare('UPDATE products SET price=? WHERE sku=?').run(888, sample.sku);
+  t.api.db.prepare('DELETE FROM settings WHERE key=?').run(NEWLY_ADDED_ITEMS_MARKET_PRICE_FILL);
+  ensureNewlyAddedItems(t.api.db);
+  assert.equal(
+    t.api.db.prepare('SELECT price FROM products WHERE sku=?').get(sample.sku).price,
+    888
   );
   t.api.close();
 });

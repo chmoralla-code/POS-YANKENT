@@ -1,7 +1,7 @@
 'use strict';
 /* Section 5 — Products & Inventory */
 const { test, expect } = require('@playwright/test');
-const { launchApp, login, navigate } = require('./helpers');
+const { launchApp, login, navigate, makeOpenPriceFixture } = require('./helpers');
 
 test.describe('Products & Inventory', () => {
   test('product grid loads', async () => {
@@ -60,6 +60,7 @@ test.describe('Products & Inventory', () => {
   test('cashier Products & Inventory is restricted to the Newly Added Items chip', async () => {
     const { electron, page } = await launchApp();
     try {
+      await makeOpenPriceFixture(page, 'AMERROCK Concealed Hinge', 'concrete nails #3');
       await login(page, 'cashier', 'cashier123');
       await navigate(page, 'products');
       await expect(page.locator('#viewTitle')).toHaveText('Products & Inventory');

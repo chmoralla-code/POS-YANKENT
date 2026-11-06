@@ -42,6 +42,32 @@ async function login(page, username = 'admin', password = 'admin123') {
   await page.waitForSelector('#app:not(.hidden)', { state: 'visible', timeout: 30000 });
 }
 
+// The catalog ships a market price for every Newly Added Item, so open-price
+// tests reset their own fixtures to a ₱0 base unit before the cashier logs in.
+// Alternate unit prices are kept.
+async function makeOpenPriceFixture(page, ...productNames) {
+  await page.waitForSelector('#startup', { state: 'detached', timeout: 30000 });
+  await page.evaluate(async (names) => {
+    await window.pos.login('admin', 'admin123');
+    try {
+      for (const name of names) {
+        const listed = await window.pos.products.list({ includeServices: false, q: name });
+        const match = listed.find((p) => p.name === name);
+        if (!match) throw new Error('Fixture product not found: ' + name);
+        const product = await window.pos.products.get(match.id);
+        const units = product.units.map((u) => ({
+          unit: u.unit,
+          factor: u.factor,
+          price: u.unit === product.base_unit ? 0 : u.price,
+        }));
+        await window.pos.products.update(product.id, { ...product, price: 0, units });
+      }
+    } finally {
+      await window.pos.logout();
+    }
+  }, productNames);
+}
+
 async function navigate(page, view) {
   await page.click(`.nav-item[data-view="${view}"]`);
   await page.waitForTimeout(300);
@@ -53,4 +79,4 @@ async function screenshot(page, name) {
   }
 }
 
-module.exports = { launchApp, login, navigate, screenshot, expect };
+module.exports = { launchApp, login, makeOpenPriceFixture, navigate, screenshot, expect };

@@ -12,6 +12,7 @@ const NEWLY_ADDED_ITEMS_COUNT = 1592;
 const NEWLY_ADDED_ITEMS_UNIT_PRICE_FIX = 'newly_added_items_unit_price_v1';
 const NEWLY_ADDED_ITEMS_NOTEBOOK1_REMOVED = 'newly_added_items_notebook1_removed_v1';
 const NEWLY_ADDED_ITEMS_RECOUNT_V1 = 'newly_added_items_recount_v9';
+const NEWLY_ADDED_ITEMS_MARKET_PRICE_FILL = 'newly_added_items_market_price_fill_v1';
 const NEWLY_ADDED_ITEMS_ERASED_STOCK_RECOVERY =
   'newly_added_items_erased_stock_recovery_v2';
 const NEWLY_ADDED_ITEMS_ERASED_STOCK_REASON =
@@ -340,6 +341,74 @@ function recoverErasedNewlyAddedStock(db) {
 }
 
 /**
+ * Fill Newly Added Items that still have ₱0 sell prices from the catalog's
+ * market-based price pass. Only writes where the live price is still zero so
+ * cashier/admin edits are preserved.
+ */
+function applyNewlyAddedMarketPriceFill(db) {
+  const marker = db.prepare('SELECT value FROM settings WHERE key=?')
+    .get(NEWLY_ADDED_ITEMS_MARKET_PRICE_FILL);
+  if (marker) return { applied: false, alreadyRun: true, updated: 0 };
+
+  const items = getNewlyAddedItems();
+  let updated = 0;
+
+  db.transaction(() => {
+    const find = db.prepare(
+      `SELECT p.id, p.price, p.base_unit
+         FROM products p
+         JOIN categories c ON c.id=p.category_id
+        WHERE p.sku=? AND p.active=1 AND c.name=? COLLATE NOCASE`
+    );
+    const updProduct = db.prepare(
+      'UPDATE products SET price=? WHERE id=? AND COALESCE(price,0)=0'
+    );
+    const updUnit = db.prepare(
+      `UPDATE product_units
+          SET price=?
+        WHERE product_id=? AND unit=? AND COALESCE(price,0)=0`
+    );
+    const listUnits = db.prepare(
+      'SELECT id, unit, price FROM product_units WHERE product_id=?'
+    );
+
+    for (const item of items) {
+      const price = Number(item.price);
+      if (!Number.isFinite(price) || price <= 0) continue;
+      const row = find.get(String(item.sku).trim(), NEWLY_ADDED_ITEMS_CATEGORY);
+      if (!row) continue;
+
+      let touched = false;
+      if (Number(row.price) === 0) {
+        if (updProduct.run(price, row.id).changes) touched = true;
+      }
+
+      const catalogUnits = Array.isArray(item.units) && item.units.length
+        ? item.units
+        : [{ unit: item.baseUnit || item.unit || row.base_unit, factor: 1, price }];
+      const liveUnits = listUnits.all(row.id);
+      for (const unit of catalogUnits) {
+        const unitName = String(unit.unit || row.base_unit).trim();
+        const unitPrice = Number(unit.price);
+        if (!unitName || !Number.isFinite(unitPrice) || unitPrice <= 0) continue;
+        const live = liveUnits.find(
+          (u) => String(u.unit).trim().toLowerCase() === unitName.toLowerCase()
+        );
+        if (!live || Number(live.price) !== 0) continue;
+        if (updUnit.run(unitPrice, row.id, live.unit).changes) touched = true;
+      }
+
+      if (touched) updated++;
+    }
+
+    db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)')
+      .run(NEWLY_ADDED_ITEMS_MARKET_PRICE_FILL, String(updated));
+  })();
+
+  return { applied: true, alreadyRun: false, updated };
+}
+
+/**
  * Add the handwritten inventory batches to an existing database exactly once.
  *
  * Existing names are preserved rather than overwritten, and the settings
@@ -350,6 +419,7 @@ function ensureNewlyAddedItems(db) {
   recoverErasedNewlyAddedStock(db);
   applyNewlyAddedUnitPriceFix(db);
   applyNewlyAddedRecount(db);
+  applyNewlyAddedMarketPriceFill(db);
 
   const marker = db.prepare('SELECT value FROM settings WHERE key=?').get(NEWLY_ADDED_ITEMS_SETTING);
   if (marker) return { inserted: 0, skipped: 0, alreadyRun: true };
@@ -720,6 +790,8 @@ function seedDatabase(db) {
     db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)')
       .run(NEWLY_ADDED_ITEMS_RECOUNT_V1, '1');
     db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)')
+      .run(NEWLY_ADDED_ITEMS_MARKET_PRICE_FILL, 'fresh');
+    db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)')
       .run(NEWLY_ADDED_ITEMS_ERASED_STOCK_RECOVERY, 'fresh');
   });
 
@@ -739,6 +811,7 @@ module.exports = {
   NEWLY_ADDED_ITEMS_UNIT_PRICE_FIX,
   NEWLY_ADDED_ITEMS_NOTEBOOK1_REMOVED,
   NEWLY_ADDED_ITEMS_RECOUNT_V1,
+  NEWLY_ADDED_ITEMS_MARKET_PRICE_FILL,
   NEWLY_ADDED_ITEMS_ERASED_STOCK_RECOVERY,
   NEWLY_ADDED_ITEMS_ERASED_STOCK_REASON,
 };
